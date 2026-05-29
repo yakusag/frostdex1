@@ -77,6 +77,15 @@ const SYMBOL_GROUPS = [
     ],
   },
   {
+    label: "🏅 Commodities",
+    symbols: [
+      "PERP_XAU_USDC",
+      "PERP_XAG_USDC",
+      "PERP_OIL_USDC",
+      "PERP_GAZ_USDC",
+    ],
+  },
+  {
     label: "🌍 RWA",
     symbols: [
       "PERP_ONDO_USDC",
