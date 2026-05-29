@@ -1,6 +1,6 @@
 {
-  "installCommand": "npx pnpm@8 install",
-  "buildCommand": "npx pnpm@8 run build",
+  "installCommand": "yarn install",
+  "buildCommand": "yarn build",
   "outputDirectory": "dist",
   "framework": "vite"
 }
