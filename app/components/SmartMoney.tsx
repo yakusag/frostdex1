@@ -163,7 +163,12 @@ export default function SmartMoney({ onHide }: Props) {
       </button>
 
       {open && (
-        <div className="sm-panel" style={{ ...panelStyle, width: 310, maxWidth: "calc(100vw - 24px)" }}>
+        <div
+          className="sm-panel"
+          style={{ ...panelStyle, width: 310, maxWidth: "calc(100vw - 24px)" }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="sm-header">
             <div className="sm-header-left">

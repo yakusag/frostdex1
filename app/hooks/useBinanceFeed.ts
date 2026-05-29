@@ -2,6 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { Candle } from "@/components/BotChart";
 
 export const BINANCE_SYMBOLS: Record<string, string> = {
+  BTC: "BTC",
+  ETH: "ETH",
+  SOL: "SOL",
+  ARB: "ARB",
+  BNB: "BNB",
+};
+
+const CC_SYMBOLS: Record<string, string> = {
   BTC: "BTCUSDT",
   ETH: "ETHUSDT",
   SOL: "SOLUSDT",
@@ -16,16 +24,12 @@ const TF_LIMIT: Record<string, number> = {
   "1d": 180,
 };
 
-function mapKline(k: (string | number)[]): Candle {
-  return {
-    t: k[0] as number,
-    o: parseFloat(k[1] as string),
-    h: parseFloat(k[2] as string),
-    l: parseFloat(k[3] as string),
-    c: parseFloat(k[4] as string),
-    v: parseFloat(k[5] as string),
-  };
-}
+const TF_CC: Record<string, { endpoint: string; aggregate: number }> = {
+  "15m": { endpoint: "histominute", aggregate: 15 },
+  "1h":  { endpoint: "histohour",   aggregate: 1  },
+  "4h":  { endpoint: "histohour",   aggregate: 4  },
+  "1d":  { endpoint: "histoday",    aggregate: 1  },
+};
 
 export interface BinanceFeedResult {
   candles: Candle[];
@@ -49,15 +53,11 @@ export function useBinanceFeed(
   const wsRef = useRef<WebSocket | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const binanceSymbol = BINANCE_SYMBOLS[symbol];
   const limit = TF_LIMIT[timeframe] ?? 120;
+  const ccSym = BINANCE_SYMBOLS[symbol] ?? symbol;
+  const ccTf = TF_CC[timeframe] ?? TF_CC["1h"];
 
   const fetchCandles = useCallback(() => {
-    if (!binanceSymbol) {
-      setError("Symbol not on Binance");
-      setLoading(false);
-      return;
-    }
     if (abortRef.current) abortRef.current.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -65,22 +65,30 @@ export function useBinanceFeed(
     setLoading(true);
     setError(null);
 
-    fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=${timeframe}&limit=${limit}`,
-      { signal: ctrl.signal }
-    )
-      .then((r) => {
+    // CryptoCompare free public API — no key needed, CORS-friendly
+    const url =
+      `https://min-api.cryptocompare.com/data/${ccTf.endpoint}` +
+      `?fsym=${ccSym}&tsym=USDT&limit=${limit}&aggregate=${ccTf.aggregate}&e=CCCAGG`;
+
+    fetch(url, { signal: ctrl.signal })
+      .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: (string | number)[][]) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map(mapKline);
-          setCandles(mapped);
-          setLatestPrice(mapped[mapped.length - 1].c);
-        } else {
-          setError("Empty response");
-        }
+      .then((json: any) => {
+        const rows: any[] = json?.Data ?? [];
+        if (!Array.isArray(rows) || rows.length === 0) throw new Error("No data");
+        // CryptoCompare returns time in seconds
+        const mapped: Candle[] = rows.map(k => ({
+          t: k.time * 1000,
+          o: k.open,
+          h: k.high,
+          l: k.low,
+          c: k.close,
+          v: k.volumefrom,
+        }));
+        setCandles(mapped);
+        setLatestPrice(mapped[mapped.length - 1].c);
         setLoading(false);
       })
       .catch((e: Error) => {
@@ -89,17 +97,16 @@ export function useBinanceFeed(
           setLoading(false);
         }
       });
-  }, [binanceSymbol, timeframe, limit]);
+  }, [ccSym, timeframe, limit, ccTf.endpoint, ccTf.aggregate]);
 
-  // Fetch historical klines on symbol/tf change
   useEffect(() => {
     fetchCandles();
     return () => { abortRef.current?.abort(); };
   }, [fetchCandles]);
 
-  // WebSocket for live candle updates
+  // WebSocket live updates via Binance (best-effort — works in browser, may not work server-side)
   useEffect(() => {
-    if (!liveEnabled || !binanceSymbol) {
+    if (!liveEnabled) {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -108,8 +115,16 @@ export function useBinanceFeed(
       return;
     }
 
-    const streamName = `${binanceSymbol.toLowerCase()}@kline_${timeframe}`;
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streamName}`);
+    const binanceSym = CC_SYMBOLS[symbol]?.toLowerCase();
+    if (!binanceSym) return;
+
+    const streamName = `${binanceSym}@kline_${timeframe}`;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streamName}`);
+    } catch {
+      return;
+    }
     wsRef.current = ws;
 
     ws.onopen = () => setWsConnected(true);
@@ -150,7 +165,7 @@ export function useBinanceFeed(
       wsRef.current = null;
       setWsConnected(false);
     };
-  }, [liveEnabled, binanceSymbol, timeframe, limit]);
+  }, [liveEnabled, symbol, timeframe, limit]);
 
   return { candles, latestPrice, loading, error, wsConnected, refetch: fetchCandles };
 }

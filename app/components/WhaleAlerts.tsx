@@ -77,7 +77,12 @@ export default function WhaleAlerts({ onHide }: Props) {
       </button>
 
       {open && (
-        <div className="whale-panel" style={{ ...panelStyle, width: 300, maxWidth: "calc(100vw - 24px)" }}>
+        <div
+          className="whale-panel"
+          style={{ ...panelStyle, width: 300, maxWidth: "calc(100vw - 24px)" }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
           <div className="whale-panel-header">
             <span className="whale-panel-title">🐋 Whale Alerts</span>
             <span className="whale-panel-sub">Trades &gt; {fmtVal(WHALE_THRESHOLD)}</span>

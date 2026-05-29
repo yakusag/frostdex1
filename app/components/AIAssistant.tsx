@@ -19,10 +19,12 @@ const GROQ_MODELS = [
   { id: "mixtral-8x7b-32768",      label: "Mixtral 8x7B" },
 ];
 
-async function askGroq(messages: Message[], apiKey: string, model: string): Promise<string> {
+const API_KEY = (import.meta.env.VITE_GROQ_API_KEY as string) || "";
+
+async function askGroq(messages: Message[], model: string): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
@@ -53,11 +55,8 @@ export default function AIAssistant({ onHide }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const envKey = (import.meta.env.VITE_GROQ_API_KEY as string) || "";
-  const [apiKey, setApiKey] = useState(() => envKey || localStorage.getItem("frost_groq_key") || "");
   const [model, setModel] = useState(() => localStorage.getItem("frost_groq_model") || GROQ_MODELS[0].id);
-  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState("");
   const [hovered, setHovered] = useState(false);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -75,13 +74,6 @@ export default function AIAssistant({ onHide }: Props) {
     }
   }, [open, messages]);
 
-  const saveKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem("frost_groq_key", key);
-    setShowKeyInput(false);
-    setError("");
-  };
-
   const saveModel = (m: string) => {
     setModel(m);
     localStorage.setItem("frost_groq_model", m);
@@ -90,7 +82,6 @@ export default function AIAssistant({ onHide }: Props) {
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || loading) return;
-    if (!apiKey) { setShowKeyInput(true); return; }
     const userMsg: Message = { role: "user", content };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -98,10 +89,10 @@ export default function AIAssistant({ onHide }: Props) {
     setLoading(true);
     setError("");
     try {
-      const reply = await askGroq(newMessages, apiKey, model);
+      const reply = await askGroq(newMessages, model);
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
     } catch (e: any) {
-      setError(e.message || "Error. Check your Groq API key.");
+      setError(e.message || "Error contacting FrostAI.");
     } finally {
       setLoading(false);
     }
@@ -114,7 +105,6 @@ export default function AIAssistant({ onHide }: Props) {
   return (
     <div
       ref={elementRef}
-      {...dragHandleProps}
       style={{
         position: "fixed",
         left: pos.x,
@@ -127,26 +117,34 @@ export default function AIAssistant({ onHide }: Props) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {(hovered || isMobile) && !open && (
-        <div className="widget-controls">
-          <button className="widget-hide-btn" onMouseDown={e => e.stopPropagation()} onClick={onHide} title="Hide widget">✕</button>
-        </div>
-      )}
+      {/* Drag handle only on the FAB button area */}
+      <div {...dragHandleProps} style={{ display: "contents" }}>
+        {(hovered || isMobile) && !open && (
+          <div className="widget-controls">
+            <button className="widget-hide-btn" onMouseDown={e => e.stopPropagation()} onClick={onHide} title="Hide widget">✕</button>
+          </div>
+        )}
 
-      <button
-        className="ai-assistant-fab"
-        onClick={() => { if (wasDragged()) return; setOpen(v => !v); }}
-        aria-label="AI Trading Assistant"
-      >
-        {open
-          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
-          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 12h6M9 16h4M7 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2M9 4h6v2H9V4z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-        }
-        <span>FrostAI</span>
-      </button>
+        <button
+          className="ai-assistant-fab"
+          onClick={() => { if (wasDragged()) return; setOpen(v => !v); }}
+          aria-label="AI Trading Assistant"
+        >
+          {open
+            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
+            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 12h6M9 16h4M7 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2M9 4h6v2H9V4z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          }
+          <span>FrostAI</span>
+        </button>
+      </div>
 
       {open && (
-        <div className="ai-assistant-panel" style={{ ...panelStyle, width: 340, maxWidth: "calc(100vw - 24px)" }}>
+        <div
+          className="ai-assistant-panel"
+          style={{ ...panelStyle, width: 340, maxWidth: "calc(100vw - 24px)" }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
           <div className="ai-panel-header">
             <div className="ai-panel-title">
               <span className="ai-panel-icon">❄</span>
@@ -159,76 +157,46 @@ export default function AIAssistant({ onHide }: Props) {
               </div>
             </div>
             <div className="ai-panel-actions">
-              <button className="ai-icon-btn" onClick={() => setShowKeyInput(v => !v)} title="Settings">⚙</button>
+              <button className="ai-icon-btn" onClick={() => setShowSettings(v => !v)} title="Model settings">⚙</button>
               {messages.length > 0 && (
                 <button className="ai-icon-btn" onClick={() => setMessages([])} title="Clear chat">🗑</button>
               )}
             </div>
           </div>
 
-          {showKeyInput && (
+          {showSettings && (
             <div className="ai-key-box">
-              <p className="ai-key-label" style={{ color: "#38e0f8" }}>Groq API Key</p>
-              <p className="ai-key-sub">Free · Fast · No limits — stored in your browser only</p>
-              <div className="ai-key-row">
-                <input
-                  type="password"
-                  placeholder="gsk_..."
-                  defaultValue={apiKey}
-                  className="ai-key-input"
-                  onKeyDown={e => { if (e.key === "Enter") saveKey((e.target as HTMLInputElement).value); }}
-                  id="ai-key-field"
-                />
-                <button
-                  className="ai-key-save"
-                  onClick={() => {
-                    const v = (document.getElementById("ai-key-field") as HTMLInputElement)?.value;
-                    if (v) saveKey(v);
-                  }}
-                >Save</button>
-              </div>
-              <a
-                href="https://console.groq.com/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ai-key-link"
-              >
-                Get free Groq API key →
-              </a>
-
-              <div style={{ marginTop: 10 }}>
-                <p className="ai-key-sub" style={{ marginBottom: 4 }}>Model</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {GROQ_MODELS.map(m => (
-                    <label
-                      key={m.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        fontSize: 12,
-                        color: model === m.id ? "#38e0f8" : "rgba(180,190,210,0.7)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="groq-model"
-                        value={m.id}
-                        checked={model === m.id}
-                        onChange={() => saveModel(m.id)}
-                        style={{ accentColor: "#38e0f8" }}
-                      />
-                      {m.label}
-                    </label>
-                  ))}
-                </div>
+              <p className="ai-key-label" style={{ color: "#38e0f8" }}>Model</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+                {GROQ_MODELS.map(m => (
+                  <label
+                    key={m.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 12,
+                      color: model === m.id ? "#38e0f8" : "rgba(180,190,210,0.7)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="groq-model"
+                      value={m.id}
+                      checked={model === m.id}
+                      onChange={() => saveModel(m.id)}
+                      style={{ accentColor: "#38e0f8" }}
+                    />
+                    {m.label}
+                  </label>
+                ))}
               </div>
             </div>
           )}
 
           <div className="ai-messages">
-            {messages.length === 0 && !showKeyInput && (
+            {messages.length === 0 && !showSettings && (
               <div className="ai-welcome">
                 <div className="ai-welcome-icon">❄</div>
                 <div className="ai-welcome-title">FrostAI</div>

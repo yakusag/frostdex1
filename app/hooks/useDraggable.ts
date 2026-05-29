@@ -4,7 +4,7 @@ interface Position { x: number; y: number; }
 
 const SNAP_THRESHOLD = 60;
 const EDGE_MARGIN = 8;
-const DRAG_THRESHOLD_PX = 5;
+const DRAG_THRESHOLD_PX = 8;
 
 function clamp(val: number, min: number, max: number) {
   return Math.max(min, Math.min(max, val));
@@ -44,6 +44,8 @@ export function useDraggable(id: string, defaultPos: Position) {
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; posX: number; posY: number } | null>(null);
   const hasDraggedRef = useRef(false);
   const elementRef = useRef<HTMLDivElement | null>(null);
+  // Track if the touch started inside a scrollable area (open panel)
+  const touchStartInScrollableRef = useRef(false);
 
   const savePos = useCallback((p: Position) => {
     try { localStorage.setItem(`widget-pos-${id}`, JSON.stringify(p)); } catch {}
@@ -55,12 +57,10 @@ export function useDraggable(id: string, defaultPos: Position) {
   }, [pos]);
 
   useEffect(() => {
-    const onMove = (e: MouseEvent | TouchEvent) => {
+    const onMouseMove = (e: MouseEvent) => {
       if (!dragStartRef.current) return;
-      if ("touches" in e) e.preventDefault();
-      const client = "touches" in e ? e.touches[0] : e;
-      const dx = client.clientX - dragStartRef.current.mouseX;
-      const dy = client.clientY - dragStartRef.current.mouseY;
+      const dx = e.clientX - dragStartRef.current.mouseX;
+      const dy = e.clientY - dragStartRef.current.mouseY;
 
       if (!hasDraggedRef.current) {
         if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
@@ -76,10 +76,35 @@ export function useDraggable(id: string, defaultPos: Position) {
       setPos({ x: newX, y: newY });
     };
 
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragStartRef.current) return;
+      // If touch started in a scrollable child, don't drag
+      if (touchStartInScrollableRef.current) return;
+
+      const client = e.touches[0];
+      const dx = client.clientX - dragStartRef.current.mouseX;
+      const dy = client.clientY - dragStartRef.current.mouseY;
+
+      if (!hasDraggedRef.current) {
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
+        hasDraggedRef.current = true;
+        setIsDragging(true);
+      }
+
+      e.preventDefault();
+      const el = elementRef.current;
+      const w = el?.offsetWidth ?? 50;
+      const h = el?.offsetHeight ?? 50;
+      const newX = clamp(dragStartRef.current.posX + dx, 0, window.innerWidth - w);
+      const newY = clamp(dragStartRef.current.posY + dy, 0, window.innerHeight - h);
+      setPos({ x: newX, y: newY });
+    };
+
     const onEnd = () => {
       if (!dragStartRef.current) return;
       const wasDrag = hasDraggedRef.current;
       dragStartRef.current = null;
+      touchStartInScrollableRef.current = false;
 
       if (!wasDrag) return;
 
@@ -98,15 +123,15 @@ export function useDraggable(id: string, defaultPos: Position) {
       });
     };
 
-    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onEnd);
-    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onEnd);
 
     return () => {
-      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onEnd);
-      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onEnd);
     };
   }, [savePos]);
@@ -122,7 +147,17 @@ export function useDraggable(id: string, defaultPos: Position) {
   }, [startDrag]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
+    // If the touch target is inside a scrollable element (panel content), don't start drag
+    const target = e.target as HTMLElement;
+    const scrollable = target.closest(
+      ".ai-messages, .ai-assistant-panel, .sentiment-panel, .whale-panel, .smartmoney-panel, .frost-trade-widget__body, [data-no-drag]"
+    );
+    if (scrollable) {
+      touchStartInScrollableRef.current = true;
+      dragStartRef.current = null;
+      return;
+    }
+    touchStartInScrollableRef.current = false;
     startDrag(e.touches[0].clientX, e.touches[0].clientY);
   }, [startDrag]);
 

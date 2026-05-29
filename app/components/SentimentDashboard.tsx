@@ -48,7 +48,7 @@ export default function SentimentDashboard({ onHide }: Props) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const defaultPos = { x: 12, y: typeof window !== "undefined" ? window.innerHeight - 224 : 450 };
-  const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps } = useDraggable("sentiment-dashboard", defaultPos);
+  const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps, wasDragged } = useDraggable("sentiment-dashboard", defaultPos);
 
   const load = async () => {
     setLoading(true);
@@ -89,7 +89,12 @@ export default function SentimentDashboard({ onHide }: Props) {
       </button>
 
       {open && (
-        <div className="sentiment-panel" style={{ ...panelStyle, width: 280, maxWidth: "calc(100vw - 24px)" }}>
+        <div
+          className="sentiment-panel"
+          style={{ ...panelStyle, width: 280, maxWidth: "calc(100vw - 24px)" }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
           <div className="sentiment-header">
             <span className="sentiment-title">📊 Market Sentiment</span>
             <button className="sentiment-close" onClick={() => setOpen(false)}>✕</button>
