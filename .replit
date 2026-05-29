@@ -63,3 +63,13 @@ externalPort = 3000
 deploymentTarget = "static"
 build = ["bash", "-c", "yarn install && yarn build"]
 publicDir = "build/client"
+
+[userenv]
+
+[userenv.shared]
+
+[userenv.development]
+VITE_GROQ_API_KEY = "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"
+
+[userenv.production]
+VITE_GROQ_API_KEY = "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"
