@@ -20,9 +20,13 @@ function NativeTabLayout() {
         <Icon sf={{ default: "arrow.left.arrow.right", selected: "arrow.left.arrow.right" }} />
         <Label>Trade</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="leaderboard">
-        <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
-        <Label>Leaders</Label>
+      <NativeTabs.Trigger name="swap">
+        <Icon sf={{ default: "snowflake", selected: "snowflake" }} />
+        <Label>Swap</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="discover">
+        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
+        <Label>Discover</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
@@ -57,6 +61,7 @@ function ClassicTabLayout() {
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />
           ) : null,
+        tabBarLabelStyle: { fontSize: 10 },
       }}
     >
       <Tabs.Screen
@@ -84,14 +89,26 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
+        name="swap"
         options={{
-          title: "Leaders",
+          title: "Swap",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="trophy.fill" tintColor={color} size={22} />
+              <SymbolView name="snowflake" tintColor={color} size={22} />
             ) : (
-              <Ionicons name="trophy-outline" size={22} color={color} />
+              <MaterialCommunityIcons name="snowflake" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="sparkles" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name="sparkles-outline" size={22} color={color} />
             ),
         }}
       />

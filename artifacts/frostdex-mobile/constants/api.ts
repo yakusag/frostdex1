@@ -1,4 +1,4 @@
-export const ORDERLY_API_BASE = "https://api-evm.orderly.org";
+export const ORDERLY_API_BASE = "https://api.orderly.org";
 
 export interface FuturesMarket {
   symbol: string;
