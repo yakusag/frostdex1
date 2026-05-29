@@ -14,6 +14,16 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
+
+// Wire the API client to the correct deployment domain.
+// Expo bundles run outside the web proxy and need absolute URLs.
+if (process.env.EXPO_PUBLIC_DOMAIN) {
+  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+}
+// FrostDex Mobile is read-only (no wallet auth on mobile yet).
+// Returning null means public endpoints work; protected endpoints return 401 gracefully.
+setAuthTokenGetter(() => null);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
