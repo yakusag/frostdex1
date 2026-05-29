@@ -54,18 +54,58 @@ interface PendingOrder {
 const STORAGE_KEY = "frostdex_bots_v1";
 const LOGS_KEY = "frostdex_bot_logs_v1";
 
-const POPULAR_SYMBOLS = [
-  "PERP_BTC_USDC",
-  "PERP_ETH_USDC",
-  "PERP_SOL_USDC",
-  "PERP_ARB_USDC",
-  "PERP_BNB_USDC",
-  "PERP_MATIC_USDC",
-  "PERP_AVAX_USDC",
-  "PERP_DOGE_USDC",
-  "PERP_LINK_USDC",
-  "PERP_OP_USDC",
+const SYMBOL_GROUPS = [
+  {
+    label: "🔥 Popular",
+    symbols: [
+      "PERP_BTC_USDC",
+      "PERP_ETH_USDC",
+      "PERP_SOL_USDC",
+      "PERP_BNB_USDC",
+      "PERP_XRP_USDC",
+      "PERP_ARB_USDC",
+      "PERP_AVAX_USDC",
+      "PERP_OP_USDC",
+      "PERP_LINK_USDC",
+      "PERP_SUI_USDC",
+      "PERP_NEAR_USDC",
+      "PERP_TIA_USDC",
+      "PERP_INJ_USDC",
+      "PERP_APT_USDC",
+      "PERP_MATIC_USDC",
+      "PERP_DOGE_USDC",
+    ],
+  },
+  {
+    label: "🌍 RWA",
+    symbols: [
+      "PERP_ONDO_USDC",
+      "PERP_POLYX_USDC",
+      "PERP_CFG_USDC",
+      "PERP_RIO_USDC",
+      "PERP_GFI_USDC",
+      "PERP_MPL_USDC",
+    ],
+  },
+  {
+    label: "🚀 Community",
+    symbols: [
+      "PERP_PEPE_USDC",
+      "PERP_WIF_USDC",
+      "PERP_BONK_USDC",
+      "PERP_SHIB_USDC",
+      "PERP_FLOKI_USDC",
+      "PERP_BOME_USDC",
+      "PERP_PEOPLE_USDC",
+      "PERP_TURBO_USDC",
+      "PERP_TRUMP_USDC",
+      "PERP_MOODENG_USDC",
+      "PERP_MEW_USDC",
+    ],
+  },
 ];
+
+const POPULAR_SYMBOLS = SYMBOL_GROUPS.flatMap((g) => g.symbols);
 
 function symbolDisplay(s: string) {
   return s.replace("PERP_", "").replace("_USDC", "/USDC");
@@ -1217,10 +1257,14 @@ export default function BotPage() {
                 onChange={(e) => setSymbol(e.target.value)}
                 style={inputStyle}
               >
-                {POPULAR_SYMBOLS.map((s) => (
-                  <option key={s} value={s}>
-                    {symbolDisplay(s)}
-                  </option>
+                {SYMBOL_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.symbols.map((s) => (
+                      <option key={s} value={s}>
+                        {symbolDisplay(s)}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
