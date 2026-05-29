@@ -20,15 +20,12 @@ import { createSymbolDataAdapter } from "@/utils/symbol-filter";
 import { DemoGraduationChecker } from "@/components/DemoGraduationChecker";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ServiceDisclaimerDialog from "./ServiceDisclaimerDialog";
-import { ExtendLocaleMessages, extendMessages, extendMessagesAr, extendMessagesDz, extendMessagesMa } from "@/i18n/extend";
+import { ExtendLocaleMessages, extendMessages } from "@/i18n/extend";
 const NETWORK_ID_KEY = "orderly_network_id";
 
 //  preload extend messages to prevent the key name from being displayed when the language file is loaded slowly
 const resources: Resources<ExtendLocaleMessages> = {
   [LocaleEnum.en]: extendMessages,
-  ["ar" as string]: extendMessagesAr,
-  ["dz" as string]: extendMessagesDz,
-  ["ma" as string]: extendMessagesMa,
 };
 
 const getNetworkId = (): NetworkId => {
@@ -160,7 +157,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
     []
   );
 
-  const RTL_LOCALES = ["ar", "dz", "ma"];
+  const RTL_LOCALES = ["ar", "ma"];
 
   const onLanguageChanged = async (lang: LocaleCode) => {
     if (typeof window !== "undefined") {
@@ -203,7 +200,6 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   const availableLanguages = getAvailableLanguages();
   const customLanguages = [
     { localCode: "ar", displayName: "العربية" },
-    { localCode: "dz", displayName: "الدارجة (دز)" },
     { localCode: "ma", displayName: "الدارجة المغربية" },
   ];
   const filteredLanguages = [

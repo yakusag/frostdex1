@@ -60,6 +60,7 @@ const LeftNavSheet = modal.create<LeftNavUIProps>((props) => {
         closeable
         closeableSize={24}
         closeOpacity={0.54}
+        style={{ paddingTop: '28px' }}
       >
         <div className="oui-relative oui-flex oui-h-full oui-flex-col oui-gap-3">
           <div className="oui-mt-[6px] oui-flex oui-h-[56px] oui-items-center">
