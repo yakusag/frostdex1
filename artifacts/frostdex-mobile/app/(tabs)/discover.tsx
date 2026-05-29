@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { getWebAppUrl, WEB_APP_BASE } from "@/constants/urls";
 
 interface DiscoverItem {
   id: string;
@@ -99,7 +100,7 @@ function DiscoverCard({ item, colors }: { item: DiscoverItem; colors: ReturnType
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       activeOpacity={0.7}
-      onPress={() => Linking.openURL(`https://frostdex.replit.app${item.webPath}`)}
+      onPress={() => Linking.openURL(getWebAppUrl(item.webPath))}
     >
       <View style={styles.cardTop}>
         <View style={[styles.cardIcon, { backgroundColor: `${colors.primary}18` }]}>
@@ -156,7 +157,7 @@ export default function DiscoverScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.bannerTitle, { color: colors.foreground }]}>All features on the web app</Text>
             <Text style={[styles.bannerDesc, { color: colors.mutedForeground }]}>
-              The mobile app shows live data. Full trading, bots, vaults, and rewards are available at frostdex.replit.app.
+              The mobile app shows live data. Full trading, bots, vaults, and rewards are available on the FrostDex web app.
             </Text>
           </View>
         </View>

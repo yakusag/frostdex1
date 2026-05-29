@@ -14,6 +14,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { fetchTicker, formatPrice, ORDERLY_API_BASE } from "@/constants/api";
+import { getWebAppUrl } from "@/constants/urls";
 
 const FROST_SYMBOL = "PERP_FROST_USDC";
 const FROST_CA = "0xfrost000000000000000000000000000000000000";
@@ -150,7 +151,7 @@ export default function SwapScreen() {
               <TouchableOpacity
                 style={[styles.buyBtn, { backgroundColor: colors.primary }]}
                 activeOpacity={0.8}
-                onPress={() => Linking.openURL("https://frostdex.replit.app/swap")}
+                onPress={() => Linking.openURL(getWebAppUrl("/swap"))}
               >
                 <MaterialCommunityIcons name="snowflake" size={18} color={colors.primaryForeground} />
                 <Text style={[styles.buyBtnText, { color: colors.primaryForeground }]}>Buy on FrostDex Web</Text>
@@ -194,7 +195,7 @@ export default function SwapScreen() {
               <TouchableOpacity
                 style={[styles.buyBtn, { backgroundColor: colors.secondary }]}
                 activeOpacity={0.8}
-                onPress={() => Linking.openURL("https://frostdex.replit.app/swap")}
+                onPress={() => Linking.openURL(getWebAppUrl("/swap"))}
               >
                 <Feather name="external-link" size={16} color={colors.foreground} />
                 <Text style={[styles.buyBtnText, { color: colors.foreground }]}>Open Swap on Web App</Text>

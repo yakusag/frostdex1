@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+import { getWebAppUrl } from "@/constants/urls";
 
 interface FeatureItem {
   icon: string;
@@ -52,7 +53,7 @@ export default function PortfolioScreen() {
           <TouchableOpacity
             style={[styles.connectBtn, { backgroundColor: colors.primary }]}
             activeOpacity={0.8}
-            onPress={() => Linking.openURL("https://frostdex.replit.app")}
+            onPress={() => Linking.openURL(getWebAppUrl("/"))}
           >
             <Feather name="external-link" size={16} color={colors.primaryForeground} />
             <Text style={[styles.connectBtnText, { color: colors.primaryForeground }]}>Open Web App</Text>

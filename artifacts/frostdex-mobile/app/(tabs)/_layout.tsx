@@ -24,6 +24,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "snowflake", selected: "snowflake" }} />
         <Label>Swap</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="leaderboard">
+        <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
+        <Label>Leaderboard</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
         <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
         <Label>Discover</Label>
@@ -97,6 +101,18 @@ function ClassicTabLayout() {
               <SymbolView name="snowflake" tintColor={color} size={22} />
             ) : (
               <MaterialCommunityIcons name="snowflake" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: "Leaders",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="trophy.fill" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name="trophy-outline" size={22} color={color} />
             ),
         }}
       />
