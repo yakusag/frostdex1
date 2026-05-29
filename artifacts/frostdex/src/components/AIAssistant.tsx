@@ -19,25 +19,24 @@ const GROQ_MODELS = [
   { id: "mixtral-8x7b-32768",      label: "Mixtral 8x7B" },
 ];
 
-const API_KEY = (import.meta.env.VITE_GROQ_API_KEY as string) || "";
+async function askFrostAI(messages: Message[], model: string): Promise<string> {
+  const url = "/api/ai/chat";
 
-async function askGroq(messages: Message[], model: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      max_tokens: 800,
-      temperature: 0.7,
     }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Groq API error ${res.status}`);
+    throw new Error((err as any)?.error || `Error ${res.status}`);
   }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "No response.";
+  return (data as any).content ?? "No response.";
 }
 
 const SUGGESTIONS = [
@@ -89,7 +88,7 @@ export default function AIAssistant({ onHide }: Props) {
     setLoading(true);
     setError("");
     try {
-      const reply = await askGroq(newMessages, model);
+      const reply = await askFrostAI(newMessages, model);
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
     } catch (e: any) {
       setError(e.message || "Error contacting FrostAI.");
@@ -117,7 +116,6 @@ export default function AIAssistant({ onHide }: Props) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Drag handle only on the FAB button area */}
       <div {...dragHandleProps} style={{ display: "contents" }}>
         {(hovered || isMobile) && !open && (
           <div className="widget-controls">
@@ -172,22 +170,12 @@ export default function AIAssistant({ onHide }: Props) {
                   <label
                     key={m.id}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 12,
-                      color: model === m.id ? "#38e0f8" : "rgba(180,190,210,0.7)",
-                      cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                      color: model === m.id ? "#38e0f8" : "rgba(180,190,210,0.7)", cursor: "pointer",
                     }}
                   >
-                    <input
-                      type="radio"
-                      name="groq-model"
-                      value={m.id}
-                      checked={model === m.id}
-                      onChange={() => saveModel(m.id)}
-                      style={{ accentColor: "#38e0f8" }}
-                    />
+                    <input type="radio" name="groq-model" value={m.id} checked={model === m.id}
+                      onChange={() => saveModel(m.id)} style={{ accentColor: "#38e0f8" }} />
                     {m.label}
                   </label>
                 ))}
@@ -200,9 +188,7 @@ export default function AIAssistant({ onHide }: Props) {
               <div className="ai-welcome">
                 <div className="ai-welcome-icon">❄</div>
                 <div className="ai-welcome-title">FrostAI</div>
-                <div className="ai-welcome-sub">
-                  Ask me anything about crypto trading, market analysis, or FrostDex.
-                </div>
+                <div className="ai-welcome-sub">Ask me anything about crypto trading, market analysis, or FrostDex.</div>
                 <div className="ai-suggestions">
                   {SUGGESTIONS.map(s => (
                     <button key={s} className="ai-suggestion" onClick={() => send(s)}>{s}</button>

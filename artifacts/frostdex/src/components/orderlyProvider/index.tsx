@@ -20,12 +20,14 @@ import { createSymbolDataAdapter } from "@/utils/symbol-filter";
 import { DemoGraduationChecker } from "@/components/DemoGraduationChecker";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ServiceDisclaimerDialog from "./ServiceDisclaimerDialog";
-import { ExtendLocaleMessages, extendMessages } from "@/i18n/extend";
+import { ExtendLocaleMessages, extendMessages, extendMessagesAr, extendMessagesMa } from "@/i18n/extend";
 const NETWORK_ID_KEY = "orderly_network_id";
 
-//  preload extend messages to prevent the key name from being displayed when the language file is loaded slowly
+//  preload extend messages for all supported languages to prevent key names from showing during slow locale file loads
 const resources: Resources<ExtendLocaleMessages> = {
   [LocaleEnum.en]: extendMessages,
+  ar: extendMessagesAr,
+  ma: extendMessagesMa,
 };
 
 const getNetworkId = (): NetworkId => {
