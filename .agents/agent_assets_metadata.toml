@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "am3AmNwT0tOPY09zbCGY8"
+uri = "file://artifacts/frostdex-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
