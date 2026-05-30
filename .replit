@@ -22,7 +22,6 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-VITE_GROQ_API_KEY = "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"
 
 [nix]
 channel = "stable-25_05"

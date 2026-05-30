@@ -7,48 +7,54 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { cjsInterop } from "vite-plugin-cjs-interop";
 import { createRequire } from "module";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+// PORT defaults to 8080 so `vite build` works in CI/Vercel without PORT set.
+const port = Number(process.env.PORT || "8080");
 
 const basePath = process.env.BASE_PATH || "/";
 
-// Resolve shim paths at config time so esbuild optimizer gets absolute paths.
-// We resolve the main entry of the package then navigate to /shims.
+// Resolve absolute shim paths once at config-load time.
+// This avoids "EISDIR" failures where Rollup/esbuild try to read a directory
+// instead of the shim's actual CJS entry file.
 const _require = createRequire(import.meta.url);
 const vpnpMain = _require.resolve("vite-plugin-node-polyfills");
 const vpnpDir = path.resolve(path.dirname(vpnpMain), "..");
-const bufferShim = path.join(vpnpDir, "shims/buffer/dist/index.cjs");
+const bufferShim  = path.join(vpnpDir, "shims/buffer/dist/index.cjs");
 const processShim = path.join(vpnpDir, "shims/process/dist/index.cjs");
+const globalShim  = path.join(vpnpDir, "shims/global/dist/index.cjs");
 
-// esbuild plugin that fixes trailing-slash node built-in imports in the dep optimizer
+// Rollup plugin — runs during both `vite build` and internally for optimizeDeps.
+// Intercepts bare shim specifiers before Rollup tries to resolve them as
+// directories (which would give EISDIR).
+const fixVpnpShims = {
+  name: "fix-vpnp-shims",
+  resolveId(id: string) {
+    if (id === "vite-plugin-node-polyfills/shims/buffer"  || id.startsWith("vite-plugin-node-polyfills/shims/buffer/"))  return bufferShim;
+    if (id === "vite-plugin-node-polyfills/shims/process" || id.startsWith("vite-plugin-node-polyfills/shims/process/")) return processShim;
+    if (id === "vite-plugin-node-polyfills/shims/global"  || id.startsWith("vite-plugin-node-polyfills/shims/global/"))  return globalShim;
+    return null;
+  },
+};
+
+// esbuild plugin for the dep-optimizer phase (same logic, esbuild API)
 const fixTrailingSlashShims = {
   name: "fix-trailing-slash-shims",
   setup(build: any) {
     build.onResolve({ filter: /^process\/$/ }, () => ({ path: processShim }));
-    build.onResolve({ filter: /^buffer\/$/ }, () => ({ path: bufferShim }));
+    build.onResolve({ filter: /^buffer\/$/ },  () => ({ path: bufferShim  }));
+    build.onResolve({ filter: /^global\/$/  }, () => ({ path: globalShim  }));
   },
 };
 
 export default defineConfig({
   base: basePath,
   plugins: [
+    fixVpnpShims,
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
     nodePolyfills({
       include: ["buffer", "crypto", "stream", "process"],
-      globals: { Buffer: true, process: true },
+      globals: { Buffer: true, process: true, global: true },
     }),
     cjsInterop({
       dependencies: ["bs58", "@coral-xyz/anchor", "lodash"],
@@ -69,10 +75,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // Absolute aliases so vite's own client.mjs can resolve these shims
-      // (the plugin injects them into @vite/client which lives in the pnpm store)
+      // Keep these for the dev-server transform path as well
       "vite-plugin-node-polyfills/shims/process": processShim,
-      "vite-plugin-node-polyfills/shims/buffer": bufferShim,
+      "vite-plugin-node-polyfills/shims/buffer":  bufferShim,
+      "vite-plugin-node-polyfills/shims/global":  globalShim,
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
@@ -82,15 +88,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      plugins: [fixVpnpShims],
+    },
   },
   server: {
     port,
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
-    fs: {
-      strict: false,
-    },
+    fs: { strict: false },
   },
   optimizeDeps: {
     include: ["react", "react-dom", "react-router-dom"],
@@ -108,9 +115,7 @@ export default defineConfig({
       "readable-stream",
     ],
     esbuildOptions: {
-      define: {
-        global: "globalThis",
-      },
+      define: { global: "globalThis" },
       plugins: [fixTrailingSlashShims],
     },
   },
