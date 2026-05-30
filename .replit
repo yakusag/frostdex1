@@ -18,3 +18,19 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+VITE_GROQ_API_KEY = "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"
+
+[nix]
+channel = "stable-25_05"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+
+[[ports]]
+localPort = 20570
+externalPort = 3000
