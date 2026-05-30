@@ -5,6 +5,7 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { cjsInterop } from "vite-plugin-cjs-interop";
+import { createRequire } from "module";
 
 const rawPort = process.env.PORT;
 
@@ -22,6 +23,23 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH || "/";
 
+// Resolve shim paths at config time so esbuild optimizer gets absolute paths.
+// We resolve the main entry of the package then navigate to /shims.
+const _require = createRequire(import.meta.url);
+const vpnpMain = _require.resolve("vite-plugin-node-polyfills");
+const vpnpDir = path.resolve(path.dirname(vpnpMain), "..");
+const bufferShim = path.join(vpnpDir, "shims/buffer/dist/index.cjs");
+const processShim = path.join(vpnpDir, "shims/process/dist/index.cjs");
+
+// esbuild plugin that fixes trailing-slash node built-in imports in the dep optimizer
+const fixTrailingSlashShims = {
+  name: "fix-trailing-slash-shims",
+  setup(build: any) {
+    build.onResolve({ filter: /^process\/$/ }, () => ({ path: processShim }));
+    build.onResolve({ filter: /^buffer\/$/ }, () => ({ path: bufferShim }));
+  },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -29,7 +47,8 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     nodePolyfills({
-      include: ["buffer", "crypto", "stream"],
+      include: ["buffer", "crypto", "stream", "process"],
+      globals: { Buffer: true, process: true },
     }),
     cjsInterop({
       dependencies: ["bs58", "@coral-xyz/anchor", "lodash"],
@@ -50,6 +69,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      // Absolute aliases so vite's own client.mjs can resolve these shims
+      // (the plugin injects them into @vite/client which lives in the pnpm store)
+      "vite-plugin-node-polyfills/shims/process": processShim,
+      "vite-plugin-node-polyfills/shims/buffer": bufferShim,
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
@@ -71,6 +94,25 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ["react", "react-dom", "react-router-dom"],
+    exclude: [
+      "@keystonehq/bc-ur-registry",
+      "babel-runtime",
+      "@particle-network/solana-wallet",
+      "@particle-network/auth",
+      "@particle-network/analytics",
+      "@particle-network/crypto",
+      "@trezor/device-utils",
+      "@solana/wallet-standard-wallet-adapter-base",
+      "@abstract-foundation/agw-react",
+      "@fractalwagmi/solana-wallet-adapter",
+      "readable-stream",
+    ],
+    esbuildOptions: {
+      define: {
+        global: "globalThis",
+      },
+      plugins: [fixTrailingSlashShims],
+    },
   },
   preview: {
     port,

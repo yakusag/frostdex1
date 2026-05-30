@@ -1,0 +1,26 @@
+{
+  "buildCommand": "pnpm --filter @workspace/frostdex run build",
+  "outputDirectory": "artifacts/frostdex/dist/public",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/config.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
+    {
+      "source": "/locales/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

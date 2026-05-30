@@ -1,0 +1,2 @@
+- [Vite trailing-slash shim fix](vite-trailing-slash-shim.md) — fix for `process/` and `buffer/` trailing-slash imports failing in esbuild optimizer
+- [FrostDex migration structure](frostdex-migration.md) — how frostdex was migrated from .migration-backup into live artifacts/
