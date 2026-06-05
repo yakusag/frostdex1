@@ -39,6 +39,8 @@ const BotLayout = lazy(() => import('./pages/bot/Layout'));
 const BotIndex = lazy(() => import('./pages/bot/Index'));
 const AboutLayout = lazy(() => import('./pages/about/Layout'));
 const AboutIndex = lazy(() => import('./pages/about/Index'));
+const TokenLayout = lazy(() => import('./pages/token/Layout'));
+const TokenIndex = lazy(() => import('./pages/token/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -169,6 +171,13 @@ const router = createBrowserRouter([
           { index: true, element: <AboutIndex /> },
         ],
       },
+      {
+        path: 'token',
+        element: <TokenLayout />,
+        children: [
+          { index: true, element: <TokenIndex /> },
+        ],
+      },
     ],
   },
 ], { basename: basePath });
@@ -191,6 +200,8 @@ function prefetchRoutes() {
     import('./pages/vaults/Index');
     import('./pages/about/Layout');
     import('./pages/about/Index');
+    import('./pages/token/Layout');
+    import('./pages/token/Index');
   };
 
   if ('requestIdleCallback' in window) {

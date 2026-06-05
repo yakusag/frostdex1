@@ -38,7 +38,14 @@ export function useWidgetVisibility() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
   }, []);
 
-  const anyHidden = Object.values(visibility).some(v => !v);
+  const hideAll = useCallback(() => {
+    const next = { ai: false, whale: false, sentiment: false, frost: false, smartmoney: false, liq: false, mac: false, palert: false };
+    setVisibility(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  }, []);
 
-  return { visibility, toggle, showAll, anyHidden };
+  const anyHidden = Object.values(visibility).some(v => !v);
+  const allVisible = Object.values(visibility).every(v => v);
+
+  return { visibility, toggle, showAll, hideAll, anyHidden, allVisible };
 }

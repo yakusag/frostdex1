@@ -27,7 +27,7 @@ import { startFaviconAnimation } from "./utils/favicon-animation";
 export default function App() {
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const { visibility, toggle, showAll, anyHidden } = useWidgetVisibility();
+  const { visibility, toggle, showAll, hideAll, anyHidden, allVisible } = useWidgetVisibility();
 
   useEffect(() => {
     if (typeof (window as any).__hideSplash === "function") {
@@ -73,8 +73,10 @@ export default function App() {
       <WidgetManager
         visibility={visibility}
         anyHidden={anyHidden}
+        allVisible={allVisible}
         onToggle={toggle}
         onShowAll={showAll}
+        onHideAll={hideAll}
       />
       <SpeedInsights />
       <Analytics />
