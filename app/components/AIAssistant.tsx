@@ -19,6 +19,18 @@ const GROQ_MODELS = [
   { id: "mixtral-8x7b-32768",      label: "Mixtral 8x7B" },
 ];
 
+const LS_KEY     = "frost_groq_key";
+const LS_MODEL   = "frost_groq_model";
+
+function getApiKey(): string {
+  return (
+    localStorage.getItem(LS_KEY) ||
+    (window as any).__RUNTIME_CONFIG__?.GROQ_API_KEY ||
+    (typeof __GROQ_KEY__ !== "undefined" ? __GROQ_KEY__ : "") ||
+    ""
+  );
+}
+
 async function askGroq(messages: Message[], apiKey: string, model: string): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -49,21 +61,21 @@ const SUGGESTIONS = [
 interface Props { onHide: () => void; }
 
 export default function AIAssistant({ onHide }: Props) {
-  const [open, setOpen]     = useState(false);
+  const [open, setOpen]         = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState("");
-  const [hovered, setHovered] = useState(false);
+  const [input, setInput]       = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [hovered, setHovered]   = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const apiKey = (
-    (window as any).__RUNTIME_CONFIG__?.GROQ_API_KEY ||
-    (typeof __GROQ_KEY__ !== "undefined" ? __GROQ_KEY__ : "")
-  ) || "";
+  const [apiKey, setApiKey] = useState(getApiKey);
+  const [keyInput, setKeyInput] = useState("");
+  const [keySaved, setKeySaved] = useState(false);
+
   const needsKey = !apiKey;
 
-  const [model, setModel] = useState(() => localStorage.getItem("frost_groq_model") || GROQ_MODELS[0].id);
+  const [model, setModel] = useState(() => localStorage.getItem(LS_MODEL) || GROQ_MODELS[0].id);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
@@ -79,7 +91,22 @@ export default function AIAssistant({ onHide }: Props) {
     }
   }, [open, messages]);
 
-  const saveModel = (m: string) => { setModel(m); localStorage.setItem("frost_groq_model", m); };
+  const saveModel = (m: string) => { setModel(m); localStorage.setItem(LS_MODEL, m); };
+
+  const saveKey = () => {
+    const k = keyInput.trim();
+    if (!k) return;
+    localStorage.setItem(LS_KEY, k);
+    setApiKey(k);
+    setKeyInput("");
+    setKeySaved(true);
+    setTimeout(() => { setKeySaved(false); setShowSettings(false); }, 1200);
+  };
+
+  const removeKey = () => {
+    localStorage.removeItem(LS_KEY);
+    setApiKey(getApiKey());
+  };
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -102,6 +129,8 @@ export default function AIAssistant({ onHide }: Props) {
   const panelStyle: React.CSSProperties = isBottomHalf
     ? { position: "absolute", bottom: "calc(100% + 8px)", left: 0 }
     : { position: "absolute", top: "calc(100% + 8px)", left: 0 };
+
+  const storedKey = localStorage.getItem(LS_KEY);
 
   return (
     <div
@@ -133,8 +162,8 @@ export default function AIAssistant({ onHide }: Props) {
               <div>
                 <div className="ai-panel-name">FrostAI</div>
                 <div className="ai-panel-sub" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: "#0ecb81", fontSize: 9 }}>●</span>
-                  <span>Powered by Groq</span>
+                  <span style={{ color: needsKey ? "#f6465d" : "#0ecb81", fontSize: 9 }}>●</span>
+                  <span>{needsKey ? "Needs API key" : "Powered by Groq"}</span>
                 </div>
               </div>
             </div>
@@ -144,10 +173,58 @@ export default function AIAssistant({ onHide }: Props) {
             </div>
           </div>
 
-          {/* Settings panel — model picker only */}
+          {/* Settings panel */}
           {showSettings && (
             <div className="ai-key-box" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
-              <p className="ai-key-label" style={{ color: "#38e0f8" }}>Model</p>
+              {/* API Key section */}
+              <div style={{ marginBottom: 12 }}>
+                <p className="ai-key-label" style={{ color: "#38e0f8", marginBottom: 6 }}>
+                  Groq API Key
+                  {storedKey && (
+                    <span style={{ color: "#0ecb81", fontSize: 10, marginLeft: 6 }}>✓ saved</span>
+                  )}
+                </p>
+                {storedKey ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 11, color: "rgba(180,190,210,0.5)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {storedKey.slice(0, 8)}••••••••{storedKey.slice(-4)}
+                    </span>
+                    <button
+                      onClick={removeKey}
+                      style={{ fontSize: 10, color: "#f6465d", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", flexShrink: 0 }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        type="password"
+                        value={keyInput}
+                        onChange={e => setKeyInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveKey(); }}
+                        placeholder="gsk_..."
+                        style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(56,224,248,0.2)", borderRadius: 6, padding: "6px 10px", color: "#e0e6f0", fontSize: 12, outline: "none" }}
+                      />
+                      <button
+                        onClick={saveKey}
+                        style={{ background: keySaved ? "#0ecb81" : "#38e0f8", color: "#000", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                      >
+                        {keySaved ? "✓" : "Save"}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: 10, color: "rgba(180,190,210,0.4)", marginTop: 5 }}>
+                      Free key at{" "}
+                      <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: "#38e0f8" }}>console.groq.com</a>
+                      . Stored locally only.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Model picker */}
+              <p className="ai-key-label" style={{ color: "#38e0f8", marginBottom: 6 }}>Model</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {GROQ_MODELS.map(m => (
                   <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: model === m.id ? "#38e0f8" : "rgba(180,190,210,0.7)", cursor: "pointer" }}>
@@ -160,11 +237,22 @@ export default function AIAssistant({ onHide }: Props) {
           )}
 
           <div className="ai-messages" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
-            {needsKey && (
+            {needsKey && !showSettings && (
               <div className="ai-welcome">
                 <div className="ai-welcome-icon">❄</div>
                 <div className="ai-welcome-title">FrostAI</div>
-                <div className="ai-welcome-sub" style={{ color: "rgba(246,70,93,0.8)" }}>AI assistant is not configured yet.</div>
+                <div className="ai-welcome-sub" style={{ color: "rgba(246,70,93,0.85)", marginBottom: 10 }}>
+                  API key not configured.
+                </div>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  style={{ background: "#38e0f8", color: "#000", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Add Groq API Key
+                </button>
+                <p style={{ fontSize: 10, color: "rgba(180,190,210,0.35)", marginTop: 8 }}>
+                  Free at console.groq.com
+                </p>
               </div>
             )}
             {messages.length === 0 && !showSettings && !needsKey && (

@@ -89,6 +89,10 @@ export default defineConfig(() => {
     esbuild: {
       drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
       legalComments: "none",
+      treeShaking: true,
+    },
+    css: {
+      devSourcemap: false,
     },
   };
 });
