@@ -37,6 +37,8 @@ const PointsLayout = lazy(() => import('./pages/points/Layout'));
 const PointsIndex = lazy(() => import('./pages/points/Index'));
 const BotLayout = lazy(() => import('./pages/bot/Layout'));
 const BotIndex = lazy(() => import('./pages/bot/Index'));
+const AboutLayout = lazy(() => import('./pages/about/Layout'));
+const AboutIndex = lazy(() => import('./pages/about/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -160,6 +162,13 @@ const router = createBrowserRouter([
           { index: true, element: <BotIndex /> },
         ],
       },
+      {
+        path: 'about',
+        element: <AboutLayout />,
+        children: [
+          { index: true, element: <AboutIndex /> },
+        ],
+      },
     ],
   },
 ], { basename: basePath });
@@ -178,10 +187,10 @@ function prefetchRoutes() {
     import('./pages/swap/Index');
     import('./pages/bot/Layout');
     import('./pages/bot/Index');
-    import('./pages/rewards/Layout');
-    import('./pages/rewards/Index');
     import('./pages/vaults/Layout');
     import('./pages/vaults/Index');
+    import('./pages/about/Layout');
+    import('./pages/about/Index');
   };
 
   if ('requestIdleCallback' in window) {

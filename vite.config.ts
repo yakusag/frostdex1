@@ -67,7 +67,9 @@ export default defineConfig(() => {
     build: {
       outDir: "build/client",
       target: "esnext",
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1500,
+      cssCodeSplit: true,
+      reportCompressedSize: false,
       rollupOptions: {
         output: {
           manualChunks: {
@@ -82,6 +84,11 @@ export default defineConfig(() => {
     },
     optimizeDeps: {
       include: ["react", "react-dom", "react-router-dom"],
+      force: false,
+    },
+    esbuild: {
+      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
+      legalComments: "none",
     },
   };
 });
