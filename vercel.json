@@ -2,6 +2,9 @@
   "buildCommand": "yarn install && yarn build",
   "outputDirectory": "build/client",
   "framework": null,
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=3072"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
