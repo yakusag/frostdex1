@@ -25,7 +25,7 @@ export default function AboutIndex() {
   return (
     <>
       <Helmet>
-        <title>{generatePageTitle("About & Legal")}</title>
+        <title>{generatePageTitle("Legal & Policies")}</title>
       </Helmet>
 
       <div className="oui-min-h-screen oui-bg-base-9 oui-text-base-contrast-80">

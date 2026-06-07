@@ -299,7 +299,8 @@ export const useOrderlyConfig = () => {
 
       { id: "Rewards", href: "/rewards", name: t("tradingRewards.rewards") },
       { id: "Token", href: "/token", name: "Token Search" },
-      { id: "About", href: "/about", name: "About" },
+      { id: "About", href: "/about", name: "Legal" },
+      { id: "Referral", href: "/referral", name: "Refer & Earn" },
       { id: "Vaults", href: "/vaults", name: t("common.vaults") },
       {
         id: "Points",

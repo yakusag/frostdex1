@@ -41,6 +41,8 @@ const AboutLayout = lazy(() => import('./pages/about/Layout'));
 const AboutIndex = lazy(() => import('./pages/about/Index'));
 const TokenLayout = lazy(() => import('./pages/token/Layout'));
 const TokenIndex = lazy(() => import('./pages/token/Index'));
+const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
+const ReferralIndex = lazy(() => import('./pages/referral/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -178,6 +180,13 @@ const router = createBrowserRouter([
           { index: true, element: <TokenIndex /> },
         ],
       },
+      {
+        path: 'referral',
+        element: <ReferralLayout />,
+        children: [
+          { index: true, element: <ReferralIndex /> },
+        ],
+      },
     ],
   },
 ], { basename: basePath });
@@ -202,6 +211,8 @@ function prefetchRoutes() {
     import('./pages/about/Index');
     import('./pages/token/Layout');
     import('./pages/token/Index');
+    import('./pages/referral/Layout');
+    import('./pages/referral/Index');
   };
 
   if ('requestIdleCallback' in window) {
