@@ -17,7 +17,7 @@ import {
   SolanaMobileWalletAdapter,
 } from "@solana-mobile/wallet-adapter-mobile";
 import type { NetworkId } from "@orderly.network/types";
-import injectedOnboard from "@web3-onboard/injected-wallets";
+import injectedOnboard, { ProviderLabel } from "@web3-onboard/injected-wallets";
 import { getRuntimeConfig } from "./runtime-config";
 import walletConnectOnboard from "@web3-onboard/walletconnect";
 import binanceWallet from "@binance/w3w-blocknative-connector";
@@ -98,7 +98,20 @@ export const getOnboardEvmWallets = () => {
   }
 
   return [
-    injectedOnboard(),
+    injectedOnboard({
+      displayUnavailable: [
+        ProviderLabel.MetaMask,
+        ProviderLabel.Trust,
+        ProviderLabel.Coinbase,
+        ProviderLabel.OKXWallet,
+        ProviderLabel.Rainbow,
+        ProviderLabel.Zerion,
+        ProviderLabel.Phantom,
+        ProviderLabel.Rabby,
+        ProviderLabel.Brave,
+        ProviderLabel.Bitget,
+      ],
+    }),
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
       projectId: walletConnectProjectId,
