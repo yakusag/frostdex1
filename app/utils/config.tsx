@@ -379,16 +379,7 @@ export const useOrderlyConfig = () => {
               />
             )}
             <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "52px" }}>
-              {isMobile &&
-              getRuntimeConfigBoolean("VITE_HAS_SECONDARY_LOGO") ? (
-                <img
-                  src={withBasePath("/logo-secondary.webp")}
-                  alt="logo"
-                  style={{ height: "36px", maxWidth: "160px", objectFit: "contain" }}
-                />
-              ) : (
-                components.title
-              )}
+              {components.title}
             </Link>
             {components.mainNav}
           </Flex>

@@ -21,11 +21,7 @@ nav,
   box-shadow: 0 0 10px 0 rgba(56, 224, 248, 0.2);
 }
 
-/* ─── glowing border on focused inputs ─────────────────────────────── */
-.oui-input:focus-within,
-input:focus {
-  box-shadow: 0 0 0 1px rgba(56, 224, 248, 0.35) !important;
-}
+/* ─── glowing border on focused inputs — disabled ───────────────────── */
 
 /* ─── row hover ─────────────────────────────────────────────────── */
 .oui-orderbook-row:hover,

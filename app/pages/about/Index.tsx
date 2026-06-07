@@ -641,25 +641,7 @@ function AmlContent({ name }: { name: string }) {
         the smart contract and protocol level by Orderly Network and the underlying blockchains.
       </P>
 
-      <H2>2. Geographic Restrictions</H2>
-      <P>
-        Access to {name} is restricted for users in sanctioned jurisdictions. You must not
-        use the Protocol if you are located in or a resident of:
-      </P>
-      <div className="oui-flex oui-flex-wrap oui-gap-2 oui-mb-4">
-        {["United States", "Cuba", "Iran", "North Korea", "Syria", "Crimea Region", "OFAC Sanctioned Countries"].map(c => (
-          <span key={c} className="oui-bg-red-500/10 oui-text-red-400 oui-text-xs oui-font-semibold oui-px-3 oui-py-1.5 oui-rounded-full oui-border oui-border-red-500/20">
-            {c}
-          </span>
-        ))}
-      </div>
-      <P>
-        By using the Protocol, you represent and warrant that you are not located in, or
-        ordinarily resident in, any restricted jurisdiction and that you are not on any
-        government sanctions list.
-      </P>
-
-      <H2>3. On-Chain Screening</H2>
+      <H2>2. On-Chain Screening</H2>
       <P>
         The Orderly Network infrastructure performs automated on-chain screening of wallet
         addresses against OFAC and other international sanctions lists. Wallets identified as
@@ -667,7 +649,7 @@ function AmlContent({ name }: { name: string }) {
         contract level. This screening is conducted by Orderly Network, not {name} directly.
       </P>
 
-      <H2>4. Prohibited Uses</H2>
+      <H2>3. Prohibited Uses</H2>
       <P>You must not use {name} to:</P>
       <ul className="oui-list-none oui-space-y-2 oui-mb-4">
         {[
@@ -685,7 +667,7 @@ function AmlContent({ name }: { name: string }) {
         ))}
       </ul>
 
-      <H2>5. Blockchain Transparency</H2>
+      <H2>4. Blockchain Transparency</H2>
       <P>
         All transactions on {name} are permanently recorded on public blockchains and are
         fully traceable by law enforcement agencies, blockchain analytics companies, and the
@@ -694,7 +676,7 @@ function AmlContent({ name }: { name: string }) {
         to real-world identities.
       </P>
 
-      <H2>6. Cooperation with Authorities</H2>
+      <H2>5. Cooperation with Authorities</H2>
       <P>
         To the extent technically feasible and legally required, {name} will cooperate with
         law enforcement and regulatory authorities. While our non-custodial architecture
@@ -703,14 +685,14 @@ function AmlContent({ name }: { name: string }) {
         upon receipt of government orders.
       </P>
 
-      <H2>7. User Responsibility</H2>
+      <H2>6. User Responsibility</H2>
       <P>
         Each user is solely responsible for ensuring their use of {name} complies with all
         applicable laws in their jurisdiction, including AML laws, tax reporting obligations,
         and any licensing requirements. Ignorance of applicable laws is not a defense.
       </P>
 
-      <H2>8. Reporting Suspicious Activity</H2>
+      <H2>7. Reporting Suspicious Activity</H2>
       <P>
         If you become aware of any suspicious activity, potential money laundering, or
         terrorist financing involving the Protocol, please report it to us immediately through
