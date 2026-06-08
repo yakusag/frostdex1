@@ -108,6 +108,16 @@ export default defineConfig(() => {
     },
     optimizeDeps: {
       include: ["react", "react-dom", "react-router-dom"],
+      exclude: [
+        "woofi-swap-widget-kit",
+        "@solana/codecs-core",
+        "@solana/codecs-data-structures",
+        "@solana/codecs-numbers",
+        "@solana/codecs-strings",
+        "@solana/codecs",
+        "@solana/errors",
+        "@solana/options",
+      ],
       force: false,
       esbuildOptions: {
         target: "esnext",
