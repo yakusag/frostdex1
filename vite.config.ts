@@ -59,11 +59,7 @@ export default defineConfig(() => {
     },
     base: basePath,
     plugins: [
-      react({
-        babel: {
-          plugins: isProd ? [["transform-remove-console", { exclude: ["error", "warn"] }]] : [],
-        },
-      }),
+      react(),
       tsconfigPaths(),
       htmlTitlePlugin(),
       cjsInterop({
