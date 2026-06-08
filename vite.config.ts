@@ -41,6 +41,7 @@ function htmlTitlePlugin(): Plugin {
 
 export default defineConfig(() => {
   const basePath = process.env.PUBLIC_PATH || "/";
+  const isProd = process.env.NODE_ENV === "production";
 
   return {
     server: {
@@ -48,13 +49,21 @@ export default defineConfig(() => {
       host: "0.0.0.0",
       port: 5000,
       allowedHosts: true,
+      hmr: true,
+      watch: {
+        usePolling: false,
+      },
     },
     define: {
       __GROQ_KEY__: JSON.stringify(process.env.GROQ_API_KEY || ""),
     },
     base: basePath,
     plugins: [
-      react(),
+      react({
+        babel: {
+          plugins: isProd ? [["transform-remove-console", { exclude: ["error", "warn"] }]] : [],
+        },
+      }),
       tsconfigPaths(),
       htmlTitlePlugin(),
       cjsInterop({
@@ -62,6 +71,7 @@ export default defineConfig(() => {
       }),
       nodePolyfills({
         include: ["buffer", "crypto", "stream"],
+        protocolImports: false,
       }),
     ],
     build: {
@@ -72,9 +82,17 @@ export default defineConfig(() => {
       reportCompressedSize: false,
       sourcemap: false,
       minify: "esbuild",
+      assetsInlineLimit: 4096,
       rollupOptions: {
-        maxParallelFileOps: 3,
+        maxParallelFileOps: 4,
+        treeshake: {
+          moduleSideEffects: "no-external",
+          propertyReadSideEffects: false,
+          unknownGlobalSideEffects: false,
+        },
         output: {
+          compact: true,
+          generatedCode: { constBindings: true },
           manualChunks: {
             "vendor-react":     ["react", "react-dom", "react-router-dom"],
             "vendor-orderly-a": ["@orderly.network/react-app", "@orderly.network/ui"],
@@ -91,11 +109,16 @@ export default defineConfig(() => {
     optimizeDeps: {
       include: ["react", "react-dom", "react-router-dom"],
       force: false,
+      esbuildOptions: {
+        target: "esnext",
+      },
     },
     esbuild: {
-      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
+      drop: isProd ? ["console", "debugger"] : [],
       legalComments: "none",
       treeShaking: true,
+      minifyIdentifiers: isProd,
+      minifySyntax: isProd,
     },
     css: {
       devSourcemap: false,

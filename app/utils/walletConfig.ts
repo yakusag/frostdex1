@@ -99,18 +99,18 @@ export const getOnboardEvmWallets = () => {
 
   return [
     injectedOnboard({
-      displayUnavailable: [
-        ProviderLabel.MetaMask,
-        ProviderLabel.Trust,
-        ProviderLabel.Coinbase,
-        ProviderLabel.OKXWallet,
-        ProviderLabel.Rainbow,
-        ProviderLabel.Zerion,
-        ProviderLabel.Phantom,
-        ProviderLabel.Rabby,
-        ProviderLabel.Brave,
-        ProviderLabel.Bitget,
-      ],
+      displayUnavailable: [ProviderLabel.Brave],
+      filter: {
+        [ProviderLabel.MetaMask]: false,
+        [ProviderLabel.Trust]: false,
+        [ProviderLabel.Coinbase]: false,
+        [ProviderLabel.OKXWallet]: false,
+        [ProviderLabel.Rainbow]: false,
+        [ProviderLabel.Zerion]: false,
+        [ProviderLabel.Phantom]: false,
+        [ProviderLabel.Rabby]: false,
+        [ProviderLabel.Bitget]: false,
+      },
     }),
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({

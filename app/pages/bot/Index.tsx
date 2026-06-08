@@ -547,7 +547,7 @@ export default function BotPage() {
           style={{
             position: "absolute",
             inset: 0,
-            backgroundImage: "url(/bot-bg.png)",
+            backgroundImage: "url(/bot-bg.webp)",
             backgroundSize: "cover",
             backgroundPosition: "center 30%",
             backgroundRepeat: "no-repeat",
@@ -615,7 +615,7 @@ export default function BotPage() {
               }}
             >
               <img
-                src="/frostdex-badge.png"
+                src="/frostdex-badge.webp"
                 alt="FrostDex"
                 style={{ height: 28, objectFit: "contain", display: "block" }}
               />
