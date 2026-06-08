@@ -100,16 +100,7 @@ export const getOnboardEvmWallets = () => {
   return [
     injectedOnboard({
       displayUnavailable: [
-        ProviderLabel.MetaMask,
-        ProviderLabel.Trust,
-        ProviderLabel.Coinbase,
-        ProviderLabel.OKXWallet,
-        ProviderLabel.Rainbow,
-        ProviderLabel.Zerion,
-        ProviderLabel.Phantom,
-        ProviderLabel.Rabby,
         ProviderLabel.Brave,
-        ProviderLabel.Bitget,
       ],
     }),
     binanceWallet({ options: { lng: "en" } }),

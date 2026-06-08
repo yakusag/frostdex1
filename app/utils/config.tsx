@@ -380,7 +380,15 @@ export const useOrderlyConfig = () => {
               />
             )}
             <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "52px" }}>
-              {components.title}
+              {isMobile ? (
+                <img
+                  src={withBasePath("/logo.webp")}
+                  alt="FrostDex"
+                  style={{ height: "22px", width: "auto", objectFit: "contain" }}
+                />
+              ) : (
+                components.title
+              )}
             </Link>
             {components.mainNav}
           </Flex>

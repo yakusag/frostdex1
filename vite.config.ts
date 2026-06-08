@@ -66,14 +66,16 @@ export default defineConfig(() => {
     ],
     build: {
       outDir: "build/client",
-      target: "esnext",
+      target: "es2022",
       chunkSizeWarningLimit: 2000,
       cssCodeSplit: true,
       reportCompressedSize: false,
       sourcemap: false,
       minify: "esbuild",
+      assetsInlineLimit: 8192,
+      modulePreload: { polyfill: false },
       rollupOptions: {
-        maxParallelFileOps: 3,
+        maxParallelFileOps: 4,
         output: {
           manualChunks: {
             "vendor-react":     ["react", "react-dom", "react-router-dom"],
@@ -85,6 +87,7 @@ export default defineConfig(() => {
             "vendor-web3":      ["wagmi"],
             "vendor-solana":    ["@solana/wallet-adapter-base", "@solana/wallet-adapter-wallets"],
           },
+          compact: true,
         },
       },
     },
@@ -96,6 +99,10 @@ export default defineConfig(() => {
       drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
       legalComments: "none",
       treeShaking: true,
+      target: "es2022",
+      minifyIdentifiers: true,
+      minifySyntax: true,
+      minifyWhitespace: true,
     },
     css: {
       devSourcemap: false,
