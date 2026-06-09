@@ -161,7 +161,7 @@ export default function FrostSwapWidget() {
           functionName: "quoteExactInputSingle",
           args: [{ tokenIn, tokenOut, amountIn, fee: POOL_FEE, sqrtPriceLimitX96: 0n }],
         });
-        setQuote((result.result as [bigint])[0]);
+        setQuote((result.result as unknown as [bigint])[0]);
       } catch { setQuote(null); }
       setQuoteLoading(false);
     }, 600);
@@ -169,7 +169,8 @@ export default function FrostSwapWidget() {
 
   const getWalletClient = useCallback(() => {
     if (!wallet?.provider) return null;
-    return createWalletClient({ chain: arbitrum, transport: custom(wallet.provider) });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return createWalletClient({ chain: arbitrum, transport: custom(wallet.provider as any) });
   }, [wallet]);
 
   const switchToArbitrum = useCallback(async () => {
@@ -383,7 +384,7 @@ export default function FrostSwapWidget() {
         </div>
       </div>
 
-      {quote && (
+      {quote != null && (
         <div className="text-xs px-1 flex justify-between" style={{ color: "rgba(var(--oui-color-base-foreground), 0.4)" }}>
           <span>Slippage: 0.5%</span>
           <span>Uniswap V3 · 1% fee tier</span>

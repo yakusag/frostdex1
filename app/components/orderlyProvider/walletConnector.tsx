@@ -14,7 +14,8 @@ const WalletConnector = ({ children, networkId }: WalletConnectorProps) => {
   const disableEVMWallets = getRuntimeConfigBoolean('VITE_DISABLE_EVM_WALLETS');
   const disableSolanaWallets = getRuntimeConfigBoolean('VITE_DISABLE_SOLANA_WALLETS');
 
-  const evmInitial = disableEVMWallets ? undefined : getEvmInitialConfig();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const evmInitial = disableEVMWallets ? undefined : (getEvmInitialConfig() as any);
 
   const solanaInitial = disableSolanaWallets ? undefined : {
     network: networkId === 'mainnet' ? WalletAdapterNetwork.Mainnet : WalletAdapterNetwork.Devnet,

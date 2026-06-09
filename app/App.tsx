@@ -1,8 +1,6 @@
 import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { SpeedInsights } from "@vercel/speed-insights/react";
-import { Analytics } from "@vercel/analytics/react";
 import OrderlyProvider from "@/components/orderlyProvider";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
 import { NetworkStatus } from "@/components/NetworkStatus";
@@ -78,8 +76,6 @@ export default function App() {
         onShowAll={showAll}
         onHideAll={hideAll}
       />
-      <SpeedInsights />
-      <Analytics />
     </>
   );
 }

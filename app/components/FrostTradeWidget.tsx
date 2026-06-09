@@ -43,7 +43,7 @@ export default function FrostTradeWidget({ onHide }: Props) {
   const prevPrice = useRef<number>(0);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
 
-  const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps } =
+  const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps, wasDragged } =
     useDraggable("frost-widget", getDefaultPos());
 
   const fetchPrice = async () => {
