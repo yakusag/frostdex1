@@ -427,11 +427,23 @@ export const useOrderlyConfig = () => {
           main: getRuntimeConfigBoolean("VITE_HAS_PRIMARY_LOGO")
             ? {
                 component: (
-                  <img
-                    src={withBasePath("/logo.webp")}
-                    alt="logo"
-                    style={{ height: "28px", maxHeight: "28px", width: "auto" }}
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <img
+                      src={withBasePath("/logo.webp")}
+                      alt="logo"
+                      style={{ height: "36px", width: "auto", flexShrink: 0 }}
+                    />
+                    <span style={{
+                      fontSize: "18px",
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      color: "#38e0f8",
+                      fontFamily: "inherit",
+                      lineHeight: 1,
+                    }}>
+                      FROSTDEX
+                    </span>
+                  </div>
                 ),
               }
             : { img: withBasePath("/orderly-logo.svg") },
