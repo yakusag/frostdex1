@@ -384,7 +384,7 @@ export const useOrderlyConfig = () => {
                 <img
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
-                  style={{ height: "36px", width: "auto", flexShrink: 0, display: "block" }}
+                  style={{ height: "96px", width: "auto", flexShrink: 0, display: "block" }}
                 />
               ) : (
                 components.title
@@ -439,7 +439,7 @@ export const useOrderlyConfig = () => {
                     <img
                       src={withBasePath("/logo.webp")}
                       alt="logo"
-                      style={{ height: "96px", width: "48px", flexShrink: 0 }}
+                      style={{ height: "96px", width: "auto", flexShrink: 0 }}
                     />
                     <span style={{
                       fontSize: "18px",
