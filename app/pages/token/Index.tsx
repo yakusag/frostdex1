@@ -220,7 +220,7 @@ export default function TokenIndex() {
                     className="oui-flex oui-items-center oui-gap-3 oui-w-full oui-px-4 oui-py-3 hover:oui-bg-base-7 oui-bg-transparent oui-border-none oui-cursor-pointer oui-text-left oui-transition-colors oui-border-b oui-border-line-12/50 last:oui-border-0"
                   >
                     {coin.thumb ? (
-                      <img src={coin.thumb} alt={coin.name} className="oui-w-7 oui-h-7 oui-rounded-full oui-flex-shrink-0" />
+                      <img src={coin.thumb} alt={coin.name} loading="lazy" decoding="async" className="oui-w-7 oui-h-7 oui-rounded-full oui-flex-shrink-0" />
                     ) : (
                       <div className="oui-w-7 oui-h-7 oui-rounded-full oui-bg-base-6 oui-flex-shrink-0" />
                     )}
@@ -261,7 +261,7 @@ export default function TokenIndex() {
                     className="oui-flex oui-items-center oui-gap-3 oui-bg-base-8 oui-border oui-border-line-12 oui-rounded-xl oui-p-3 hover:oui-border-primary/50 hover:oui-bg-base-7 oui-cursor-pointer oui-text-left oui-transition-colors oui-w-full"
                   >
                     {item.thumb ? (
-                      <img src={item.thumb} alt={item.name} className="oui-w-8 oui-h-8 oui-rounded-full oui-flex-shrink-0" />
+                      <img src={item.thumb} alt={item.name} loading="lazy" decoding="async" className="oui-w-8 oui-h-8 oui-rounded-full oui-flex-shrink-0" />
                     ) : (
                       <div className="oui-w-8 oui-h-8 oui-rounded-full oui-bg-base-6 oui-flex-shrink-0" />
                     )}
@@ -306,7 +306,7 @@ function CoinDetail({ coin }: { coin: CoinDetail }) {
       {/* Header */}
       <div className="oui-bg-base-8 oui-border oui-border-line-12 oui-rounded-xl oui-p-6">
         <div className="oui-flex oui-items-center oui-gap-4 oui-mb-4">
-          <img src={coin.image.large} alt={coin.name} className="oui-w-14 oui-h-14 oui-rounded-full" />
+          <img src={coin.image.large} alt={coin.name} loading="lazy" decoding="async" className="oui-w-14 oui-h-14 oui-rounded-full" />
           <div className="oui-flex-1">
             <div className="oui-flex oui-items-center oui-gap-2 oui-flex-wrap">
               <h2 className="oui-text-xl oui-font-bold oui-text-base-contrast-80">{coin.name}</h2>

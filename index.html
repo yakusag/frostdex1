@@ -5,29 +5,57 @@
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- SEO -->
+    <meta name="description" content="FrostDex — Trade perpetual futures on Orderly Network. Low fees, deep liquidity, multi-chain support." />
+    <meta name="keywords" content="dex, crypto, trading, frost, frostdex, ethereum, arbitrum, perpetuals, orderly network" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://frostdex.pw/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FrostDex" />
+    <meta property="og:title" content="FrostDex — Decentralized Exchange" />
+    <meta property="og:description" content="Trade perpetual futures on Orderly Network. Low fees, deep liquidity, multi-chain support." />
+    <meta property="og:image" content="https://frostdex.pw/frostdex-badge.webp" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://frostdex.pw/" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@FrostDex" />
+    <meta name="twitter:title" content="FrostDex — Decentralized Exchange" />
+    <meta name="twitter:description" content="Trade perpetual futures on Orderly Network. Low fees, deep liquidity, multi-chain support." />
+    <meta name="twitter:image" content="https://frostdex.pw/frostdex-badge.webp" />
+
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#04061400" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FrostDex" />
     <link rel="apple-touch-icon" href="/favicon.webp" />
 
     <title>FrostDex</title>
 
-    <!-- speed: preconnect + prefetch critical origins -->
+    <!-- Preload critical assets -->
+    <link rel="preload" href="/frostdex-logo.webp" as="image" type="image/webp" />
+    <link rel="preload" href="/fonts/Manrope/Manrope-Medium.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/fonts/Manrope/Manrope-SemiBold.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/fonts/Manrope/Manrope-Bold.ttf" as="font" type="font/ttf" crossorigin />
+
+    <!-- Preconnect to external APIs -->
     <link rel="preconnect" href="https://api.orderly.org" crossorigin />
     <link rel="preconnect" href="https://api.groq.com" crossorigin />
     <link rel="preconnect" href="https://api.dexscreener.com" crossorigin />
     <link rel="preconnect" href="https://arb1.arbitrum.io" crossorigin />
     <link rel="preconnect" href="https://ws.orderly.org" crossorigin />
+    <link rel="preconnect" href="https://static.orderly.org" crossorigin />
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
     <link rel="dns-prefetch" href="https://arbiscan.io" />
     <link rel="dns-prefetch" href="https://api.coingecko.com" />
     <link rel="dns-prefetch" href="https://wss.orderly.org" />
-    <link rel="dns-prefetch" href="https://static.orderly.org" />
 
     <style>
       /* ── base ── */
@@ -149,7 +177,7 @@
     <div id="splash">
       <div id="splash-aurora"></div>
       <div id="splash-particles"></div>
-      <img id="splash-flake" src="/frostdex-logo.webp" alt="FrostDex" />
+      <img id="splash-flake" src="/frostdex-logo.webp" alt="FrostDex" fetchpriority="high" />
       <div id="splash-name">FROSTDEX</div>
       <div id="splash-candles">
         <div class="splash-candle"></div>

@@ -54,7 +54,11 @@ export default defineConfig(() => {
     },
     base: basePath,
     plugins: [
-      react(),
+      react({
+        babel: {
+          plugins: [],
+        },
+      }),
       tsconfigPaths(),
       htmlTitlePlugin(),
       cjsInterop({
@@ -75,15 +79,51 @@ export default defineConfig(() => {
       rollupOptions: {
         maxParallelFileOps: 3,
         output: {
-          manualChunks: {
-            "vendor-react":     ["react", "react-dom", "react-router-dom"],
-            "vendor-orderly-a": ["@orderly.network/react-app", "@orderly.network/ui"],
-            "vendor-orderly-b": ["@orderly.network/ui-scaffold", "@orderly.network/trading"],
-            "vendor-orderly-c": ["@orderly.network/markets", "@orderly.network/portfolio"],
-            "vendor-orderly-d": ["@orderly.network/affiliate", "@orderly.network/vaults"],
-            "vendor-orderly-e": ["@orderly.network/wallet-connector"],
-            "vendor-web3":      ["wagmi"],
-            "vendor-solana":    ["@solana/wallet-adapter-base", "@solana/wallet-adapter-wallets"],
+          manualChunks(id) {
+            // React core — always first to load
+            if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/react-router-dom/")) {
+              return "vendor-react";
+            }
+            // Orderly UI layer
+            if (id.includes("@orderly.network/react-app") || id.includes("@orderly.network/ui/")) {
+              return "vendor-orderly-a";
+            }
+            if (id.includes("@orderly.network/ui-scaffold") || id.includes("@orderly.network/trading/")) {
+              return "vendor-orderly-b";
+            }
+            if (id.includes("@orderly.network/markets") || id.includes("@orderly.network/portfolio")) {
+              return "vendor-orderly-c";
+            }
+            if (id.includes("@orderly.network/affiliate") || id.includes("@orderly.network/vaults")) {
+              return "vendor-orderly-d";
+            }
+            if (id.includes("@orderly.network/wallet-connector-privy")) {
+              return "vendor-privy";
+            }
+            if (id.includes("@orderly.network/wallet-connector")) {
+              return "vendor-orderly-e";
+            }
+            if (id.includes("@orderly.network/i18n") || id.includes("@orderly.network/trading-leaderboard") || id.includes("@orderly.network/trading-points")) {
+              return "vendor-orderly-f";
+            }
+            // Web3 / wallets
+            if (id.includes("node_modules/wagmi") || id.includes("node_modules/viem") || id.includes("node_modules/@wagmi")) {
+              return "vendor-web3";
+            }
+            if (id.includes("@solana/wallet-adapter-base") || id.includes("@solana/wallet-adapter-wallets") || id.includes("@solana-mobile")) {
+              return "vendor-solana";
+            }
+            if (id.includes("@web3-onboard") || id.includes("@reown") || id.includes("@walletconnect")) {
+              return "vendor-walletconnect";
+            }
+            // Swap widget
+            if (id.includes("woofi-swap-widget-kit")) {
+              return "vendor-swap";
+            }
+            // Utilities
+            if (id.includes("node_modules/date-fns") || id.includes("node_modules/lodash") || id.includes("node_modules/lucide-react")) {
+              return "vendor-utils";
+            }
           },
         },
       },
