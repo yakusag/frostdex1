@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+
+if [ -z "$GITHUB_TOKEN" ]; then
+  echo "post-commit: GITHUB_TOKEN not set, skipping GitHub push"
+  exit 0
+fi
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then
+  echo "post-commit: Could not determine branch, skipping GitHub push"
+  exit 0
+fi
+
+REMOTE_URL="https://${GITHUB_TOKEN}@github.com/yakusag/frostdex1.git"
+
+echo "post-commit: Pushing to GitHub (yakusag/frostdex1@${BRANCH})..."
+git push "$REMOTE_URL" "${BRANCH}:${BRANCH}" --quiet 2>&1 | sed "s/${GITHUB_TOKEN}/***REDACTED***/g" || {
+  echo "post-commit: GitHub push failed (non-fatal)"
+  exit 0
+}
+echo "post-commit: GitHub push complete"
