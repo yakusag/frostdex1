@@ -381,25 +381,11 @@ export const useOrderlyConfig = () => {
             )}
             <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "52px" }}>
               {isMobile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                  <img
-                    src={withBasePath("/logo.webp")}
-                    alt="FrostDex"
-                    style={{ height: "34px", width: "auto", flexShrink: 0 }}
-                  />
-                  <span style={{
-                    fontSize: "17px",
-                    fontWeight: 800,
-                    letterSpacing: "0.07em",
-                    background: "linear-gradient(90deg, #38e0f8 0%, #0ecb81 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    lineHeight: 1,
-                  }}>
-                    FROSTDEX
-                  </span>
-                </div>
+                <img
+                  src={withBasePath("/logo.webp")}
+                  alt="FrostDex"
+                  style={{ height: "36px", width: "auto", flexShrink: 0, display: "block" }}
+                />
               ) : (
                 components.title
               )}

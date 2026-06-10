@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import OrderlyProvider from "@/components/orderlyProvider";
@@ -8,19 +8,20 @@ import LeverageAutoMax from "@/components/LeverageAutoMax";
 import ReferralHandler from "@/components/ReferralHandler";
 import ReferralWelcome from "@/components/ReferralWelcome";
 import MarketTickerBar from "@/components/MarketTickerBar";
-import AIAssistant from "@/components/AIAssistant";
-import WhaleAlerts from "@/components/WhaleAlerts";
-import SentimentDashboard from "@/components/SentimentDashboard";
-import FrostTradeWidget from "@/components/FrostTradeWidget";
-import SmartMoney from "@/components/SmartMoney";
-import LiqHeatmap from "@/components/LiqHeatmap";
-import MACWidget from "@/components/MACWidget";
-import PriceAlert from "@/components/PriceAlert";
 import WidgetManager from "@/components/WidgetManager";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
+
+const FrostTradeWidget  = lazy(() => import("@/components/FrostTradeWidget"));
+const AIAssistant       = lazy(() => import("@/components/AIAssistant"));
+const WhaleAlerts       = lazy(() => import("@/components/WhaleAlerts"));
+const SentimentDashboard= lazy(() => import("@/components/SentimentDashboard"));
+const SmartMoney        = lazy(() => import("@/components/SmartMoney"));
+const LiqHeatmap        = lazy(() => import("@/components/LiqHeatmap"));
+const MACWidget         = lazy(() => import("@/components/MACWidget"));
+const PriceAlert        = lazy(() => import("@/components/PriceAlert"));
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -60,14 +61,16 @@ export default function App() {
         <LeverageAutoMax />
         <Outlet />
       </OrderlyProvider>
-      {visibility.frost      && <FrostTradeWidget  onHide={() => toggle("frost")} />}
-      {visibility.ai         && <AIAssistant        onHide={() => toggle("ai")} />}
-      {visibility.whale      && <WhaleAlerts         onHide={() => toggle("whale")} />}
-      {visibility.smartmoney && <SmartMoney          onHide={() => toggle("smartmoney")} />}
-      {visibility.liq        && <LiqHeatmap          onHide={() => toggle("liq")} />}
-      {visibility.mac        && <MACWidget            onHide={() => toggle("mac")} />}
-      {visibility.palert     && <PriceAlert           onHide={() => toggle("palert")} />}
-      {visibility.sentiment  && <SentimentDashboard  onHide={() => toggle("sentiment")} />}
+      <Suspense fallback={null}>
+        {visibility.frost      && <FrostTradeWidget   onHide={() => toggle("frost")} />}
+        {visibility.ai         && <AIAssistant         onHide={() => toggle("ai")} />}
+        {visibility.whale      && <WhaleAlerts          onHide={() => toggle("whale")} />}
+        {visibility.smartmoney && <SmartMoney           onHide={() => toggle("smartmoney")} />}
+        {visibility.liq        && <LiqHeatmap           onHide={() => toggle("liq")} />}
+        {visibility.mac        && <MACWidget             onHide={() => toggle("mac")} />}
+        {visibility.palert     && <PriceAlert            onHide={() => toggle("palert")} />}
+        {visibility.sentiment  && <SentimentDashboard   onHide={() => toggle("sentiment")} />}
+      </Suspense>
       <WidgetManager
         visibility={visibility}
         anyHidden={anyHidden}
