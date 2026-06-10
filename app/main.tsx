@@ -1,85 +1,74 @@
-import React, { lazy } from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LoadingSpinner } from './components/LoadingSpinner';
 import { withBasePath } from './utils/base-path';
 import { getRuntimeConfig } from './utils/runtime-config';
 
 import './styles/index.css';
 
-const IndexPage = lazy(() => import('./pages/Index'));
-const PerpLayout = lazy(() => import('./pages/perp/Layout'));
-const PerpIndex = lazy(() => import('./pages/perp/Index'));
-const PerpSymbol = lazy(() => import('./pages/perp/Symbol'));
-const PortfolioLayout = lazy(() => import('./pages/portfolio/Layout'));
-const PortfolioIndex = lazy(() => import('./pages/portfolio/Index'));
+const IndexPage          = lazy(() => import('./pages/Index'));
+const PerpLayout         = lazy(() => import('./pages/perp/Layout'));
+const PerpIndex          = lazy(() => import('./pages/perp/Index'));
+const PerpSymbol         = lazy(() => import('./pages/perp/Symbol'));
+const PortfolioLayout    = lazy(() => import('./pages/portfolio/Layout'));
+const PortfolioIndex     = lazy(() => import('./pages/portfolio/Index'));
 const PortfolioPositions = lazy(() => import('./pages/portfolio/Positions'));
-const PortfolioOrders = lazy(() => import('./pages/portfolio/Orders'));
-const PortfolioAssets = lazy(() => import('./pages/portfolio/Assets'));
-const PortfolioApiKey = lazy(() => import('./pages/portfolio/ApiKey'));
-const PortfolioFee = lazy(() => import('./pages/portfolio/Fee'));
-const PortfolioHistory = lazy(() => import('./pages/portfolio/History'));
-const PortfolioSetting = lazy(() => import('./pages/portfolio/Setting'));
-const MarketsLayout = lazy(() => import('./pages/markets/Layout'));
-const MarketsIndex = lazy(() => import('./pages/markets/Index'));
-const LeaderboardLayout = lazy(() => import('./pages/leaderboard/Layout'));
-const LeaderboardIndex = lazy(() => import('./pages/leaderboard/Index'));
-const RewardsLayout = lazy(() => import('./pages/rewards/Layout'));
-const RewardsIndex = lazy(() => import('./pages/rewards/Index'));
-const RewardsAffiliate = lazy(() => import('./pages/rewards/Affiliate'));
-const VaultsLayout = lazy(() => import('./pages/vaults/Layout'));
-const VaultsIndex = lazy(() => import('./pages/vaults/Index'));
-const SwapLayout = lazy(() => import('./pages/swap/Layout'));
-const SwapIndex = lazy(() => import('./pages/swap/Index'));
-const PointsLayout = lazy(() => import('./pages/points/Layout'));
-const PointsIndex = lazy(() => import('./pages/points/Index'));
-const BotLayout = lazy(() => import('./pages/bot/Layout'));
-const BotIndex = lazy(() => import('./pages/bot/Index'));
-const AboutLayout = lazy(() => import('./pages/about/Layout'));
-const AboutIndex = lazy(() => import('./pages/about/Index'));
-const TokenLayout = lazy(() => import('./pages/token/Layout'));
-const TokenIndex = lazy(() => import('./pages/token/Index'));
-const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
-const ReferralIndex = lazy(() => import('./pages/referral/Index'));
-
+const PortfolioOrders    = lazy(() => import('./pages/portfolio/Orders'));
+const PortfolioAssets    = lazy(() => import('./pages/portfolio/Assets'));
+const PortfolioApiKey    = lazy(() => import('./pages/portfolio/ApiKey'));
+const PortfolioFee       = lazy(() => import('./pages/portfolio/Fee'));
+const PortfolioHistory   = lazy(() => import('./pages/portfolio/History'));
+const PortfolioSetting   = lazy(() => import('./pages/portfolio/Setting'));
+const MarketsLayout      = lazy(() => import('./pages/markets/Layout'));
+const MarketsIndex       = lazy(() => import('./pages/markets/Index'));
+const LeaderboardLayout  = lazy(() => import('./pages/leaderboard/Layout'));
+const LeaderboardIndex   = lazy(() => import('./pages/leaderboard/Index'));
+const RewardsLayout      = lazy(() => import('./pages/rewards/Layout'));
+const RewardsIndex       = lazy(() => import('./pages/rewards/Index'));
+const RewardsAffiliate   = lazy(() => import('./pages/rewards/Affiliate'));
+const VaultsLayout       = lazy(() => import('./pages/vaults/Layout'));
+const VaultsIndex        = lazy(() => import('./pages/vaults/Index'));
+const SwapLayout         = lazy(() => import('./pages/swap/Layout'));
+const SwapIndex          = lazy(() => import('./pages/swap/Index'));
+const PointsLayout       = lazy(() => import('./pages/points/Layout'));
+const PointsIndex        = lazy(() => import('./pages/points/Index'));
+const BotLayout          = lazy(() => import('./pages/bot/Layout'));
+const BotIndex           = lazy(() => import('./pages/bot/Index'));
+const AboutLayout        = lazy(() => import('./pages/about/Layout'));
+const AboutIndex         = lazy(() => import('./pages/about/Index'));
+const TokenLayout        = lazy(() => import('./pages/token/Layout'));
+const TokenIndex         = lazy(() => import('./pages/token/Index'));
+const ReferralLayout     = lazy(() => import('./pages/referral/Layout'));
+const ReferralIndex      = lazy(() => import('./pages/referral/Index'));
 
 async function loadRuntimeConfig() {
   return new Promise<void>((resolve) => {
     const script = document.createElement('script');
     script.src = withBasePath('/config.js');
-    script.onload = () => {
-      console.log('Runtime config loaded successfully');
-      resolve();
-    };
-    script.onerror = () => {
-      console.log('Runtime config not found, using build-time env vars');
-      resolve();
-    };
+    script.onload = () => { resolve(); };
+    script.onerror = () => { resolve(); };
     document.head.appendChild(script);
   });
 }
 
 function loadAnalytics() {
   const analyticsScript = getRuntimeConfig('VITE_ANALYTICS_SCRIPT');
-
   if (analyticsScript) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(analyticsScript, 'text/html');
     const scripts = doc.querySelectorAll('script');
-    
     scripts.forEach((originalScript) => {
       const newScript = document.createElement('script');
-      
       Array.from(originalScript.attributes).forEach((attr) => {
         newScript.setAttribute(attr.name, attr.value);
       });
-      
       if (originalScript.textContent) {
         newScript.textContent = originalScript.textContent;
       }
-      
       document.head.appendChild(newScript);
     });
   }
@@ -119,16 +108,12 @@ const router = createBrowserRouter([
       {
         path: 'markets',
         element: <MarketsLayout />,
-        children: [
-          { index: true, element: <MarketsIndex /> },
-        ],
+        children: [{ index: true, element: <MarketsIndex /> }],
       },
       {
         path: 'leaderboard',
         element: <LeaderboardLayout />,
-        children: [
-          { index: true, element: <LeaderboardIndex /> },
-        ],
+        children: [{ index: true, element: <LeaderboardIndex /> }],
       },
       {
         path: 'rewards',
@@ -141,51 +126,37 @@ const router = createBrowserRouter([
       {
         path: 'vaults',
         element: <VaultsLayout />,
-        children: [
-          { index: true, element: <VaultsIndex /> },
-        ],
+        children: [{ index: true, element: <VaultsIndex /> }],
       },
       {
         path: 'swap',
         element: <SwapLayout />,
-        children: [
-          { index: true, element: <SwapIndex /> },
-        ],
+        children: [{ index: true, element: <SwapIndex /> }],
       },
       {
         path: 'points',
         element: <PointsLayout />,
-        children: [
-          { index: true, element: <PointsIndex /> },
-        ],
+        children: [{ index: true, element: <PointsIndex /> }],
       },
       {
         path: 'bot',
         element: <BotLayout />,
-        children: [
-          { index: true, element: <BotIndex /> },
-        ],
+        children: [{ index: true, element: <BotIndex /> }],
       },
       {
         path: 'about',
         element: <AboutLayout />,
-        children: [
-          { index: true, element: <AboutIndex /> },
-        ],
+        children: [{ index: true, element: <AboutIndex /> }],
       },
       {
         path: 'token',
         element: <TokenLayout />,
-        children: [
-          { index: true, element: <TokenIndex /> },
-        ],
+        children: [{ index: true, element: <TokenIndex /> }],
       },
       {
         path: 'referral',
         element: <ReferralLayout />,
-        children: [
-          { index: true, element: <ReferralIndex /> },
-        ],
+        children: [{ index: true, element: <ReferralIndex /> }],
       },
     ],
   },
@@ -197,12 +168,20 @@ function prefetchRoutes() {
     import('./pages/perp/Index');
     import('./pages/portfolio/Layout');
     import('./pages/portfolio/Index');
+    import('./pages/portfolio/Positions');
+    import('./pages/portfolio/Orders');
+    import('./pages/portfolio/Assets');
     import('./pages/markets/Layout');
     import('./pages/markets/Index');
     import('./pages/leaderboard/Layout');
     import('./pages/leaderboard/Index');
+    import('./pages/rewards/Layout');
+    import('./pages/rewards/Index');
+    import('./pages/rewards/Affiliate');
     import('./pages/swap/Layout');
     import('./pages/swap/Index');
+    import('./pages/points/Layout');
+    import('./pages/points/Index');
     import('./pages/bot/Layout');
     import('./pages/bot/Index');
     import('./pages/vaults/Layout');
@@ -224,11 +203,13 @@ function prefetchRoutes() {
 
 loadRuntimeConfig().then(() => {
   loadAnalytics();
-  
+
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <HelmetProvider>
-        <RouterProvider router={router} />
+        <Suspense fallback={<LoadingSpinner />}>
+          <RouterProvider router={router} />
+        </Suspense>
       </HelmetProvider>
     </React.StrictMode>
   );
@@ -248,4 +229,3 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
-
