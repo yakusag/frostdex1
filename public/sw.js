@@ -1,47 +1,51 @@
-const CACHE_VERSION = 'v3';
-let CACHE_NAME = `frostdex-dex-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v4';
+let CACHE_NAME = `frostdex-${CACHE_VERSION}`;
 let cacheNameInitialized = false;
 
-/* Assets that must NEVER be served stale */
-const NEVER_CACHE = ['/', '/index.html', '/config.js', '/sw.js', '/manifest.json'];
+/* Never serve these stale — always fetch fresh */
+const NEVER_CACHE_PATHS = ['/', '/index.html', '/config.js', '/sw.js', '/manifest.json'];
 
-/* Hashed asset pattern — these are content-addressed, safe to cache forever */
-const HASHED_ASSET_RE = /\/assets\/.*-[A-Za-z0-9_-]{8,}\.(js|mjs|css)$/;
+/* Hashed bundles: /assets/xxx-AbCdEfGh.js — safe to cache forever */
+const HASHED_ASSET_RE = /\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(js|mjs|css)$/;
 
-/* Static file extensions worth caching */
-const STATIC_EXT_RE = /\.(woff2?|ttf|otf|png|jpg|jpeg|svg|webp|ico|gif)$/i;
+/* Fonts and images — cache-first, long-lived */
+const STATIC_EXT_RE = /\.(woff2?|ttf|otf|eot|png|jpg|jpeg|svg|webp|ico|gif)$/i;
 
-/* External origins we should never intercept */
-const EXTERNAL_PASSTHROUGH = [
+/* External hostnames to pass through untouched */
+const PASSTHROUGH_HOSTS = new Set([
   'api.orderly.org',
+  'api-evm.orderly.org',
+  'testnet-api-evm.orderly.org',
   'ws.orderly.org',
   'wss.orderly.org',
   'static.orderly.org',
   'api.groq.com',
   'api.dexscreener.com',
   'api.coingecko.com',
-];
+  'cdn.jsdelivr.net',
+]);
 
 async function initCacheName() {
   if (cacheNameInitialized) return;
   try {
-    const res = await fetch('/config.js');
+    const res = await fetch('/config.js', { cache: 'no-store' });
     const text = await res.text();
     const json = text
       .replace(/window\.__RUNTIME_CONFIG__\s*=\s*/, '')
       .replace(/;\s*$/, '')
       .trim();
     const cfg = JSON.parse(json);
-    const broker = cfg.VITE_ORDERLY_BROKER_ID || 'frostdex';
-    CACHE_NAME = `${broker}-dex-${CACHE_VERSION}`;
+    const broker = (cfg.VITE_ORDERLY_BROKER_ID || 'frostdex').replace(/[^a-z0-9-]/gi, '');
+    CACHE_NAME = `${broker}-${CACHE_VERSION}`;
   } catch {
-    CACHE_NAME = `frostdex-dex-${CACHE_VERSION}`;
+    /* keep default */
   }
   cacheNameInitialized = true;
 }
 
-/* ── install: take control immediately ── */
+/* ── install: pre-cache critical static assets ── */
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     initCacheName().then(() =>
       caches.open(CACHE_NAME).then((cache) =>
@@ -51,106 +55,79 @@ self.addEventListener('install', (event) => {
           '/fonts/Manrope/Manrope-Bold.ttf',
           '/favicon.webp',
           '/frostdex-logo.webp',
-        ]).catch(() => {})
+        ]).catch(() => { /* non-fatal: assets might not exist yet */ })
       )
     )
   );
-  self.skipWaiting();
 });
 
-/* ── activate: purge old caches ── */
+/* ── activate: delete every old cache version ── */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    initCacheName().then(() =>
-      caches.keys().then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== CACHE_NAME)
-            .map((k) => caches.delete(k))
-        )
-      )
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-/* ── fetch: three strategies ── */
+/* ── fetch ── */
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') return;
 
+  /* Only handle GET over HTTP(S) */
+  if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  /* Pass through external API traffic untouched */
-  if (EXTERNAL_PASSTHROUGH.includes(url.hostname)) return;
+  /* Pass through external APIs / CDNs untouched */
+  if (PASSTHROUGH_HOSTS.has(url.hostname)) return;
 
-  /* Never intercept SW / manifest themselves */
+  /* Skip SW/manifest requests */
   if (url.pathname === '/sw.js' || url.pathname === '/manifest.json') return;
 
-  /* Strategy 1 — Network-only for HTML + config (always fresh) */
-  if (NEVER_CACHE.includes(url.pathname)) {
+  /* ── Strategy A: Network-only (always fresh) ── */
+  if (NEVER_CACHE_PATHS.includes(url.pathname)) {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request))
+      fetch(request).catch(() => caches.match(request).then((r) => r || Promise.reject()))
     );
     return;
   }
 
-  /* Strategy 2 — Cache-first for hashed JS/CSS bundles (immutable) */
+  /* ── Strategy B: Cache-first for hashed JS/CSS (immutable) ── */
   if (HASHED_ASSET_RE.test(url.pathname)) {
     event.respondWith(
-      initCacheName().then(() =>
-        caches.open(CACHE_NAME).then((cache) =>
-          cache.match(request).then((cached) => {
-            if (cached) return cached;
-            return fetch(request).then((res) => {
-              if (res && res.status === 200 && res.type === 'basic') {
-                cache.put(request, res.clone()).catch(() => {});
-              }
-              return res;
-            });
-          })
-        )
-      )
-    );
-    return;
-  }
-
-  /* Strategy 3 — Cache-first for fonts + images (long-lived) */
-  if (STATIC_EXT_RE.test(url.pathname)) {
-    event.respondWith(
-      initCacheName().then(() =>
-        caches.open(CACHE_NAME).then((cache) =>
-          cache.match(request).then((cached) => {
-            if (cached) return cached;
-            return fetch(request).then((res) => {
-              if (res && res.status === 200 && res.type === 'basic') {
-                cache.put(request, res.clone()).catch(() => {});
-              }
-              return res;
-            }).catch(() => cached || Promise.reject(new Error('offline')));
-          })
-        )
-      )
-    );
-    return;
-  }
-
-  /* Strategy 4 — Stale-while-revalidate for everything else (locales, etc.) */
-  event.respondWith(
-    initCacheName().then(() =>
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(request).then((cached) => {
-          const fetchPromise = fetch(request).then((res) => {
-            if (res && res.status === 200 && res.type === 'basic') {
-              cache.put(request, res.clone()).catch(() => {});
-            }
+          if (cached) return cached;
+          return fetch(request).then((res) => {
+            if (res.ok && res.type === 'basic') cache.put(request, res.clone()).catch(() => {});
             return res;
-          }).catch(() => null);
-
-          return cached || fetchPromise;
+          });
         })
       )
-    )
-  );
+    );
+    return;
+  }
+
+  /* ── Strategy C: Cache-first for fonts & images ── */
+  if (STATIC_EXT_RE.test(url.pathname)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(request).then((cached) => {
+          if (cached) return cached;
+          return fetch(request).then((res) => {
+            if (res.ok && res.type === 'basic') cache.put(request, res.clone()).catch(() => {});
+            return res;
+          }).catch(() => { throw new Error('offline'); });
+        })
+      )
+    );
+    return;
+  }
+
+  /* ── Strategy D: Network-only for everything else ──
+     (TradingView scripts, locale JSON, non-hashed JS — never cache these
+      to avoid serving stale code after a deploy) */
+  /* default: no respondWith → browser handles natively */
 });
