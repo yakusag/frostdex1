@@ -10,6 +10,7 @@ import ReferralWelcome from "@/components/ReferralWelcome";
 import MarketTickerBar from "@/components/MarketTickerBar";
 import WidgetManager from "@/components/WidgetManager";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
+import PWAInstallBanner from "@/components/PWAInstallBanner";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
@@ -52,6 +53,7 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" type="image/webp" href={withBasePath("/favicon.webp")} />
       </Helmet>
+      <PWAInstallBanner />
       <HttpsRequiredWarning />
       <NetworkStatus />
       <ReferralHandler />
