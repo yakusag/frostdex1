@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 let CACHE_NAME = `frostdex-${CACHE_VERSION}`;
 let cacheNameInitialized = false;
 
@@ -55,6 +55,8 @@ self.addEventListener('install', (event) => {
           '/fonts/Manrope/Manrope-Bold.ttf',
           '/favicon.webp',
           '/frostdex-logo.webp',
+          '/icon-192.png',
+          '/icon-512.png',
         ]).catch(() => { /* non-fatal: assets might not exist yet */ })
       )
     )
