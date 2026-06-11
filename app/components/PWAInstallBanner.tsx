@@ -27,7 +27,6 @@ export default function PWAInstallBanner() {
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e);
-      localStorage.setItem(STORAGE_KEY, "1");
       setShow(true);
     };
 
@@ -35,7 +34,6 @@ export default function PWAInstallBanner() {
 
     if (isIOS()) {
       setIos(true);
-      localStorage.setItem(STORAGE_KEY, "1");
       setShow(true);
     }
 
@@ -43,14 +41,15 @@ export default function PWAInstallBanner() {
   }, []);
 
   const dismiss = useCallback(() => {
+    localStorage.setItem(STORAGE_KEY, "1");
     setShow(false);
   }, []);
 
   const installAndroid = useCallback(async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") localStorage.setItem(STORAGE_KEY, "1");
+    await deferredPrompt.userChoice;
+    localStorage.setItem(STORAGE_KEY, "1");
     setDeferred(null);
     setShow(false);
   }, [deferredPrompt]);
