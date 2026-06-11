@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
+import { withBasePath } from "../utils/base-path";
 
 const STORAGE_KEY = "frost-pwa-dismissed";
 
 function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
 }
 
@@ -25,6 +27,7 @@ export default function PWAInstallBanner() {
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e);
+      localStorage.setItem(STORAGE_KEY, "1");
       setShow(true);
     };
 
@@ -32,6 +35,7 @@ export default function PWAInstallBanner() {
 
     if (isIOS()) {
       setIos(true);
+      localStorage.setItem(STORAGE_KEY, "1");
       setShow(true);
     }
 
@@ -39,7 +43,6 @@ export default function PWAInstallBanner() {
   }, []);
 
   const dismiss = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, "1");
     setShow(false);
   }, []);
 
@@ -81,7 +84,7 @@ export default function PWAInstallBanner() {
       `}</style>
 
       <img
-        src="/icon-192.png"
+        src={withBasePath("/icon-192.png")}
         alt="FrostDex"
         style={{
           width: 48,
@@ -186,11 +189,11 @@ function ShareIcon() {
       height="13"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="rgb(56,224,248)"
-      strokeWidth="2.5"
+      stroke="currentColor"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ display: "inline", verticalAlign: "middle", margin: "0 2px" }}
+      style={{ display: "inline", verticalAlign: "middle", color: "rgb(56,224,248)" }}
     >
       <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
       <polyline points="16 6 12 2 8 6" />

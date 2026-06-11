@@ -14,6 +14,7 @@ import PWAInstallBanner from "@/components/PWAInstallBanner";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
+import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 const FrostTradeWidget  = lazy(() => import("@/components/FrostTradeWidget"));
 const AIAssistant       = lazy(() => import("@/components/AIAssistant"));
@@ -58,6 +59,7 @@ export default function App() {
       <NetworkStatus />
       <ReferralHandler />
       <ReferralWelcome />
+      <PWAInstallBanner />
       <MarketTickerBar />
       <OrderlyProvider>
         <LeverageAutoMax />
