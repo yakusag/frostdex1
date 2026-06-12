@@ -113,6 +113,7 @@ export default defineConfig({
       "@abstract-foundation/agw-react",
       "@fractalwagmi/solana-wallet-adapter",
       "readable-stream",
+      "@orderly.network/affiliate",
     ],
     esbuildOptions: {
       define: { global: "globalThis" },

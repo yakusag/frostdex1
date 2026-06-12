@@ -1,2 +1,3 @@
 - [Vite trailing-slash shim fix](vite-trailing-slash-shim.md) — fix for `process/` and `buffer/` trailing-slash imports failing in esbuild optimizer
 - [FrostDex migration structure](frostdex-migration.md) — how frostdex was migrated from .migration-backup into live artifacts/
+- [FrostDex port configuration](frostdex-port-config.md) — web app on port 3000, api-server on 8080; @orderly.network/affiliate must be in optimizeDeps.exclude

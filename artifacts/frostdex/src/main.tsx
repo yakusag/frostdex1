@@ -37,6 +37,8 @@ const PointsLayout = lazy(() => import('./pages/points/Layout'));
 const PointsIndex = lazy(() => import('./pages/points/Index'));
 const BotLayout = lazy(() => import('./pages/bot/Layout'));
 const BotIndex = lazy(() => import('./pages/bot/Index'));
+const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
+const ReferralIndex = lazy(() => import('./pages/referral/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -156,6 +158,13 @@ const router = createBrowserRouter([
         element: <BotLayout />,
         children: [
           { index: true, element: <BotIndex /> },
+        ],
+      },
+      {
+        path: 'referral',
+        element: <ReferralLayout />,
+        children: [
+          { index: true, element: <ReferralIndex /> },
         ],
       },
     ],
