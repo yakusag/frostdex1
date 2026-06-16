@@ -1,6 +1,7 @@
 import { useEffect, lazy, Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import OrderlyProvider from "@/components/orderlyProvider";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
 import { NetworkStatus } from "@/components/NetworkStatus";
@@ -62,6 +63,8 @@ export default function App() {
         onToggle={toggle}
         onShowAll={showAll}
       />
+      {/* @ts-expect-error - SpeedInsights types not yet fully compatible with React 19 */}
+      <SpeedInsights />
     </>
   );
 }
