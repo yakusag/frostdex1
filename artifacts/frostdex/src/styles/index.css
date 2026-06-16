@@ -338,6 +338,16 @@ body {
 .rw-btn:hover  { opacity: 0.88; }
 .rw-btn:active { opacity: 1; }
 
+/* ─── hide "Powered by Orderly" scaffold branding ───────────────────── */
+[class*="oui-footer"] a[href*="orderly.network"],
+[class*="oui-footer"] a[href*="orderly.org"],
+footer a[href*="orderly"],
+[class*="PoweredBy"],
+[class*="powered-by"],
+[class*="oui-powered"] {
+  display: none !important;
+}
+
 /* ─── smooth scrolling ──────────────────────────────────────────────── */
 html {
   scroll-behavior: smooth;

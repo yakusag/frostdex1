@@ -322,31 +322,57 @@ function ReferralDashboardInner() {
           </div>
         </div>
 
-        {/* ── CTA to full affiliate dashboard ── */}
+        {/* ── FrostDex Trade CTA (distributor referral) ── */}
         <div
-          className="oui-rounded-xl oui-p-5 oui-flex oui-items-center oui-justify-between oui-gap-4 oui-flex-wrap"
-          style={{ background: "rgba(56,224,248,0.05)", border: "1px solid rgba(56,224,248,0.12)" }}
+          className="oui-rounded-2xl oui-overflow-hidden oui-relative"
+          style={{
+            background: "linear-gradient(135deg, rgba(56,224,248,0.1) 0%, rgba(14,203,129,0.06) 60%, rgba(11,14,17,0.9) 100%)",
+            border: "1px solid rgba(56,224,248,0.2)",
+          }}
         >
-          <div>
-            <p className="oui-text-sm oui-font-semibold oui-text-base-contrast oui-mb-0.5">
-              Want advanced analytics?
-            </p>
-            <p className="oui-text-xs oui-text-base-contrast-54">
-              View detailed charts, daily volume breakdowns, and manage multiple referral codes in the full Affiliate Dashboard.
-            </p>
+          <div className="oui-absolute oui-inset-0 oui-pointer-events-none" style={{
+            background: "radial-gradient(ellipse 50% 70% at 20% 50%, rgba(56,224,248,0.07) 0%, transparent 70%)",
+          }} />
+          <div className="oui-relative oui-p-6 md:oui-p-8 oui-flex oui-flex-col md:oui-flex-row oui-items-center oui-gap-6">
+            <div className="oui-flex-1">
+              <div className="oui-flex oui-items-center oui-gap-2 oui-mb-2">
+                <Zap size={16} style={{ color: "rgba(56,224,248,0.9)" }} />
+                <span className="oui-text-xs oui-font-bold oui-uppercase oui-tracking-widest" style={{ color: "rgba(56,224,248,0.9)" }}>
+                  Trade Now on FrostDex
+                </span>
+              </div>
+              <h2 className="oui-text-xl oui-font-bold oui-text-base-contrast oui-mb-1">
+                Start trading perpetuals
+              </h2>
+              <p className="oui-text-sm oui-text-base-contrast-54">
+                Low fees, deep liquidity, no KYC — trade directly on FrostDex and invite your friends to earn commissions.
+              </p>
+            </div>
+            <div className="oui-flex oui-flex-col oui-gap-3 oui-items-center">
+              <a
+                href="https://dex.orderly.network/dex?distributor_code=RYVOVA3B"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="oui-flex oui-items-center oui-gap-2 oui-px-6 oui-py-3 oui-rounded-xl oui-text-sm oui-font-bold oui-whitespace-nowrap oui-transition-all"
+                style={{
+                  background: "linear-gradient(135deg, rgba(56,224,248,0.9) 0%, rgba(14,203,129,0.9) 100%)",
+                  color: "#0b0e11",
+                  boxShadow: "0 4px 20px rgba(56,224,248,0.25)",
+                }}
+              >
+                Open FrostDex
+                <ExternalLink size={14} />
+              </a>
+              <Link
+                to="/rewards/affiliate"
+                className="oui-flex oui-items-center oui-gap-2 oui-px-4 oui-py-2 oui-rounded-lg oui-text-xs oui-font-semibold oui-whitespace-nowrap"
+                style={{ color: "rgba(56,224,248,0.7)" }}
+              >
+                Affiliate Dashboard
+                <ArrowRight size={12} />
+              </Link>
+            </div>
           </div>
-          <Link
-            to="/rewards/affiliate"
-            className="oui-flex oui-items-center oui-gap-2 oui-px-4 oui-py-2.5 oui-rounded-lg oui-text-sm oui-font-semibold oui-whitespace-nowrap oui-transition-all"
-            style={{
-              background: "rgba(56,224,248,0.1)",
-              border: "1px solid rgba(56,224,248,0.25)",
-              color: "rgba(56,224,248,0.9)",
-            }}
-          >
-            Affiliate Dashboard
-            <ExternalLink size={13} />
-          </Link>
         </div>
 
       </div>
