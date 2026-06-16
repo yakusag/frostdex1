@@ -7,14 +7,10 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { cjsInterop } from "vite-plugin-cjs-interop";
 import { createRequire } from "module";
 
-// PORT defaults to 8080 so `vite build` works in CI/Vercel without PORT set.
 const port = Number(process.env.PORT || "8080");
-
 const basePath = process.env.BASE_PATH || "/";
+const isProd = process.env.NODE_ENV === "production";
 
-// Resolve absolute shim paths once at config-load time.
-// This avoids "EISDIR" failures where Rollup/esbuild try to read a directory
-// instead of the shim's actual CJS entry file.
 const _require = createRequire(import.meta.url);
 const vpnpMain = _require.resolve("vite-plugin-node-polyfills");
 const vpnpDir = path.resolve(path.dirname(vpnpMain), "..");
@@ -22,9 +18,6 @@ const bufferShim  = path.join(vpnpDir, "shims/buffer/dist/index.cjs");
 const processShim = path.join(vpnpDir, "shims/process/dist/index.cjs");
 const globalShim  = path.join(vpnpDir, "shims/global/dist/index.cjs");
 
-// Rollup plugin — runs during both `vite build` and internally for optimizeDeps.
-// Intercepts bare shim specifiers before Rollup tries to resolve them as
-// directories (which would give EISDIR).
 const fixVpnpShims = {
   name: "fix-vpnp-shims",
   resolveId(id: string) {
@@ -35,7 +28,6 @@ const fixVpnpShims = {
   },
 };
 
-// esbuild plugin for the dep-optimizer phase (same logic, esbuild API)
 const fixTrailingSlashShims = {
   name: "fix-trailing-slash-shims",
   setup(build: any) {
@@ -75,7 +67,6 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // Keep these for the dev-server transform path as well
       "vite-plugin-node-polyfills/shims/process": processShim,
       "vite-plugin-node-polyfills/shims/buffer":  bufferShim,
       "vite-plugin-node-polyfills/shims/global":  globalShim,
@@ -88,9 +79,39 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    minify: "terser",
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        passes: 2,
+        pure_funcs: ["console.log", "console.info", "console.debug", "console.warn"],
+      },
+      format: { comments: false },
+    },
     rollupOptions: {
       plugins: [fixVpnpShims],
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/react-router-dom/") || id.includes("node_modules/react-router/") || id.includes("node_modules/react-helmet-async/")) {
+            return "react-vendor";
+          }
+          if (id.includes("node_modules/recharts/") || id.includes("node_modules/d3-") || id.includes("node_modules/victory-")) {
+            return "charts-vendor";
+          }
+          if (id.includes("node_modules/@orderly.network/")) {
+            return "orderly-vendor";
+          }
+          if (id.includes("node_modules/@solana/") || id.includes("node_modules/@coral-xyz/") || id.includes("node_modules/bs58") || id.includes("node_modules/borsh")) {
+            return "solana-vendor";
+          }
+          if (id.includes("node_modules/ethers") || id.includes("node_modules/@ethersproject/") || id.includes("node_modules/viem") || id.includes("node_modules/wagmi")) {
+            return "eth-vendor";
+          }
+        },
+      },
     },
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port,
