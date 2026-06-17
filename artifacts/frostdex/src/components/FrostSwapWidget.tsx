@@ -12,8 +12,16 @@ import {
   encodeFunctionData,
   type Address,
 } from "viem";
-import { arbitrum } from "viem/chains";
 import { FROST_TOKEN } from "@/utils/customTokens";
+
+// Inline Arbitrum chain definition — avoids viem/chains subpath export in Rollup builds
+const arbitrum = {
+  id: 42161,
+  name: "Arbitrum One",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://arb1.arbitrum.io/rpc"] } },
+  blockExplorers: { default: { name: "Arbiscan", url: "https://arbiscan.io" } },
+} as const;
 
 const WETH: Address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 const FROST: Address = FROST_TOKEN.address as Address;
