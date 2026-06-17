@@ -1,7 +1,14 @@
+import { useEffect } from 'react';
 import { useRouteError, isRouteErrorResponse } from 'react-router-dom';
 
 export function ErrorBoundary() {
   const error = useRouteError();
+
+  useEffect(() => {
+    if (typeof (window as any).__hideSplash === 'function') {
+      (window as any).__hideSplash();
+    }
+  }, []);
   
   let errorMessage = 'An unexpected error occurred';
   let errorStack: string | undefined;
