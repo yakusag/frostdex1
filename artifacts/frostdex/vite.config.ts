@@ -133,7 +133,6 @@ export default defineConfig({
       "@solana/wallet-standard-wallet-adapter-base",
       "@abstract-foundation/agw-react",
       "@fractalwagmi/solana-wallet-adapter",
-      "readable-stream",
       "@orderly.network/affiliate",
     ],
     esbuildOptions: {

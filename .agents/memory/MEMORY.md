@@ -1,0 +1,1 @@
+- [Replit firewall blocked packages](replit-firewall-blocked-packages.md) — crypto-es, es5-ext, cli-color, form-data, request, @solana/wallet-adapter-trezor blocked; shim pattern + pnpm.overrides fix
