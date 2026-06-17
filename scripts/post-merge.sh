@@ -1,3 +1,4 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile --filter "!@workspace/frostdex-mobile"
+pnpm install --frozen-lockfile
+pnpm --filter db push

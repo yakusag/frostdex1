@@ -1,6 +1,66 @@
 {
-  "installCommand": "yarn install",
-  "buildCommand": "yarn build",
-  "outputDirectory": "build/client",
-  "framework": "vite"
+  "buildCommand": "pnpm --filter @workspace/frostdex run build",
+  "outputDirectory": "artifacts/frostdex/dist/public",
+  "installCommand": "pnpm install --frozen-lockfile --filter \"!@workspace/frostdex-mobile\"",
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo|tradingview|sw\\.js|robots\\.txt).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/config.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    },
+    {
+      "source": "/locales/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=3600" }
+      ]
+    },
+    {
+      "source": "/(favicon\\.webp|favicon\\.svg|frostdex-logo\\.png|logo\\.webp|logo-secondary\\.webp)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=604800, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/fonts/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }

@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-3.11"]
 
 [deployment]
 router = "application"
@@ -17,14 +17,21 @@ expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 180000
+
+[userenv]
+
+[userenv.shared]
+
+[nix]
+channel = "stable-25_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 3001
 
 [[ports]]
 localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
 externalPort = 80
 
 [[ports]]
@@ -33,8 +40,8 @@ externalPort = 3000
 
 [[ports]]
 localPort = 23456
-externalPort = 3001
+externalPort = 3003
 
 [[ports]]
-localPort = 30555
-externalPort = 3002
+localPort = 23457
+externalPort = 4200

@@ -217,6 +217,10 @@ importers:
         version: 3.1.0
 
   artifacts/frostdex:
+    dependencies:
+      '@vercel/speed-insights':
+        specifier: ^2.0.0
+        version: 2.0.0(react@19.1.0)
     devDependencies:
       '@binance/w3w-blocknative-connector':
         specifier: ^1.1.12
@@ -945,6 +949,9 @@ packages:
   '@amplitude/analytics-browser@2.11.13':
     resolution: {integrity: sha512-vzGu0I5E8d5hM1PUsCK9RstLSrmUx11MsDBu+L7fqqdLfPKxyQJ4abzkRae/hyV7FRFIM368Hq0NtGd9GRiHRw==}
 
+  '@amplitude/analytics-browser@2.42.5':
+    resolution: {integrity: sha512-+h3oBppdQWoeIL1f6Xrq0uUx+ffRX/FQBA6OILR2V3cet/qj9PA0t5qi8mrCGPN7Ef9Xjg7fVEVDHQ4ozWHkDg==}
+
   '@amplitude/analytics-client-common@2.4.48':
     resolution: {integrity: sha512-jdRvu8ux3aIf74FvTDZuSFR1mutzdrIg1ebXYqpKizs9upXz1AJnHClkldSw9i4yu924AJ2wudxq6dccHWlNiA==}
 
@@ -963,8 +970,23 @@ packages:
   '@amplitude/plugin-autocapture-browser@1.27.2':
     resolution: {integrity: sha512-UTA/0IDw/f2nnK+S1XILqoI5pgUgMTEZokDS6+pC4wuYtmOS9uNAgKuyajzjW12uobybMHRpv7xLjCJ5khKGAg==}
 
+  '@amplitude/plugin-custom-enrichment-browser@0.1.9':
+    resolution: {integrity: sha512-wemh2Tw3zgQ7sa7MUNyMGz9OR6VjTG4tlAMrLlDKbQ4tVkgNI3oAwOF7+0BA8qzgeMXX6iw+CEKaE+EC/okkuQ==}
+
+  '@amplitude/plugin-event-property-attribution-browser@0.2.1':
+    resolution: {integrity: sha512-xqBCZe0DYsKyQ1eELN2LM8adXwRE2eOi3SnvSu9SkS0GDXBYWinuPCuLqyc/3uD5hY2FLACWvakpU0tr7GDJgg==}
+
+  '@amplitude/plugin-network-capture-browser@1.10.1':
+    resolution: {integrity: sha512-jROIAkUDPd25A/t8W5MpmsTiBat2qoJbCMoNBKKxLMNEaE8VYbheflByWLkm4enbHgWS7OveWy0i3Oc7uPCfAg==}
+
+  '@amplitude/plugin-page-url-enrichment-browser@0.7.11':
+    resolution: {integrity: sha512-u9JhUP/VenJifCSbdTz2YZZiXAphs3efzd+qx1SRAIU6d1swPh0g/GVw3sTwvH+4MZtw3SwVC1OFxmz+f2QVyA==}
+
   '@amplitude/plugin-page-view-tracking-browser@2.11.1':
     resolution: {integrity: sha512-tfXg6Uir6X1XuWsOOXE/EgZ9NvM7i2ktDdagydSrFN6OyVkMvqdjPKUZSSUPuHtOoomboi3WaZsTUfq1jkWP3w==}
+
+  '@amplitude/plugin-web-vitals-browser@1.1.33':
+    resolution: {integrity: sha512-33FzxMH1Lr2lhvr5DDy3xD1HHWEI4KPLQsMUXqDTldkLl/ENNeBWcsljQTTDJipmRdS32I79KJhuHRNaoXd6fg==}
 
   '@aptos-labs/aptos-client@2.2.0':
     resolution: {integrity: sha512-lYgHI8ehgD+Ykhix0IwzLaTCknHp1KNmExbq2bPZk8IeTwQg79D5BOkD46MjW0jGbJbl+J/RBtVF9vM7Te/hWA==}
@@ -1589,8 +1611,8 @@ packages:
   '@bitget-wallet/web3-sdk@0.0.8':
     resolution: {integrity: sha512-WFk6URUxTCukKrU3YpTdWTCScrj6/wwd/0O7eSANeQl1KDbDs+yj/fAkN1Wy6ebI3NMcW6sqN9mrmfwz53dPMQ==}
 
-  '@coinbase/cdp-sdk@1.50.0':
-    resolution: {integrity: sha512-lKK6aC2z8q8C3IA39unNuWc8lgM0hU9mSqkdd7Bncf5xvT28f8G6upexFtJweNwxkeAJwiLSgBkwOhqMK2/OGQ==}
+  '@coinbase/cdp-sdk@1.51.0':
+    resolution: {integrity: sha512-XK8+OXDER1jirYpuiOct4ij65ODQ31LsmyRrZi/J7zF4GB89qxWZ0KPfAdsqJMP7VvE4no+Q++MKkQtAJUBoyg==}
 
   '@coinbase/wallet-sdk@3.9.3':
     resolution: {integrity: sha512-N/A2DRIf0Y3PHc1XAMvbBUu4zisna6qAdqABMZwBMNEfWrXpAwx16pZGkYCLGE+Rvv1edbcB2LYDRnACNcmCiw==}
@@ -5798,6 +5820,32 @@ packages:
   '@urql/exchange-retry@1.3.2':
     resolution: {integrity: sha512-TQMCz2pFJMfpNxmSfX1VSfTjwUIFx/mL+p1bnfM1xjjdla7Z+KnGMW/EhFbpckp3LyWAH4PgOsMwOMnIN+MBFg==}
 
+  '@vercel/speed-insights@2.0.0':
+    resolution: {integrity: sha512-jwkNcrTeafWxjmWq4AHBaptSqZiJkYU5adLC9QBSqeim0GcqDMgN5Ievh8OG1rJ6W3A4l1oiP7qr9CWxGuzu3w==}
+    peerDependencies:
+      '@sveltejs/kit': ^1 || ^2
+      next: '>= 13'
+      nuxt: '>= 3'
+      react: ^18 || ^19 || ^19.0.0-rc
+      svelte: '>= 4'
+      vue: ^3
+      vue-router: ^4
+    peerDependenciesMeta:
+      '@sveltejs/kit':
+        optional: true
+      next:
+        optional: true
+      nuxt:
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+      vue-router:
+        optional: true
+
   '@vitejs/plugin-react@5.2.0':
     resolution: {integrity: sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -6489,6 +6537,10 @@ packages:
     resolution: {integrity: sha512-t70bfa7HYEA1D9idDbmuv7YbsbVkQ+Hp+8KFSul4aE5e/i1bjCNIRYJZlA8Q8p0r9T8cF/RVvwUgRA//FydEyg==}
     engines: {node: '>=0.6'}
 
+  big-integer@1.6.52:
+    resolution: {integrity: sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==}
+    engines: {node: '>=0.6'}
+
   big.js@6.2.2:
     resolution: {integrity: sha512-y/ie+Faknx7sZA5MfGA2xKlu0GDv8RWrXGsmlteyJQ2lvoKv9GBK/fpRMc2qlSoBAgNxrixICFCBefIq8WCQpQ==}
 
@@ -7151,6 +7203,9 @@ packages:
 
   dayjs@1.11.13:
     resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
+
+  dayjs@1.11.21:
+    resolution: {integrity: sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==}
 
   debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -9027,6 +9082,9 @@ packages:
   long@5.2.5:
     resolution: {integrity: sha512-e0r9YBBgNCq1D1o5Dp8FMH0N5hsFtXDBiVa0qoJPHpakvZkmDKPRoGffZJII/XsHvj9An9blm+cRJ01yQqU+Dw==}
 
+  long@5.3.2:
+    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
+
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
@@ -10164,6 +10222,10 @@ packages:
     resolution: {integrity: sha512-3wY1AxV+VBNW8Yypfd1yQY9pXnqTAN+KwQxL8iYm3/BjKYMNg4i0owhEe26PWDOMaIrzeeF98Lqd5NGz4omiIg==}
     engines: {node: '>=12.0.0'}
 
+  protobufjs@7.6.1:
+    resolution: {integrity: sha512-4K0myLaWL5EteuSAro91EGFgcfVgxb64Jx+7oDAY6GOkXD4M69yuSEljNcInGVCA5sOPxmZ/EqDLj2x0Q0+Ygg==}
+    engines: {node: '>=12.0.0'}
+
   proxy-addr@2.0.7:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
@@ -10841,6 +10903,11 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  semver@7.8.1:
+    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   send@0.19.2:
     resolution: {integrity: sha512-VMbMxbDeehAxpOtWJXlcUS5E8iXh6QmN+BkRX1GARS3wRaXEEgzCcB10gTQazO42tpNIya8xIyNx8fll1OFPrg==}
     engines: {node: '>= 0.8.0'}
@@ -11381,6 +11448,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -11940,6 +12008,9 @@ packages:
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
 
+  web-vitals@5.1.0:
+    resolution: {integrity: sha512-ArI3kx5jI0atlTtmV0fWU3fjpLmq/nD3Zr1iFFlJLaqa5wLBkUSzINwBPySCX/8jRyjlmy1Volw1kz1g9XE4Jg==}
+
   web3-bzz@1.10.4:
     resolution: {integrity: sha512-ZZ/X4sJ0Uh2teU9lAGNS8EjveEppoHNQiKlOXAjedsrdWuaMErBPdLQjXfcrYvN6WM6Su9PMsAxf3FXXZ+HwQw==}
     engines: {node: '>=8.0.0'}
@@ -12450,6 +12521,18 @@ snapshots:
       '@amplitude/plugin-page-view-tracking-browser': 2.11.1
       tslib: 2.8.1
 
+  '@amplitude/analytics-browser@2.42.5':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      '@amplitude/plugin-autocapture-browser': 1.27.2
+      '@amplitude/plugin-custom-enrichment-browser': 0.1.9
+      '@amplitude/plugin-event-property-attribution-browser': 0.2.1
+      '@amplitude/plugin-network-capture-browser': 1.10.1
+      '@amplitude/plugin-page-url-enrichment-browser': 0.7.11
+      '@amplitude/plugin-page-view-tracking-browser': 2.11.1
+      '@amplitude/plugin-web-vitals-browser': 1.1.33
+      tslib: 2.8.1
+
   '@amplitude/analytics-client-common@2.4.48':
     dependencies:
       '@amplitude/analytics-connector': 1.6.4
@@ -12481,10 +12564,36 @@ snapshots:
       '@amplitude/analytics-core': 2.48.2
       tslib: 2.8.1
 
+  '@amplitude/plugin-custom-enrichment-browser@0.1.9':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      tslib: 2.8.1
+
+  '@amplitude/plugin-event-property-attribution-browser@0.2.1':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      tslib: 2.8.1
+
+  '@amplitude/plugin-network-capture-browser@1.10.1':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      tslib: 2.8.1
+
+  '@amplitude/plugin-page-url-enrichment-browser@0.7.11':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      tslib: 2.8.1
+
   '@amplitude/plugin-page-view-tracking-browser@2.11.1':
     dependencies:
       '@amplitude/analytics-core': 2.48.2
       tslib: 2.8.1
+
+  '@amplitude/plugin-web-vitals-browser@1.1.33':
+    dependencies:
+      '@amplitude/analytics-core': 2.48.2
+      tslib: 2.8.1
+      web-vitals: 5.1.0
 
   '@aptos-labs/aptos-client@2.2.0(got@11.8.6)':
     dependencies:
@@ -13201,7 +13310,7 @@ snapshots:
 
   '@base-org/account@2.4.0(@types/react@19.2.14)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(immer@10.2.0)(react@19.1.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.1.0))(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
-      '@coinbase/cdp-sdk': 1.50.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@coinbase/cdp-sdk': 1.51.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@noble/hashes': 1.4.0
       clsx: 1.2.1
       eventemitter3: 5.0.1
@@ -13224,7 +13333,7 @@ snapshots:
 
   '@base-org/account@2.4.0(@types/react@19.2.14)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(immer@10.2.0)(react@19.1.0)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.1.0))(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
-      '@coinbase/cdp-sdk': 1.50.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@coinbase/cdp-sdk': 1.51.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@noble/hashes': 1.4.0
       clsx: 1.2.1
       eventemitter3: 5.0.1
@@ -13371,7 +13480,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@coinbase/cdp-sdk@1.50.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@coinbase/cdp-sdk@1.51.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@solana-program/system': 0.10.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
       '@solana-program/token': 0.9.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
@@ -13958,7 +14067,7 @@ snapshots:
       resolve: 1.22.12
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.7.3
+      semver: 7.8.1
       send: 0.19.2
       slugify: 1.6.9
       source-map-support: 0.5.21
@@ -14034,7 +14143,7 @@ snapshots:
       resolve: 1.22.12
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.7.3
+      semver: 7.8.1
       send: 0.19.2
       slugify: 1.6.9
       source-map-support: 0.5.21
@@ -14110,7 +14219,7 @@ snapshots:
       resolve: 1.22.12
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.7.3
+      semver: 7.8.1
       send: 0.19.2
       slugify: 1.6.9
       source-map-support: 0.5.21
@@ -14146,7 +14255,7 @@ snapshots:
       getenv: 2.0.0
       glob: 13.0.6
       resolve-from: 5.0.0
-      semver: 7.7.3
+      semver: 7.8.1
       slash: 3.0.0
       slugify: 1.6.9
       xcode: 3.0.1
@@ -14168,7 +14277,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
       resolve-workspace-root: 2.0.1
-      semver: 7.7.3
+      semver: 7.8.1
       slugify: 1.6.9
       sucrase: 3.35.1
     transitivePeerDependencies:
@@ -14217,7 +14326,7 @@ snapshots:
       minimatch: 10.2.5
       p-limit: 3.1.0
       resolve-from: 5.0.0
-      semver: 7.7.3
+      semver: 7.8.1
     transitivePeerDependencies:
       - supports-color
 
@@ -14229,7 +14338,7 @@ snapshots:
       getenv: 2.0.0
       jimp-compact: 0.16.1
       parse-png: 2.1.0
-      semver: 7.7.3
+      semver: 7.8.1
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -14364,7 +14473,7 @@ snapshots:
       debug: 4.4.3
       expo: 54.0.35(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(bufferutil@4.1.0)(expo-router@6.0.24)(graphql@16.14.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       resolve-from: 5.0.0
-      semver: 7.7.3
+      semver: 7.8.1
       xml2js: 0.6.0
     transitivePeerDependencies:
       - supports-color
@@ -14569,7 +14678,7 @@ snapshots:
       keccak256: 1.0.6
       ripemd160: 2.0.3
       secp256k1: 5.0.1
-      semver: 7.7.3
+      semver: 7.8.1
       ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - bufferutil
@@ -14582,15 +14691,15 @@ snapshots:
     dependencies:
       '@improbable-eng/grpc-web': 0.15.0(google-protobuf@3.21.4)
       google-protobuf: 3.21.4
-      long: 5.2.5
-      protobufjs: 7.5.5
+      long: 5.3.2
+      protobufjs: 7.6.1
 
   '@initia/opinit.proto@0.0.11':
     dependencies:
       '@improbable-eng/grpc-web': 0.15.0(google-protobuf@3.21.4)
       google-protobuf: 3.21.4
-      long: 5.2.5
-      protobufjs: 7.5.5
+      long: 5.3.2
+      protobufjs: 7.6.1
 
   '@internationalized/date@3.12.2':
     dependencies:
@@ -15022,7 +15131,7 @@ snapshots:
       '@ton/ton': 15.1.0(@ton/core@0.59.1(@ton/crypto@3.3.0))(@ton/crypto@3.3.0)
       aptos: 1.22.1(got@11.8.6)
       bip39: 3.1.0
-      dayjs: 1.11.13
+      dayjs: 1.11.21
       ed25519-hd-key: 1.3.0
       ethers: 5.8.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       memoizee: 0.4.17
@@ -15317,7 +15426,7 @@ snapshots:
       debug: 4.4.3
       lodash: 4.18.1
       pony-cause: 2.1.11
-      semver: 7.7.3
+      semver: 7.8.1
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -15326,7 +15435,7 @@ snapshots:
     dependencies:
       '@types/debug': 4.1.13
       debug: 4.4.3
-      semver: 7.7.3
+      semver: 7.8.1
       superstruct: 1.0.4
     transitivePeerDependencies:
       - supports-color
@@ -15336,7 +15445,7 @@ snapshots:
       '@ethereumjs/tx': 4.2.0
       '@types/debug': 4.1.13
       debug: 4.4.3
-      semver: 7.7.3
+      semver: 7.8.1
       superstruct: 1.0.4
     transitivePeerDependencies:
       - supports-color
@@ -15350,7 +15459,7 @@ snapshots:
       '@types/debug': 4.1.13
       debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.3
+      semver: 7.8.1
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -15364,7 +15473,7 @@ snapshots:
       '@types/debug': 4.1.13
       debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.3
+      semver: 7.8.1
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -15411,7 +15520,7 @@ snapshots:
   '@metaplex-foundation/rustbin@0.3.5':
     dependencies:
       debug: 4.4.3
-      semver: 7.7.3
+      semver: 7.8.1
       text-table: 0.2.0
       toml: 3.0.0
     transitivePeerDependencies:
@@ -16386,7 +16495,7 @@ snapshots:
   '@orderly.network/utils@2.12.4':
     dependencies:
       '@orderly.network/types': 2.12.4
-      dayjs: 1.11.13
+      dayjs: 1.11.21
       decimal.js-light: 2.5.1
 
   '@orderly.network/vaults@2.12.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(axios@1.16.1)(bufferutil@4.1.0)(embla-carousel@8.6.0)(encoding@0.1.13)(fastestsmallesttextencoderdecoder@1.0.22)(got@11.8.6)(immer@10.2.0)(react-dom@19.1.0(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)(tailwindcss@4.3.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
@@ -18015,7 +18124,7 @@ snapshots:
       metro: 0.83.7(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       metro-config: 0.83.7(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       metro-core: 0.83.7
-      semver: 7.7.3
+      semver: 7.8.1
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -19340,13 +19449,13 @@ snapshots:
   '@scure/bip32@1.3.0':
     dependencies:
       '@noble/curves': 1.0.0
-      '@noble/hashes': 1.3.3
+      '@noble/hashes': 1.3.0
       '@scure/base': 1.1.9
 
   '@scure/bip32@1.3.2':
     dependencies:
       '@noble/curves': 1.2.0
-      '@noble/hashes': 1.3.3
+      '@noble/hashes': 1.3.2
       '@scure/base': 1.1.9
 
   '@scure/bip32@1.4.0':
@@ -19363,18 +19472,18 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.7
+      '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
   '@scure/bip39@1.2.0':
     dependencies:
-      '@noble/hashes': 1.3.3
+      '@noble/hashes': 1.3.0
       '@scure/base': 1.1.9
 
   '@scure/bip39@1.2.1':
     dependencies:
-      '@noble/hashes': 1.3.3
+      '@noble/hashes': 1.3.2
       '@scure/base': 1.1.9
 
   '@scure/bip39@1.3.0':
@@ -21784,6 +21893,10 @@ snapshots:
     transitivePeerDependencies:
       - graphql
 
+  '@vercel/speed-insights@2.0.0(react@19.1.0)':
+    optionalDependencies:
+      react: 19.1.0
+
   '@vitejs/plugin-react@5.2.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.4))':
     dependencies:
       '@babel/core': 7.29.0
@@ -23964,11 +24077,6 @@ snapshots:
       typescript: 5.9.3
       zod: 3.25.76
 
-  abitype@1.2.4(typescript@5.9.3)(zod@3.22.4):
-    optionalDependencies:
-      typescript: 5.9.3
-      zod: 3.22.4
-
   abitype@1.2.4(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
       typescript: 5.9.3
@@ -24353,6 +24461,8 @@ snapshots:
 
   big-integer@1.6.36: {}
 
+  big-integer@1.6.52: {}
+
   big.js@6.2.2: {}
 
   bigint-buffer@1.1.5:
@@ -24457,11 +24567,11 @@ snapshots:
 
   bplist-parser@0.3.1:
     dependencies:
-      big-integer: 1.6.36
+      big-integer: 1.6.52
 
   bplist-parser@0.3.2:
     dependencies:
-      big-integer: 1.6.36
+      big-integer: 1.6.52
 
   brace-expansion@1.1.15:
     dependencies:
@@ -25106,6 +25216,8 @@ snapshots:
 
   dayjs@1.11.13: {}
 
+  dayjs@1.11.21: {}
+
   debug@2.6.9:
     dependencies:
       ms: 2.0.0
@@ -25239,7 +25351,7 @@ snapshots:
 
   dotenv-expand@11.0.7:
     dependencies:
-      dotenv: 16.6.1
+      dotenv: 16.4.7
 
   dotenv@16.4.7: {}
 
@@ -27231,6 +27343,8 @@ snapshots:
 
   long@5.2.5: {}
 
+  long@5.3.2: {}
+
   loose-envify@1.4.0:
     dependencies:
       js-tokens: 4.0.0
@@ -27490,7 +27604,7 @@ snapshots:
   metro-source-map@0.83.3:
     dependencies:
       '@babel/traverse': 7.29.0
-      '@babel/traverse--for-generate-function-map': '@babel/traverse@7.29.0'
+      '@babel/traverse--for-generate-function-map': '@babel/traverse@7.29.7'
       '@babel/types': 7.29.0
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
@@ -27929,7 +28043,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.7.3
+      semver: 7.8.1
       validate-npm-package-name: 5.0.1
 
   npm-run-path@6.0.0:
@@ -28098,7 +28212,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.4(typescript@5.9.3)(zod@3.22.4)
+      abitype: 1.2.3(typescript@5.9.3)(zod@3.22.4)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -28113,7 +28227,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.76)
+      abitype: 1.2.3(typescript@5.9.3)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -28123,11 +28237,11 @@ snapshots:
   ox@0.6.7(typescript@5.9.3)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.9.7
-      '@noble/hashes': 1.8.0
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.76)
+      '@noble/curves': 1.8.1
+      '@noble/hashes': 1.7.1
+      '@scure/bip32': 1.6.2
+      '@scure/bip39': 1.5.4
+      abitype: 1.0.8(typescript@5.9.3)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -28152,11 +28266,11 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.7
+      '@noble/curves': 1.9.2
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.76)
+      abitype: 1.0.8(typescript@5.9.3)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -28693,6 +28807,21 @@ snapshots:
       '@types/node': 25.6.2
       long: 5.2.5
 
+  protobufjs@7.6.1:
+    dependencies:
+      '@protobufjs/aspromise': 1.1.2
+      '@protobufjs/base64': 1.1.2
+      '@protobufjs/codegen': 2.0.5
+      '@protobufjs/eventemitter': 1.1.1
+      '@protobufjs/fetch': 1.1.1
+      '@protobufjs/float': 1.0.2
+      '@protobufjs/inquire': 1.1.2
+      '@protobufjs/path': 1.1.2
+      '@protobufjs/pool': 1.1.0
+      '@protobufjs/utf8': 1.1.1
+      '@types/node': 25.6.2
+      long: 5.3.2
+
   proxy-addr@2.0.7:
     dependencies:
       forwarded: 0.2.0
@@ -28987,7 +29116,7 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10)
       react-native-is-edge-to-edge: 1.3.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)
       react-native-worklets: 0.5.1(@babel/core@7.29.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)
-      semver: 7.7.3
+      semver: 7.8.1
 
   react-native-reanimated@4.1.7(react-native-worklets@0.5.1(@babel/core@7.29.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0):
     dependencies:
@@ -28995,7 +29124,7 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10)
       react-native-is-edge-to-edge: 1.3.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)
       react-native-worklets: 0.5.1(@babel/core@7.29.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0)
-      semver: 7.7.3
+      semver: 7.8.1
     optional: true
 
   react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(utf-8-validate@5.0.10))(react@19.1.0):
@@ -29120,7 +29249,7 @@ snapshots:
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
       scheduler: 0.26.0
-      semver: 7.7.3
+      semver: 7.8.1
       stacktrace-parser: 0.1.11
       whatwg-fetch: 3.6.20
       ws: 6.2.4(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -29167,7 +29296,7 @@ snapshots:
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
       scheduler: 0.26.0
-      semver: 7.7.3
+      semver: 7.8.1
       stacktrace-parser: 0.1.11
       whatwg-fetch: 3.6.20
       ws: 6.2.4(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -29607,6 +29736,8 @@ snapshots:
   semver@7.7.2: {}
 
   semver@7.7.3: {}
+
+  semver@7.8.1: {}
 
   send@0.19.2:
     dependencies:
@@ -30783,6 +30914,8 @@ snapshots:
     dependencies:
       defaults: 1.0.4
 
+  web-vitals@5.1.0: {}
+
   web3-bzz@1.10.4(bufferutil@4.1.0)(utf-8-validate@5.0.10):
     dependencies:
       '@types/node': 12.20.55
@@ -31069,7 +31202,7 @@ snapshots:
 
   woofi-swap-widget-kit@0.0.38(bufferutil@4.1.0)(encoding@0.1.13)(fastestsmallesttextencoderdecoder@1.0.22)(got@11.8.6)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76):
     dependencies:
-      '@amplitude/analytics-browser': 2.11.13
+      '@amplitude/analytics-browser': 2.42.5
       '@coral-xyz/anchor': 0.29.0(bufferutil@4.1.0)(encoding@0.1.13)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@defuse-protocol/one-click-sdk-typescript': 0.1.17
       '@kpi/di': 1.1.1
@@ -31083,7 +31216,7 @@ snapshots:
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(encoding@0.1.13)(typescript@5.9.3)(utf-8-validate@5.0.10)
       axios: 1.16.1
       bs58: 6.0.0
-      dayjs: 1.11.13
+      dayjs: 1.11.21
       element-ui: 2.15.14(vue@2.7.16)
       ethers: 5.8.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       viem: 2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)

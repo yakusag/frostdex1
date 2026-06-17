@@ -24,13 +24,17 @@ function NativeTabLayout() {
         <Icon sf={{ default: "snowflake", selected: "snowflake" }} />
         <Label>Swap</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="leaderboard">
-        <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
-        <Label>Leaderboard</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
-        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
-        <Label>Discover</Label>
+        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
+        <Label>Tokens</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="bot">
+        <Icon sf={{ default: "cpu", selected: "cpu" }} />
+        <Label>Bots</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="referral">
+        <Icon sf={{ default: "gift", selected: "gift.fill" }} />
+        <Label>Refer</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
@@ -105,26 +109,38 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
+        name="discover"
         options={{
-          title: "Leaders",
+          title: "Tokens",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="trophy.fill" tintColor={color} size={22} />
+              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
             ) : (
-              <Ionicons name="trophy-outline" size={22} color={color} />
+              <Feather name="search" size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
-        name="discover"
+        name="bot"
         options={{
-          title: "Discover",
+          title: "Bots",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="sparkles" tintColor={color} size={22} />
+              <SymbolView name="cpu" tintColor={color} size={22} />
             ) : (
-              <Ionicons name="sparkles-outline" size={22} color={color} />
+              <MaterialCommunityIcons name="robot-outline" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="referral"
+        options={{
+          title: "Refer",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="gift.fill" tintColor={color} size={22} />
+            ) : (
+              <Feather name="gift" size={22} color={color} />
             ),
         }}
       />

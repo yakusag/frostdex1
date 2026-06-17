@@ -305,6 +305,7 @@ export const useOrderlyConfig = () => {
         name: t("extend.tradingPoints.points"),
       },
       { id: "Bot", href: "/bot", name: "🤖 Bot" },
+      { id: "Referral", href: "/referral", name: "Referral" },
     ];
 
     const defaultEnabledMenus = allMenuItems.filter((menu) => menu.isDefault);
@@ -377,18 +378,21 @@ export const useOrderlyConfig = () => {
               />
             )}
             <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "52px" }}>
-              {isMobile &&
-              getRuntimeConfigBoolean("VITE_HAS_SECONDARY_LOGO") ? (
+              {isMobile && getRuntimeConfigBoolean("VITE_HAS_SECONDARY_LOGO") ? (
                 <img
                   src={withBasePath("/logo-secondary.webp")}
-                  alt="logo"
-                  style={{ height: "120px", maxHeight: "120x" }}
+                  alt="FrostDex"
+                  style={{ height: "36px", maxHeight: "36px" }}
                 />
               ) : (
-                components.title
+                <img
+                  src={withBasePath("/logo.webp")}
+                  alt="FrostDex"
+                  style={{ height: "40px", maxHeight: "40px" }}
+                />
               )}
             </Link>
-            {components.mainNav}
+            {!isMobile && components.mainNav}
           </Flex>
 
           <Flex itemAlign={"center"} className="oui-gap-2">
@@ -416,14 +420,10 @@ export const useOrderlyConfig = () => {
           twitterUrl: getRuntimeConfig("VITE_TWITTER_URL") || undefined,
           trailing: (
             <span className="oui-text-2xs oui-text-base-contrast-54">
-              Charts powered by{" "}
-              <a
-                href="https://tradingview.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                TradingView
-              </a>
+              Powered by{" "}
+              <span style={{ color: "rgba(56,224,248,0.8)", fontWeight: 600 }}>
+                FrostDex
+              </span>
             </span>
           ),
         },

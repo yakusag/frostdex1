@@ -338,6 +338,33 @@ body {
 .rw-btn:hover  { opacity: 0.88; }
 .rw-btn:active { opacity: 1; }
 
+/* ─── hide "Powered by Orderly" scaffold branding ───────────────────── */
+[class*="oui-footer"] a[href*="orderly.network"],
+[class*="oui-footer"] a[href*="orderly.org"],
+footer a[href*="orderly"],
+[class*="PoweredBy"],
+[class*="powered-by"],
+[class*="oui-powered"],
+a[href*="orderly.network"],
+a[href*="orderly.org"] {
+  display: none !important;
+}
+
+/* ─── hide "FrostDex" broker name text in main nav (next to logo) ─── */
+/* The Orderly scaffold renders brokerName as text inside mainNav */
+[class*="oui-main-nav"] span:not([class*="oui-badge"]):not([class*="oui-tag"]),
+[class*="oui-main-nav"] > div > span,
+[class*="oui-scaffold-main-nav"] [class*="oui-text"][class*="base-contrast"] {
+  /* Only hide non-link, non-menu text spans that look like broker name */
+}
+
+/* Specifically target broker name text rendered by Orderly scaffold on mobile */
+[class*="oui-main-nav-widget"] > [class*="oui-flex"] > span,
+[class*="oui-main-nav-widget"] [class*="broker"],
+[class*="oui-main-nav-widget"] [class*="brand"] {
+  display: none !important;
+}
+
 /* ─── smooth scrolling ──────────────────────────────────────────────── */
 html {
   scroll-behavior: smooth;
