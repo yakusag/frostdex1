@@ -1,0 +1,10 @@
+{
+  "name": "es5-ext",
+  "version": "0.10.64",
+  "description": "Stub for es5-ext — native ES5+ polyfills not needed in modern environments",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./*": "./wildcard.js"
+  }
+}

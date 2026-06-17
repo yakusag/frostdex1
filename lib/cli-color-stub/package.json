@@ -1,0 +1,9 @@
+{
+  "name": "cli-color",
+  "version": "2.0.4",
+  "description": "Local stub for cli-color — no-op color formatter",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  }
+}
