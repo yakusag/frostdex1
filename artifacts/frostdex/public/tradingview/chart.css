@@ -1,5 +1,23 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
 
+/* ─── hide "Charts powered by TradingView" watermark ──────────────── */
+.tv-watermark,
+.tv-watermark-link,
+[class*="tv-watermark"],
+[class*="watermark"],
+a[href*="tradingview.com"],
+.js-watermark,
+[class^="watermark-"],
+[class*="chart-powered-by"],
+[class*="tradingview-copyright"],
+.js-attribution-logo,
+[class*="attribution"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 html,
 body,
 canvas,
