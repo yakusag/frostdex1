@@ -195,16 +195,8 @@
         }
       };
 
-      /* failsafe: always hide splash after 4 s even if React crashes */
-      setTimeout(function () { window.__hideSplash && window.__hideSplash(); }, 4000);
-
-      /* hide splash on any uncaught JS error so it never blocks the page */
-      window.addEventListener('error', function () {
-        window.__hideSplash && window.__hideSplash();
-      });
-      window.addEventListener('unhandledrejection', function () {
-        window.__hideSplash && window.__hideSplash();
-      });
+      /* failsafe: always hide splash after 6 s even if React crashes */
+      setTimeout(function () { window.__hideSplash && window.__hideSplash(); }, 6000);
     </script>
   </body>
 </html>
