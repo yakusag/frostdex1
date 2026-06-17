@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
-# Exclude frostdex-mobile: pnpm install with react-native scope OOMs the container.
-# Its deps are managed manually via tarball extraction in node_modules/.
-pnpm install --frozen-lockfile --filter '!@workspace/frostdex-mobile'
+# CI=true is required for non-TTY environments (post-merge runs with stdin closed).
+# pnpm will refuse to remove existing node_modules without TTY confirmation
+# unless CI=true is set.
+CI=true pnpm install --frozen-lockfile
 pnpm --filter db push

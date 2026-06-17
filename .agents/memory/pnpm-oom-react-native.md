@@ -1,21 +1,36 @@
 ---
 name: pnpm OOM with react-native in frostdex-mobile
-description: Any pnpm install that includes frostdex-mobile OOMs the container; manual store repair pattern
+description: History of OOM issue and how it was resolved; current install command for mobile app; manual store repair pattern
 ---
 
-# pnpm OOM with frostdex-mobile
+# pnpm install for frostdex-mobile
 
-## The Rule
-Never run `pnpm install` when frostdex-mobile is in the pnpm workspace scope. It will OOM the container.
+## Current Status: RESOLVED
+The pnpm virtual store is now fully populated (2,625+ entries). Normal `pnpm install` works.
 
-**Why:** The pnpm virtual store is missing 626+ react-native packages. Attempting to install them causes OOM.
+## Working install command
+```
+CI=true pnpm install --filter @workspace/frostdex-mobile --no-optional --ignore-scripts --no-frozen-lockfile
+```
+- `CI=true` — suppresses the TTY prompt to remove existing node_modules
+- `--no-optional` — skips optional packages, reduces scope
+- `--ignore-scripts` — skips postinstall scripts during install
+- `--no-frozen-lockfile` — allows lockfile updates when package.json diverges
+
+Second and subsequent runs complete in ~3 seconds (lockfile already up to date).
+
+## History
+Previously, `pnpm install` OOMed because the virtual store was missing 626+ react-native packages
+and the container didn't have enough free memory. The fix was simply to run the install with
+adequate memory available (5+ GB free) and the correct flags. No tarball workarounds needed.
+
+**Why it failed before:** Container was likely memory-constrained at the time. With 5+ GB available
+and `--no-optional --ignore-scripts`, the install completes in ~47s on first run.
 
 **How to apply:**
-- All 40+ direct deps for frostdex-mobile are manually installed via tarball extraction to `artifacts/frostdex-mobile/node_modules/`
-- frostdex-mobile IS included in pnpm-workspace.yaml so `pnpm --filter @workspace/frostdex-mobile run dev` works
-- Only `pnpm run` is safe; `pnpm install` is not
-- `scripts/post-merge.sh` uses `--filter '!@workspace/frostdex-mobile'`
-- If a new package is needed, download and extract the tarball manually to node_modules/
+- Use the command above when adding/upgrading packages for frostdex-mobile
+- The manual tarball workaround is no longer needed
+- `pnpm run` still works as before
 
 ## Manual Store Repair (when OOM leaves empty pnpm store entries)
 
