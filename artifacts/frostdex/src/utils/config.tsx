@@ -392,7 +392,7 @@ export const useOrderlyConfig = () => {
                 />
               )}
             </Link>
-            {components.mainNav}
+            {!isMobile && components.mainNav}
           </Flex>
 
           <Flex itemAlign={"center"} className="oui-gap-2">
