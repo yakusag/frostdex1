@@ -1,0 +1,13 @@
+{
+  "description": "FrostDex — a cross-platform Pokédex app built with React, Expo, and TypeScript",
+  "topics": [
+    "pokedex",
+    "react",
+    "expo",
+    "typescript",
+    "react-native",
+    "express",
+    "postgresql",
+    "drizzle-orm"
+  ]
+}
