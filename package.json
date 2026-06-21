@@ -20,7 +20,8 @@
       "es5-ext": "file:./lib/es5-ext-stub",
       "@solana/wallet-adapter-trezor": "file:./lib/solana-wallet-trezor-stub",
       "form-data@2.3.3": "file:./lib/form-data-stub",
-      "request": "file:./lib/request-stub"
+      "request": "file:./lib/request-stub",
+      "lru-cache": "9.1.2"
     }
   }
 }
