@@ -131,7 +131,7 @@ export default function AIScreen() {
 
       const json = await res.json();
       const replyContent: string =
-        json?.choices?.[0]?.message?.content ?? "Sorry, I could not generate a response.";
+        (json as { content?: string })?.content ?? "Sorry, I could not generate a response.";
 
       const assistantMsg: Message = {
         id: Date.now().toString() + "a",

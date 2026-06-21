@@ -156,7 +156,18 @@ function ClassicTabLayout() {
             ),
         }}
       />
-      <Tabs.Screen name="bot" options={{ href: null }} />
+      <Tabs.Screen
+        name="bot"
+        options={{
+          title: "Bots",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="cpu" tintColor={color} size={22} />
+            ) : (
+              <MaterialCommunityIcons name="robot-outline" size={22} color={color} />
+            ),
+        }}
+      />
       <Tabs.Screen name="leaderboard" options={{ href: null }} />
     </Tabs>
   );

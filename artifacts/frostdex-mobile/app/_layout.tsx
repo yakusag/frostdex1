@@ -25,14 +25,6 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: "#0B0E11" } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="leaderboard-modal"
-        options={{
-          presentation: "modal",
-          headerShown: false,
-          contentStyle: { backgroundColor: "#0B0E11" },
-        }}
-      />
     </Stack>
   );
 }
