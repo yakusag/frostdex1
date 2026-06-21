@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Platform,
   Share,
-  Clipboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -61,7 +60,9 @@ export default function ReferralScreen() {
 
   const handleCopy = async () => {
     try {
-      Clipboard.setString(referralUrl);
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(referralUrl);
+      }
     } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

@@ -191,9 +191,12 @@
         var s = document.getElementById('splash');
         if (s) {
           s.classList.add('hidden');
-          setTimeout(function () { s.remove(); }, 600);
+          setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 650);
         }
       };
+
+      /* failsafe: always hide splash after 6 s even if React crashes */
+      setTimeout(function () { window.__hideSplash && window.__hideSplash(); }, 6000);
     </script>
   </body>
 </html>

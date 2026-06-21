@@ -36,10 +36,6 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
 
-## GitHub repo metadata
-
-`github-meta.json` at the repo root is the single source of truth for the GitHub repository description and topics. `scripts/sync-github.sh` reads this file on every post-merge run and PATCHes the GitHub API to keep the public repo page in sync. Edit that file to update what appears on GitHub.
-
 ## Gotchas
 
 _Populate as you build — sharp edges, "always run X before Y" rules._

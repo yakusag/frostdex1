@@ -1,3 +1,2 @@
-- [Vite trailing-slash shim fix](vite-trailing-slash-shim.md) — fix for `process/` and `buffer/` trailing-slash imports failing in esbuild optimizer
-- [FrostDex migration structure](frostdex-migration.md) — how frostdex was migrated from .migration-backup into live artifacts/
-- [FrostDex port configuration](frostdex-port-config.md) — web app on port 3000, api-server on 8080; @orderly.network/affiliate must be in optimizeDeps.exclude
+- [Expo workflow port registration](expo-port-registration.md) — port 23456 must be in .replit [[ports]] via verifyAndReplaceDotReplit for DIDNT_OPEN_A_PORT fix
+- [OOM pnpm with react-native](pnpm-oom-react-native.md) — pnpm install with frostdex-mobile in scope OOMs; run only, never install

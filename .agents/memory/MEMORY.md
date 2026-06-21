@@ -1,2 +1,0 @@
-- [Expo workflow port registration](expo-port-registration.md) — port 23456 must be in .replit [[ports]] via verifyAndReplaceDotReplit for DIDNT_OPEN_A_PORT fix
-- [OOM pnpm with react-native](pnpm-oom-react-native.md) — pnpm install with frostdex-mobile in scope OOMs; run only, never install

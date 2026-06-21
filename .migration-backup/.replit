@@ -1,37 +1,33 @@
 modules = ["nodejs-24", "python-3.11"]
 
-[deployment]
-router = "application"
-deploymentTarget = "autoscale"
+  [deployment]
+  router = "application"
+  deploymentTarget = "autoscale"
 
-[deployment.postBuild]
-args = ["pnpm", "store", "prune"]
-env = { "CI" = "true" }
+  [deployment.postBuild]
+  args = ["pnpm", "store", "prune"]
+  env = { "CI" = "true" }
 
-[workflows]
-runButton = "Project"
+  [workflows]
+  runButton = "Project"
 
-[agent]
-stack = "PNPM_WORKSPACE"
+  [agent]
+  stack = "PNPM_WORKSPACE"
 expertMode = true
 
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 180000
+  [postMerge]
+  path = "scripts/post-merge.sh"
+timeoutMs = 120000
 
-[userenv]
-
-[userenv.shared]
-
-[nix]
-channel = "stable-25_05"
-
-[[ports]]
-localPort = 3000
-externalPort = 3001
+  [nix]
+  channel = "stable-25_05"
 
 [[ports]]
 localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
 externalPort = 80
 
 [[ports]]
@@ -40,8 +36,5 @@ externalPort = 3000
 
 [[ports]]
 localPort = 23456
-externalPort = 3003
-
-[[ports]]
-localPort = 23457
-externalPort = 4200
+externalPort = 4000
+  

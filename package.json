@@ -12,15 +12,5 @@
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
-  },
-  "pnpm": {
-    "overrides": {
-      "crypto-es": "file:./lib/crypto-es-shim",
-      "cli-color": "file:./lib/cli-color-stub",
-      "es5-ext": "file:./lib/es5-ext-stub",
-      "@solana/wallet-adapter-trezor": "file:./lib/solana-wallet-trezor-stub",
-      "form-data@2.3.3": "file:./lib/form-data-stub",
-      "request": "file:./lib/request-stub"
-    }
   }
 }

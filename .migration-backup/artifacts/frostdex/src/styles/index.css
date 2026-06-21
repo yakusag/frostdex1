@@ -1382,3 +1382,45 @@ select,
   flex-direction: row-reverse;
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   FROSTDEX UI OVERRIDES
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Hide broker name text rendered by Orderly scaffold next to logo ── */
+/* Orderly renders broker name as a sibling span/div next to appIcons */
+[class*="oui-main-nav"] [class*="broker-name"],
+[class*="oui-main-nav"] [class*="brand-name"],
+[class*="oui-main-nav"] [class*="brokerName"],
+[class*="oui-nav"] [class*="broker-name"],
+[class*="oui-header"] [class*="broker-name"] {
+  display: none !important;
+}
+
+/* ── 2. Hide "Charts powered by TradingView" in footer ─────────────── */
+a[href*="tradingview.com"],
+a[href*="tradingview"]:not([class*="oui-btn"]),
+[class*="tradingview-attribution"],
+[class*="tv-attribution"],
+[class*="charts-powered"],
+[data-testid*="tradingview"] {
+  display: none !important;
+}
+
+/* ── 3. Hide Orderly branding "Powered by Orderly" in footer ──────── */
+/* Only targets the footer-level orderly branding link, not wallet/chain buttons */
+footer a[href*="orderly.network"],
+[class*="oui-footer"] a[href*="orderly.network"],
+[class*="oui-footer-brand"],
+[class*="powered-by-orderly"],
+[class*="orderly-brand"],
+[data-testid*="powered-by-orderly"] {
+  display: none !important;
+}
+
+/* ── Performance: content-visibility for off-screen heavy panels ──── */
+[class*="oui-portfolio"],
+[class*="oui-markets"],
+[class*="oui-leaderboard"] {
+  content-visibility: auto;
+}

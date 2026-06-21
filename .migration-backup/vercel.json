@@ -1,63 +1,23 @@
 {
   "buildCommand": "pnpm --filter @workspace/frostdex run build",
   "outputDirectory": "artifacts/frostdex/dist/public",
-  "installCommand": "pnpm install --frozen-lockfile --filter \"!@workspace/frostdex-mobile\"",
+  "installCommand": "pnpm install --frozen-lockfile",
   "framework": null,
   "rewrites": [
-    { "source": "/((?!assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo|tradingview|sw\\.js|robots\\.txt).*)", "destination": "/index.html" }
+    { "source": "/((?!assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/config.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/assets/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
     },
     {
       "source": "/locales/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=3600" }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     },
     {
-      "source": "/(favicon\\.webp|favicon\\.svg|frostdex-logo\\.png|logo\\.webp|logo-secondary\\.webp)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=604800, stale-while-revalidate=86400" }
-      ]
-    },
-    {
-      "source": "/fonts/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     }
   ],
   "env": {
