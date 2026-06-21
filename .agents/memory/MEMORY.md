@@ -1,0 +1,1 @@
+- [Frostdex pnpm install fix](frostdex-pnpm-install.md) — pnpm install must run before dev; put it in artifact.toml run command, not package.json.

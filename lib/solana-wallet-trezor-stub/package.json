@@ -1,0 +1,6 @@
+{
+  "name": "@solana/wallet-adapter-trezor",
+  "version": "0.1.6",
+  "description": "Stub — Trezor not needed in Replit env",
+  "main": "./index.js"
+}
