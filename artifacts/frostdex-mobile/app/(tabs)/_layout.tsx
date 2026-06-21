@@ -3,7 +3,7 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
-import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 
@@ -24,21 +24,21 @@ function NativeTabLayout() {
         <Icon sf={{ default: "snowflake", selected: "snowflake" }} />
         <Label>Swap</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="discover">
-        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
-        <Label>Tokens</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bot">
-        <Icon sf={{ default: "cpu", selected: "cpu" }} />
-        <Label>Bots</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="referral">
-        <Icon sf={{ default: "gift", selected: "gift.fill" }} />
-        <Label>Refer</Label>
+      <NativeTabs.Trigger name="ai">
+        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
+        <Label>AI</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="portfolio">
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
         <Label>Portfolio</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="discover">
+        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
+        <Label>Tokens</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="referral">
+        <Icon sf={{ default: "gift", selected: "gift.fill" }} />
+        <Label>Refer</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -109,38 +109,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="discover"
+        name="ai"
         options={{
-          title: "Tokens",
+          title: "AI",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
-            ) : (
-              <Feather name="search" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="bot"
-        options={{
-          title: "Bots",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="cpu" tintColor={color} size={22} />
+              <SymbolView name="sparkles" tintColor={color} size={22} />
             ) : (
               <MaterialCommunityIcons name="robot-outline" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="referral"
-        options={{
-          title: "Refer",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="gift.fill" tintColor={color} size={22} />
-            ) : (
-              <Feather name="gift" size={22} color={color} />
             ),
         }}
       />
@@ -156,6 +132,32 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Tokens",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
+            ) : (
+              <Feather name="search" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="referral"
+        options={{
+          title: "Refer",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="gift.fill" tintColor={color} size={22} />
+            ) : (
+              <Feather name="gift" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen name="bot" options={{ href: null }} />
+      <Tabs.Screen name="leaderboard" options={{ href: null }} />
     </Tabs>
   );
 }
