@@ -40,6 +40,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "gift", selected: "gift.fill" }} />
         <Label>Refer</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="bot">
+        <Icon sf={{ default: "cpu", selected: "cpu" }} />
+        <Label>Bots</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
