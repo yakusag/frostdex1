@@ -18,7 +18,23 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
+args = "FrostDex"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
 args = "GitHub Sync"
+
+[[workflows.workflow]]
+name = "FrostDex"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm install --frozen-lockfile"
+waitForPort = 20570
 
 [[workflows.workflow]]
 name = "GitHub Sync"
