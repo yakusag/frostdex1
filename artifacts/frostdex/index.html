@@ -197,6 +197,34 @@
 
       /* failsafe: always hide splash after 6 s even if React crashes */
       setTimeout(function () { window.__hideSplash && window.__hideSplash(); }, 6000);
+
+      /* global error handler: catch crashes before React mounts and show visible fallback */
+      window.addEventListener('error', function (e) {
+        window.__hideSplash && window.__hideSplash();
+        var root = document.getElementById('root');
+        if (root && !root.hasChildNodes()) {
+          root.innerHTML = '<div style="min-height:100vh;background:#0b0e11;color:#eaecef;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;font-family:system-ui,sans-serif;text-align:center;">' +
+            '<div style="font-size:2rem;margin-bottom:1rem;">❄</div>' +
+            '<p style="font-size:1rem;color:#38e0f8;font-weight:600;margin-bottom:0.5rem;">FrostDex failed to load</p>' +
+            '<p style="font-size:0.85rem;color:#8a8d96;margin-bottom:1.5rem;">' + (e.message || 'Unknown error') + '</p>' +
+            '<button onclick="window.location.reload()" style="padding:0.6rem 1.4rem;background:#38e0f8;color:#0b0e11;border:none;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer;">Reload</button>' +
+            '</div>';
+        }
+      });
+
+      window.addEventListener('unhandledrejection', function (e) {
+        window.__hideSplash && window.__hideSplash();
+        var root = document.getElementById('root');
+        if (root && !root.hasChildNodes()) {
+          var msg = (e.reason && (e.reason.message || String(e.reason))) || 'Unknown error';
+          root.innerHTML = '<div style="min-height:100vh;background:#0b0e11;color:#eaecef;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;font-family:system-ui,sans-serif;text-align:center;">' +
+            '<div style="font-size:2rem;margin-bottom:1rem;">❄</div>' +
+            '<p style="font-size:1rem;color:#38e0f8;font-weight:600;margin-bottom:0.5rem;">FrostDex failed to load</p>' +
+            '<p style="font-size:0.85rem;color:#8a8d96;margin-bottom:1.5rem;">' + msg + '</p>' +
+            '<button onclick="window.location.reload()" style="padding:0.6rem 1.4rem;background:#38e0f8;color:#0b0e11;border:none;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer;">Reload</button>' +
+            '</div>';
+        }
+      });
     </script>
   </body>
 </html>
