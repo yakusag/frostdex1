@@ -219,14 +219,21 @@ export default defineConfig({
           if (id.includes("node_modules/recharts/") || id.includes("node_modules/d3-") || id.includes("node_modules/victory-")) {
             return "charts-vendor";
           }
-          if (id.includes("node_modules/@orderly.network/")) {
-            return "orderly-vendor";
-          }
           if (id.includes("node_modules/@solana/") || id.includes("node_modules/@coral-xyz/") || id.includes("node_modules/bs58") || id.includes("node_modules/borsh")) {
             return "solana-vendor";
           }
-          if (id.includes("node_modules/ethers") || id.includes("node_modules/@ethersproject/") || id.includes("node_modules/viem") || id.includes("node_modules/wagmi")) {
-            return "eth-vendor";
+          // orderly + eth libs merged into ONE chunk to prevent cross-chunk TDZ
+          // (ReferenceError: Cannot access 'X' before initialization on mobile)
+          if (
+            id.includes("node_modules/@orderly.network/") ||
+            id.includes("node_modules/ethers") ||
+            id.includes("node_modules/@ethersproject/") ||
+            id.includes("node_modules/viem") ||
+            id.includes("node_modules/wagmi") ||
+            id.includes("node_modules/@wagmi/") ||
+            id.includes("node_modules/@privy-io/")
+          ) {
+            return "dex-vendor";
           }
         },
       },
