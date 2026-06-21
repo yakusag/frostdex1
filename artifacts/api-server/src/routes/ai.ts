@@ -1,8 +1,29 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 
 const router: IRouter = Router();
 
-router.post("/ai/chat", async (req, res) => {
+// Simple in-memory rate limiter: 20 requests per minute per IP
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+function rateLimiter(req: Request, res: Response, next: NextFunction): void {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
+  const now = Date.now();
+  const window = 60_000;
+  const limit = 20;
+  const entry = rateMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateMap.set(ip, { count: 1, resetAt: now + window });
+    next();
+    return;
+  }
+  if (entry.count >= limit) {
+    res.status(429).json({ error: "Rate limit exceeded. Try again in a minute." });
+    return;
+  }
+  entry.count++;
+  next();
+}
+
+router.post("/ai/chat", rateLimiter, async (req, res) => {
   const apiKey = process.env["GROQ_API_KEY"];
 
   if (!apiKey) {

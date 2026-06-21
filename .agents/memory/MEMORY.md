@@ -1,2 +1,4 @@
 - [Frostdex pnpm install fix](frostdex-pnpm-install.md) — pnpm install must run before dev; put it in artifact.toml run command, not package.json.
-- [GitHub sync setup](github-sync.md) — git remote set-url is blocked in main agent; use explicit URL with token in git-sync.sh instead. Workflow "GitHub Sync (pull + push)" runs sh git-sync.sh.
+- [GitHub sync setup](github-sync.md) — use credential helper (~/.gitconfig + ~/.github-cred-helper.sh) not token in URL; git-sync.sh runs pull + push via origin.
+- [configureWorkflow stale cache fix](configureWorkflow-cache.md) — after removeWorkflow, configureWorkflow still shows old count; workaround: add a small workflow first (e.g. GitHub Sync) which clears the stale slot, then add more.
+- [Artifact vs Project workflow port conflict](artifact-workflow-conflict.md) — artifact dev workflows hold ports; changing service name in artifact.toml creates a NEW workflow; old process stays alive holding the port (use fuser -k 8080/tcp to free it).
