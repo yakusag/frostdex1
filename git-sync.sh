@@ -1,13 +1,12 @@
 #!/bin/sh
 # FrostDex GitHub Sync — pull then push
+# Uses ~/.github-cred-helper.sh for auth (token never embedded in URL)
 set -e
 
-REMOTE="https://x-token-auth:${GITHUB_TOKEN}@github.com/yakusag/frostdex1.git"
-
 echo "=== Pulling from GitHub ==="
-git pull "$REMOTE" main --no-rebase 2>&1
+git pull origin main --no-rebase 2>&1
 
 echo "=== Pushing to GitHub ==="
-git push "$REMOTE" HEAD:main 2>&1
+git push origin HEAD:main 2>&1
 
 echo "=== Sync done! ==="
