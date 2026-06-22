@@ -11,7 +11,16 @@ a[href*="tradingview.com"],
 [class*="chart-powered-by"],
 [class*="tradingview-copyright"],
 .js-attribution-logo,
-[class*="attribution"] {
+[class*="attribution"],
+[class*="powered-by"],
+[class*="poweredBy"],
+[class*="charts-powered"],
+[class*="tv-copyright"],
+.tv-chart-properties-studies__list,
+[data-role="button"][title*="TradingView"],
+[class*="brand-btn"],
+[class*="trading-toolbar--broker"],
+[class*="tv-header-toolbar"] [class*="broker"] {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;

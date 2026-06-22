@@ -1416,8 +1416,7 @@ a[href*="tradingview"]:not([class*="oui-btn"]),
   display: none !important;
 }
 
-/* ── 3. "Powered by Orderly" → replaced by footer trailing already.     */
-/* Hide the hardcoded orderly branding link in the scaffold footer:      */
+/* ── 3. "Powered by Orderly" → show "Powered by FrostDex" instead.    */
 footer a[href*="orderly.network"],
 footer a[href*="orderly.org"],
 [class*="oui-footer"] a[href*="orderly.network"],
@@ -1429,6 +1428,20 @@ footer a[href*="orderly.org"],
 [class*="oui-footer"] [class*="oui-text"] a,
 [class*="oui-scaffold-footer"] > div > a {
   display: none !important;
+}
+
+/* Inject "Powered by FrostDex" in place of hidden Orderly footer branding */
+[class*="oui-scaffold-footer"]::after,
+[class*="oui-footer"]::after {
+  content: "❄ Powered by FrostDex";
+  display: block;
+  font-size: 11px;
+  color: rgba(56, 224, 248, 0.45);
+  text-align: center;
+  padding: 6px 0;
+  font-family: 'Manrope', sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
 }
 
 /* ── Performance: content-visibility for off-screen heavy panels ──── */
