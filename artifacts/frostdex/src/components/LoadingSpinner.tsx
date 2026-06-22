@@ -1,31 +1,34 @@
 export const LoadingSpinner = () => (
   <div className="loading-container">
-    <div className="loading-spinner-ring"></div>
+    <div className="loading-spinner"></div>
     <style>
       {`
         .loading-container {
           display: flex;
-          flex-direction: column;
           justify-content: center;
           align-items: center;
           width: 100%;
           height: 100vh;
-          background-color: #0b0e11;
-          gap: 16px;
+          background-color: rgba(0, 0, 0, 0.03);
         }
-        .loading-spinner-ring {
-          width: 48px;
-          height: 48px;
-          border: 3px solid rgba(56, 224, 248, 0.15);
-          border-top-color: #38e0f8;
+        .loading-spinner {
+          width: 50px;
+          height: 50px;
+          border: 4px solid rgba(0, 0, 0, 0.1);
           border-radius: 50%;
-          animation: frost-spin 0.9s linear infinite;
+          border-left-color: #09f;
+          animation: spin 1s linear infinite;
         }
-        @keyframes frost-spin {
-          0%   { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
         }
       `}
     </style>
   </div>
 );
+

@@ -1,8 +1,17 @@
 #!/bin/sh
-# FrostDex GitHub Sync — pull then push using GITHUB_TOKEN
+# FrostDex GitHub Sync — commit any pending changes, pull then push
 set -e
 
 REMOTE_URL="https://${GITHUB_TOKEN}@github.com/yakusag/frostdex1.git"
+
+git config user.email "sync@frostdex.pw" 2>/dev/null || true
+git config user.name "FrostDex Sync" 2>/dev/null || true
+
+echo "=== Staging and committing pending changes ==="
+git add -A
+if ! git diff --cached --quiet; then
+  git commit -m "chore: sync pending changes"
+fi
 
 echo "=== Pulling from GitHub ==="
 git pull "$REMOTE_URL" main --no-rebase 2>&1

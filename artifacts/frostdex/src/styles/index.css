@@ -1416,7 +1416,7 @@ a[href*="tradingview"]:not([class*="oui-btn"]),
   display: none !important;
 }
 
-/* ── 3. "Powered by Orderly" → show "Powered by FrostDex" instead.    */
+/* ── 3. "Powered by Orderly" → show "Powered by FrostDex" instead ──── */
 footer a[href*="orderly.network"],
 footer a[href*="orderly.org"],
 [class*="oui-footer"] a[href*="orderly.network"],
