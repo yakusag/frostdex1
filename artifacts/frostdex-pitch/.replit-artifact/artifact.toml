@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/frostdex-pitch/"
+title = "FrostDex Pitch Deck"
+version = "1.0.0"
+id = "artifacts/frostdex-pitch"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/frostdex-pitch/" ]
+localPort = 22332
+
+[services.development]
+run = "pnpm install && pnpm --filter @workspace/frostdex-pitch run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/frostdex-pitch", "run", "build" ]
+publicDir = "artifacts/frostdex-pitch/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22332"
+BASE_PATH = "/frostdex-pitch/"
