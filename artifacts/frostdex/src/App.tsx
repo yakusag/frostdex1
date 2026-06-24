@@ -29,6 +29,8 @@ export default function App() {
     if (typeof (window as any).__hideSplash === "function") {
       (window as any).__hideSplash();
     }
+    const rl = document.getElementById("root-loading");
+    if (rl) rl.remove();
     startFaviconAnimation(withBasePath("/favicon.webp"));
   }, []);
 

@@ -196,22 +196,6 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
-      /* remove fallback spinner when React mounts */
-      var __rlRemove = function() {
-        var el = document.getElementById('root-loading');
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-      };
-      /* React calls __hideSplash on mount — piggyback on that */
-      var __origHideSplash;
-      Object.defineProperty(window, '__hideSplash', {
-        set: function(fn) {
-          __origHideSplash = fn;
-          window.__hideSplashImpl = function() { fn(); __rlRemove(); };
-        },
-        get: function() { return window.__hideSplashImpl || __origHideSplash; },
-        configurable: true,
-      });
-
       /* catch unhandled JS errors and show a recovery message */
       window.addEventListener('error', function(e) {
         var el = document.getElementById('root-loading');
