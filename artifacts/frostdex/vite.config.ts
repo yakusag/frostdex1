@@ -81,7 +81,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: "esnext",
+    minify: false,
     rollupOptions: {
+      maxParallelFileOps: 2,
       plugins: [fixVpnpShims],
     },
   },
