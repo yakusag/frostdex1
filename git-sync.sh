@@ -7,6 +7,9 @@ REMOTE_URL="https://${GITHUB_TOKEN}@github.com/yakusag/frostdex1.git"
 git config user.email "sync@frostdex.pw" 2>/dev/null || true
 git config user.name "FrostDex Sync" 2>/dev/null || true
 
+# Clear any stale lock files left by previous processes
+rm -f .git/index.lock .git/MERGE_HEAD .git/CHERRY_PICK_HEAD 2>/dev/null || true
+
 echo "=== Staging and committing pending changes ==="
 git add -A
 if ! git diff --cached --quiet; then
