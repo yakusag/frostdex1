@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @workspace/frostdex run build",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm install --frozen-lockfile && NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter @workspace/frostdex run build",
   "outputDirectory": "artifacts/frostdex/dist/public",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

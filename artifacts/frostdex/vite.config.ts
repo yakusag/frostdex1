@@ -211,6 +211,43 @@ export default defineConfig({
       treeshake: false,
       onwarn: () => {},
       plugins: [fixVpnpShims],
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/react-router-dom/") ||
+            id.includes("node_modules/react-router/") ||
+            id.includes("node_modules/react-helmet-async/")
+          ) {
+            return "react-vendor";
+          }
+          if (
+            id.includes("node_modules/recharts/") ||
+            id.includes("node_modules/d3-") ||
+            id.includes("node_modules/victory-")
+          ) {
+            return "charts-vendor";
+          }
+          if (
+            id.includes("node_modules/ethers/") ||
+            id.includes("node_modules/@ethersproject/") ||
+            id.includes("node_modules/viem/") ||
+            id.includes("node_modules/wagmi/") ||
+            id.includes("node_modules/@wagmi/")
+          ) {
+            return "eth-vendor";
+          }
+          if (
+            id.includes("node_modules/@solana/") ||
+            id.includes("node_modules/@coral-xyz/") ||
+            id.includes("node_modules/bs58/") ||
+            id.includes("node_modules/borsh/")
+          ) {
+            return "solana-vendor";
+          }
+        },
+      },
     },
     chunkSizeWarningLimit: 1000,
   },
