@@ -84,6 +84,8 @@ export default defineConfig({
     target: "esnext",
     minify: false,
     rollupOptions: {
+      treeshake: false,
+      onwarn: () => {},
       maxParallelFileOps: 2,
       plugins: [fixVpnpShims],
     },
