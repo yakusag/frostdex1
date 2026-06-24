@@ -1,5 +1,26 @@
 {
-  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm install --frozen-lockfile && NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter @workspace/frostdex run build",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter @workspace/frostdex run build",
+  "installCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm install --frozen-lockfile --filter '!@workspace/frostdex-mobile'",
   "outputDirectory": "artifacts/frostdex/dist/public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo|tradingview|whitepaper-banner).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/config.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
+    {
+      "source": "/locales/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
