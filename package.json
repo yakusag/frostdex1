@@ -21,7 +21,9 @@
       "@solana/wallet-adapter-trezor": "file:./lib/solana-wallet-trezor-stub",
       "form-data@2.3.3": "file:./lib/form-data-stub",
       "request": "file:./lib/request-stub",
-      "lru-cache": "9.1.2"
+      "lru-cache": "9.1.2",
+      "@babel/helper-compilation-targets>lru-cache": "^6.0.0",
+      "browserslist>lru-cache": "^6.0.0"
     }
   }
 }

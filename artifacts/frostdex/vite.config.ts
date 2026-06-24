@@ -118,6 +118,8 @@ export default defineConfig({
       "@fractalwagmi/solana-wallet-adapter",
       "readable-stream",
       "@orderly.network/affiliate",
+      "ethers",
+      "memoizee",
     ],
     esbuildOptions: {
       define: { global: "globalThis" },
