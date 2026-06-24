@@ -171,6 +171,17 @@ export default function WhitepaperIndex() {
             infrastructure.
           </p>
 
+          {/* ── Banner image ── */}
+          <div className="mx-auto max-w-3xl mb-10 rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(56,224,248,0.15)" }}>
+            <img
+              src={withBasePath("/whitepaper-banner.webp")}
+              alt="FrostDex — A Next-Generation Decentralized Exchange"
+              className="w-full h-auto block"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
           <div className="flex flex-wrap justify-center gap-3">
             <Link
               to="/"
