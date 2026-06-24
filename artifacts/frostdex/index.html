@@ -129,6 +129,22 @@
         animation: name-appear 0.6s ease 0.6s both;
       }
 
+      /* ── motto ── */
+      #splash-motto {
+        margin-top: 10px;
+        font-family: 'Manrope', 'Segoe UI', sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: rgba(56, 224, 248, 0.92);
+        text-shadow:
+          0 0 12px rgba(56, 224, 248, 0.75),
+          0 0 28px rgba(56, 224, 248, 0.4),
+          0 0 6px rgba(14, 203, 129, 0.3);
+        animation: name-appear 0.6s ease 0.9s both;
+      }
+
       /* ── falling snowflakes ── */
       #splash-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
       .sp {
@@ -160,6 +176,7 @@
         <div class="splash-candle"></div>
       </div>
       <div id="splash-tag">Decentralized Exchange</div>
+      <div id="splash-motto">FREEDOM · TRUST · TRADE</div>
     </div>
 
     <div id="root"></div>
