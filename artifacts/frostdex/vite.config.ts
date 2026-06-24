@@ -83,11 +83,52 @@ export default defineConfig({
     emptyOutDir: true,
     target: "esnext",
     minify: false,
+    sourcemap: false,
+    chunkSizeWarningLimit: 10000,
     rollupOptions: {
       treeshake: false,
       onwarn: () => {},
-      maxParallelFileOps: 2,
+      maxParallelFileOps: 1,
       plugins: [fixVpnpShims],
+      output: {
+        manualChunks(id) {
+          if (id.includes("@orderly.network")) return "chunk-orderly";
+          if (
+            id.includes("wagmi") ||
+            id.includes("viem") ||
+            id.includes("@reown") ||
+            id.includes("ethers")
+          )
+            return "chunk-web3";
+          if (
+            id.includes("@solana") ||
+            id.includes("@solana-mobile") ||
+            id.includes("@coral-xyz")
+          )
+            return "chunk-solana";
+          if (
+            id.includes("@particle-network") ||
+            id.includes("@privy-io") ||
+            id.includes("@binance") ||
+            id.includes("@web3-onboard") ||
+            id.includes("@abstract-foundation") ||
+            id.includes("@fractalwagmi") ||
+            id.includes("@keystonehq") ||
+            id.includes("@trezor") ||
+            id.includes("woofi-swap-widget-kit")
+          )
+            return "chunk-wallets";
+          if (
+            id.includes("@tanstack") ||
+            id.includes("@radix-ui") ||
+            id.includes("framer-motion") ||
+            id.includes("recharts") ||
+            id.includes("lucide-react")
+          )
+            return "chunk-ui";
+          if (id.includes("node_modules")) return "chunk-vendor";
+        },
+      },
     },
   },
   server: {

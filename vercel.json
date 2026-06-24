@@ -1,6 +1,6 @@
 {
-  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter @workspace/frostdex run build",
-  "installCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm install --frozen-lockfile --filter '!@workspace/frostdex-mobile'",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=8192' pnpm --filter @workspace/frostdex run build",
+  "installCommand": "NODE_OPTIONS='--max-old-space-size=8192' pnpm install --frozen-lockfile --filter '!@workspace/frostdex-mobile'",
   "outputDirectory": "artifacts/frostdex/dist/public",
   "framework": null,
   "rewrites": [
