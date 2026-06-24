@@ -306,6 +306,7 @@ export const useOrderlyConfig = () => {
       },
       { id: "Bot", href: "/bot", name: "🤖 Bot" },
       { id: "Referral", href: "/referral", name: "Referral" },
+      { id: "Whitepaper", href: "/whitepaper", name: "📄 Whitepaper", isDefault: true },
     ];
 
     const defaultEnabledMenus = allMenuItems.filter((menu) => menu.isDefault);

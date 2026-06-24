@@ -40,6 +40,7 @@ const BotLayout = lazy(() => import('./pages/bot/Layout'));
 const BotIndex = lazy(() => import('./pages/bot/Index'));
 const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
 const ReferralIndex = lazy(() => import('./pages/referral/Index'));
+const WhitepaperIndex = lazy(() => import('./pages/whitepaper/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -167,6 +168,10 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <ReferralIndex /> },
         ],
+      },
+      {
+        path: 'whitepaper',
+        element: <WhitepaperIndex />,
       },
     ],
   },
