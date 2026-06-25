@@ -41,6 +41,7 @@ const BotIndex = lazy(() => import('./pages/bot/Index'));
 const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
 const ReferralIndex = lazy(() => import('./pages/referral/Index'));
 const WhitepaperIndex = lazy(() => import('./pages/whitepaper/Index'));
+const LegalIndex      = lazy(() => import('./pages/legal/Index'));
 
 
 async function loadRuntimeConfig() {
@@ -172,6 +173,10 @@ const router = createBrowserRouter([
       {
         path: 'whitepaper',
         element: <WhitepaperIndex />,
+      },
+      {
+        path: 'legal',
+        element: <LegalIndex />,
       },
     ],
   },

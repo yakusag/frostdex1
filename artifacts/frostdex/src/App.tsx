@@ -14,11 +14,11 @@ import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
 
-const FrostTradeWidget   = lazy(() => import("@/components/FrostTradeWidget"));
-const AIAssistant        = lazy(() => import("@/components/AIAssistant"));
-const WhaleAlerts        = lazy(() => import("@/components/WhaleAlerts"));
-const SmartMoney         = lazy(() => import("@/components/SmartMoney"));
-const SentimentDashboard = lazy(() => import("@/components/SentimentDashboard"));
+const FrostTradeWidget  = lazy(() => import("@/components/FrostTradeWidget"));
+const AIAssistant       = lazy(() => import("@/components/AIAssistant"));
+const WhaleAlerts       = lazy(() => import("@/components/WhaleAlerts"));
+const SmartMoney        = lazy(() => import("@/components/SmartMoney"));
+const LiquidityHeatmap  = lazy(() => import("@/components/LiquidityHeatmap"));
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -56,7 +56,7 @@ export default function App() {
         {visibility.ai         && <AIAssistant        onHide={() => toggle("ai")} />}
         {visibility.whale      && <WhaleAlerts         onHide={() => toggle("whale")} />}
         {visibility.smartmoney && <SmartMoney          onHide={() => toggle("smartmoney")} />}
-        {visibility.sentiment  && <SentimentDashboard  onHide={() => toggle("sentiment")} />}
+        {visibility.sentiment  && <LiquidityHeatmap    onHide={() => toggle("sentiment")} />}
       </Suspense>
       <WidgetManager
         visibility={visibility}

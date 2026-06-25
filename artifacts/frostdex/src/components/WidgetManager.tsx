@@ -12,7 +12,7 @@ const WIDGETS = [
   { key: "ai"         as const, label: "FrostAI",        icon: "🤖" },
   { key: "whale"      as const, label: "Whale Alerts",   icon: "🐋" },
   { key: "smartmoney" as const, label: "Smart Money",    icon: "🧠" },
-  { key: "sentiment"  as const, label: "Market Mood",    icon: "📊" },
+  { key: "sentiment"  as const, label: "Liq. Heatmap",   icon: "🌡" },
 ];
 
 export default function WidgetManager({ visibility, anyHidden, onToggle, onShowAll }: Props) {
