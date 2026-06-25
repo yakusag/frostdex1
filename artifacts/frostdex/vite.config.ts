@@ -90,36 +90,6 @@ export default defineConfig({
       onwarn: () => {},
       maxParallelFileOps: 1,
       plugins: [fixVpnpShims],
-      output: {
-        manualChunks(id) {
-          if (id.includes("@orderly.network")) return "chunk-orderly";
-          if (
-            id.includes("/wagmi/") ||
-            id.includes("/viem/") ||
-            id.includes("/@reown/") ||
-            id.includes("/ethers/")
-          )
-            return "chunk-web3";
-          if (
-            id.includes("/@solana/") ||
-            id.includes("/@solana-mobile/") ||
-            id.includes("/@coral-xyz/")
-          )
-            return "chunk-solana";
-          if (
-            id.includes("/@particle-network/") ||
-            id.includes("/@privy-io/") ||
-            id.includes("/@binance/") ||
-            id.includes("/@web3-onboard/") ||
-            id.includes("/@abstract-foundation/") ||
-            id.includes("/@fractalwagmi/") ||
-            id.includes("/@keystonehq/") ||
-            id.includes("/@trezor/") ||
-            id.includes("/woofi-swap-widget-kit/")
-          )
-            return "chunk-wallets";
-        },
-      },
     },
   },
   server: {
