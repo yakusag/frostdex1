@@ -13,7 +13,11 @@ const WIDGETS = [
   { key: "whale"      as const, label: "Whale Alerts",     icon: "🐋" },
   { key: "smartmoney" as const, label: "Smart Money",      icon: "🧠" },
   { key: "sentiment"  as const, label: "Market Mood",      icon: "📊" },
+<<<<<<< HEAD
   { key: "heatmap"    as const, label: "Liq. Heatmap",     icon: "🌡" },
+=======
+  { key: "heatmap"    as const, label: "Crypto Heatmap",   icon: "🌡" },
+>>>>>>> 617bd7961f685f546560241d34a318d81084bab4
   { key: "macdRsi"    as const, label: "MACD · RSI",       icon: "📉" },
 ];
 

@@ -16,8 +16,13 @@ if ! git diff --cached --quiet; then
   git commit -m "chore: sync pending changes"
 fi
 
-echo "=== Pulling from GitHub ==="
-git pull "$REMOTE_URL" main --no-rebase 2>&1
+echo "=== Pulling from GitHub (ours wins on conflict) ==="
+git pull "$REMOTE_URL" main --no-rebase -X ours 2>&1 || {
+  echo "Pull had conflicts — using ours strategy to resolve"
+  git checkout --ours -- . 2>/dev/null || true
+  git add -A
+  git commit -m "chore: resolve conflicts (keep local)" 2>/dev/null || true
+}
 
 echo "=== Pushing to GitHub ==="
 git push "$REMOTE_URL" HEAD:main 2>&1
