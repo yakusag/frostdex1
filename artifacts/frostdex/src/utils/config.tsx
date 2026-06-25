@@ -390,7 +390,7 @@ export const useOrderlyConfig = () => {
                 <img
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
-                  style={{ height: "52px", maxHeight: "52px" }}
+                  style={{ height: "72px", maxHeight: "72px" }}
                 />
               )}
               {!isMobile && (
