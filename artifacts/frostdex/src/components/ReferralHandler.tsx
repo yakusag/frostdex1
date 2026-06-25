@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 const STORAGE_KEY = "referral_code";
+const DEFAULT_REF = "RYVOVA3B";
 
 export default function ReferralHandler() {
   const [searchParams] = useSearchParams();
@@ -9,10 +10,9 @@ export default function ReferralHandler() {
   useEffect(() => {
     const ref = searchParams.get("ref") || searchParams.get("referral");
     if (ref && ref.trim()) {
-      const existing = localStorage.getItem(STORAGE_KEY);
-      if (!existing) {
-        localStorage.setItem(STORAGE_KEY, ref.trim());
-      }
+      localStorage.setItem(STORAGE_KEY, ref.trim());
+    } else if (!localStorage.getItem(STORAGE_KEY)) {
+      localStorage.setItem(STORAGE_KEY, DEFAULT_REF);
     }
   }, [searchParams]);
 
