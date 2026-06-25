@@ -8,6 +8,7 @@ import LeverageAutoMax from "@/components/LeverageAutoMax";
 import ReferralHandler from "@/components/ReferralHandler";
 import ReferralWelcome from "@/components/ReferralWelcome";
 import MarketTickerBar from "@/components/MarketTickerBar";
+import MarketStats from "@/components/MarketStats";
 import WidgetManager from "@/components/WidgetManager";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
@@ -48,6 +49,7 @@ export default function App() {
       <NetworkStatus />
       <ReferralHandler />
       <ReferralWelcome />
+      <MarketStats />
       <MarketTickerBar />
       <OrderlyProvider>
         <LeverageAutoMax />

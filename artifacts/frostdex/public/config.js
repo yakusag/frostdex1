@@ -26,7 +26,7 @@ window.__RUNTIME_CONFIG__ = {
   "VITE_DISCORD_URL": "",
   "VITE_TWITTER_URL": "",
   "VITE_SEO_SITE_NAME": "FrostDex",
-  "VITE_SEO_SITE_DESCRIPTION": "Trade perpetual futures in FrostDex — low fees, deep liquidity, no KYC. Decentralized exchange.",
+  "VITE_SEO_SITE_DESCRIPTION": "Trade perpetual futures on FrostDex — low fees, deep liquidity, no KYC. Decentralized exchange.",
   "VITE_SEO_SITE_URL": "https://frostdex.pw",
   "VITE_SEO_SITE_LANGUAGE": "en",
   "VITE_SEO_SITE_LOCALE": "en_US",
