@@ -8,17 +8,20 @@ import LeverageAutoMax from "@/components/LeverageAutoMax";
 import ReferralHandler from "@/components/ReferralHandler";
 import ReferralWelcome from "@/components/ReferralWelcome";
 import MarketTickerBar from "@/components/MarketTickerBar";
+import MarketStats from "@/components/MarketStats";
 import WidgetManager from "@/components/WidgetManager";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
 
-const FrostTradeWidget  = lazy(() => import("@/components/FrostTradeWidget"));
-const AIAssistant       = lazy(() => import("@/components/AIAssistant"));
-const WhaleAlerts       = lazy(() => import("@/components/WhaleAlerts"));
-const SmartMoney        = lazy(() => import("@/components/SmartMoney"));
-const LiquidityHeatmap  = lazy(() => import("@/components/LiquidityHeatmap"));
+const FrostTradeWidget   = lazy(() => import("@/components/FrostTradeWidget"));
+const AIAssistant        = lazy(() => import("@/components/AIAssistant"));
+const WhaleAlerts        = lazy(() => import("@/components/WhaleAlerts"));
+const SmartMoney         = lazy(() => import("@/components/SmartMoney"));
+const SentimentDashboard = lazy(() => import("@/components/SentimentDashboard"));
+const LiquidityHeatmap   = lazy(() => import("@/components/LiquidityHeatmap"));
+const MacdRsiWidget      = lazy(() => import("@/components/MacdRsiWidget"));
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -46,6 +49,7 @@ export default function App() {
       <NetworkStatus />
       <ReferralHandler />
       <ReferralWelcome />
+      <MarketStats />
       <MarketTickerBar />
       <OrderlyProvider>
         <LeverageAutoMax />
@@ -56,7 +60,9 @@ export default function App() {
         {visibility.ai         && <AIAssistant        onHide={() => toggle("ai")} />}
         {visibility.whale      && <WhaleAlerts         onHide={() => toggle("whale")} />}
         {visibility.smartmoney && <SmartMoney          onHide={() => toggle("smartmoney")} />}
-        {visibility.sentiment  && <LiquidityHeatmap    onHide={() => toggle("sentiment")} />}
+        {visibility.sentiment  && <SentimentDashboard  onHide={() => toggle("sentiment")} />}
+        {visibility.heatmap    && <LiquidityHeatmap    onHide={() => toggle("heatmap")} />}
+        {visibility.macdRsi    && <MacdRsiWidget        onHide={() => toggle("macdRsi")} />}
       </Suspense>
       <WidgetManager
         visibility={visibility}

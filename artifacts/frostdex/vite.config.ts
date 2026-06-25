@@ -45,7 +45,7 @@ export default defineConfig({
     fixVpnpShims,
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
+    ...(process.env.NODE_ENV !== "production" ? [runtimeErrorOverlay()] : []),
     nodePolyfills({
       include: ["buffer", "crypto", "stream", "process"],
       globals: { Buffer: true, process: true, global: true },
@@ -83,12 +83,14 @@ export default defineConfig({
     emptyOutDir: true,
     target: "esnext",
     minify: false,
+    cssMinify: false,
     sourcemap: false,
+    reportCompressedSize: false,
     chunkSizeWarningLimit: 10000,
     rollupOptions: {
       treeshake: false,
       onwarn: () => {},
-      maxParallelFileOps: 1,
+      maxParallelFileOps: 2,
       plugins: [fixVpnpShims],
       output: {
         manualChunks(id) {

@@ -1,18 +1,20 @@
 import { useState } from "react";
 
 interface Props {
-  visibility: { ai: boolean; whale: boolean; sentiment: boolean; frost: boolean; smartmoney: boolean };
+  visibility: { ai: boolean; whale: boolean; sentiment: boolean; frost: boolean; smartmoney: boolean; heatmap: boolean; macdRsi: boolean };
   anyHidden: boolean;
-  onToggle: (key: "ai" | "whale" | "sentiment" | "frost" | "smartmoney") => void;
+  onToggle: (key: "ai" | "whale" | "sentiment" | "frost" | "smartmoney" | "heatmap" | "macdRsi") => void;
   onShowAll: () => void;
 }
 
 const WIDGETS = [
-  { key: "frost"      as const, label: "FROST Widget",  icon: "❄" },
-  { key: "ai"         as const, label: "FrostAI",        icon: "🤖" },
-  { key: "whale"      as const, label: "Whale Alerts",   icon: "🐋" },
-  { key: "smartmoney" as const, label: "Smart Money",    icon: "🧠" },
-  { key: "sentiment"  as const, label: "Liq. Heatmap",   icon: "🌡" },
+  { key: "frost"      as const, label: "FROST Widget",    icon: "❄" },
+  { key: "ai"         as const, label: "FrostAI",          icon: "🤖" },
+  { key: "whale"      as const, label: "Whale Alerts",     icon: "🐋" },
+  { key: "smartmoney" as const, label: "Smart Money",      icon: "🧠" },
+  { key: "sentiment"  as const, label: "Market Mood",      icon: "📊" },
+  { key: "heatmap"    as const, label: "Liq. Heatmap",     icon: "🌡" },
+  { key: "macdRsi"    as const, label: "MACD · RSI",       icon: "📉" },
 ];
 
 export default function WidgetManager({ visibility, anyHidden, onToggle, onShowAll }: Props) {
