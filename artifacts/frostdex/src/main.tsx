@@ -41,11 +41,7 @@ const BotIndex = lazy(() => import('./pages/bot/Index'));
 const ReferralLayout = lazy(() => import('./pages/referral/Layout'));
 const ReferralIndex = lazy(() => import('./pages/referral/Index'));
 const WhitepaperIndex = lazy(() => import('./pages/whitepaper/Index'));
-<<<<<<< HEAD
 const LegalIndex      = lazy(() => import('./pages/legal/Index'));
-=======
-const LegalIndex = lazy(() => import('./pages/legal/Index'));
->>>>>>> 617bd7961f685f546560241d34a318d81084bab4
 
 
 async function loadRuntimeConfig() {

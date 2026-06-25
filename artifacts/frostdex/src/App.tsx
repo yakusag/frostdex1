@@ -20,11 +20,7 @@ const AIAssistant        = lazy(() => import("@/components/AIAssistant"));
 const WhaleAlerts        = lazy(() => import("@/components/WhaleAlerts"));
 const SmartMoney         = lazy(() => import("@/components/SmartMoney"));
 const SentimentDashboard = lazy(() => import("@/components/SentimentDashboard"));
-<<<<<<< HEAD
 const LiquidityHeatmap   = lazy(() => import("@/components/LiquidityHeatmap"));
-=======
-const CryptoHeatmap      = lazy(() => import("@/components/CryptoHeatmap"));
->>>>>>> 617bd7961f685f546560241d34a318d81084bab4
 const MacdRsiWidget      = lazy(() => import("@/components/MacdRsiWidget"));
 
 export default function App() {
@@ -65,11 +61,7 @@ export default function App() {
         {visibility.whale      && <WhaleAlerts         onHide={() => toggle("whale")} />}
         {visibility.smartmoney && <SmartMoney          onHide={() => toggle("smartmoney")} />}
         {visibility.sentiment  && <SentimentDashboard  onHide={() => toggle("sentiment")} />}
-<<<<<<< HEAD
         {visibility.heatmap    && <LiquidityHeatmap    onHide={() => toggle("heatmap")} />}
-=======
-        {visibility.heatmap    && <CryptoHeatmap        onHide={() => toggle("heatmap")} />}
->>>>>>> 617bd7961f685f546560241d34a318d81084bab4
         {visibility.macdRsi    && <MacdRsiWidget        onHide={() => toggle("macdRsi")} />}
       </Suspense>
       <WidgetManager
