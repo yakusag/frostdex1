@@ -87,10 +87,10 @@ export default defineConfig({
     sourcemap: false,
     reportCompressedSize: false,
     chunkSizeWarningLimit: 10000,
+    maxParallelFileOps: 2,
     rollupOptions: {
       treeshake: false,
       onwarn: () => {},
-      maxParallelFileOps: 4,
       plugins: [fixVpnpShims],
       output: {
         manualChunks(id) {
