@@ -378,7 +378,7 @@ export const useOrderlyConfig = () => {
                 externalLinks={customMenus}
               />
             )}
-            <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "52px" }}>
+            <Link to="/" style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", overflow: "hidden", textDecoration: "none" }}>
               {isMobile && getRuntimeConfigBoolean("VITE_HAS_SECONDARY_LOGO") ? (
                 <img
                   src={withBasePath("/logo-secondary.webp")}
@@ -391,6 +391,21 @@ export const useOrderlyConfig = () => {
                   alt="FrostDex"
                   style={{ height: "40px", maxHeight: "40px" }}
                 />
+              )}
+              {!isMobile && (
+                <span style={{
+                  fontSize: "7.5px",
+                  fontWeight: 800,
+                  letterSpacing: "2.5px",
+                  textTransform: "uppercase",
+                  color: "rgba(56,224,248,0.85)",
+                  textShadow: "0 0 8px rgba(56,224,248,0.6), 0 0 18px rgba(56,224,248,0.3)",
+                  marginTop: "-2px",
+                  whiteSpace: "nowrap",
+                  fontFamily: "Manrope, 'Segoe UI', sans-serif",
+                }}>
+                  FREEDOM · TRUST · TRADE
+                </span>
               )}
             </Link>
             {!isMobile && components.mainNav}

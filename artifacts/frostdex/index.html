@@ -129,6 +129,22 @@
         animation: name-appear 0.6s ease 0.6s both;
       }
 
+      /* ── motto ── */
+      #splash-motto {
+        margin-top: 10px;
+        font-family: 'Manrope', 'Segoe UI', sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        color: rgba(56, 224, 248, 0.92);
+        text-shadow:
+          0 0 12px rgba(56, 224, 248, 0.75),
+          0 0 28px rgba(56, 224, 248, 0.4),
+          0 0 6px rgba(14, 203, 129, 0.3);
+        animation: name-appear 0.6s ease 0.9s both;
+      }
+
       /* ── falling snowflakes ── */
       #splash-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
       .sp {
@@ -160,12 +176,61 @@
         <div class="splash-candle"></div>
       </div>
       <div id="splash-tag">Decentralized Exchange</div>
+      <div id="splash-motto">FREEDOM · TRUST · TRADE</div>
     </div>
 
-    <div id="root"></div>
+    <div id="root">
+      <!-- fallback shown while JS loads; React replaces this on mount -->
+      <div id="root-loading" style="
+        position:fixed;inset:0;
+        background:#0b0e11;
+        display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:16px;
+        font-family:'Segoe UI',sans-serif;
+      ">
+        <div style="width:36px;height:36px;border:3px solid rgba(56,224,248,0.15);border-top-color:rgba(56,224,248,0.9);border-radius:50%;animation:rl-spin 0.8s linear infinite;"></div>
+        <div style="font-size:11px;letter-spacing:2px;color:rgba(56,224,248,0.45);text-transform:uppercase;">Loading…</div>
+        <style>@keyframes rl-spin{to{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
+      /* catch unhandled JS errors and show a recovery message */
+      window.addEventListener('error', function(e) {
+        var el = document.getElementById('root-loading');
+        if (!el) return;
+        el.innerHTML = '<div style="max-width:340px;text-align:center;padding:24px">'
+          + '<div style="font-size:32px;margin-bottom:12px">⚠️</div>'
+          + '<div style="color:#ff6b6b;font-size:13px;font-weight:700;margin-bottom:8px">Loading Error</div>'
+          + '<div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:20px">'
+          + (e.message || 'Script failed to load') + '</div>'
+          + '<button onclick="location.reload()" style="'
+          + 'padding:10px 24px;background:rgba(56,224,248,0.15);'
+          + 'border:1px solid rgba(56,224,248,0.4);border-radius:6px;'
+          + 'color:rgba(56,224,248,0.9);font-size:12px;font-weight:700;'
+          + 'letter-spacing:1px;cursor:pointer;font-family:inherit">RELOAD</button>'
+          + '</div>';
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        /* only surface chunk-load failures, not noisy wallet errors */
+        var msg = e.reason && (e.reason.message || String(e.reason));
+        if (!msg || !msg.includes('Failed to fetch')) return;
+        var el = document.getElementById('root-loading');
+        if (!el) return;
+        el.innerHTML = '<div style="max-width:340px;text-align:center;padding:24px">'
+          + '<div style="font-size:32px;margin-bottom:12px">🔄</div>'
+          + '<div style="color:#ffaa00;font-size:13px;font-weight:700;margin-bottom:8px">Update Available</div>'
+          + '<div style="color:rgba(255,255,255,0.5);font-size:11px;margin-bottom:20px">'
+          + 'A new version of FrostDex is available. Please reload.</div>'
+          + '<button onclick="caches.keys().then(function(k){return Promise.all(k.map(function(c){return caches.delete(c)}))}).then(function(){location.reload()})" style="'
+          + 'padding:10px 24px;background:rgba(56,224,248,0.15);'
+          + 'border:1px solid rgba(56,224,248,0.4);border-radius:6px;'
+          + 'color:rgba(56,224,248,0.9);font-size:12px;font-weight:700;'
+          + 'letter-spacing:1px;cursor:pointer;font-family:inherit">RELOAD</button>'
+          + '</div>';
+      });
+
       /* generate falling snowflakes */
       (function () {
         var container = document.getElementById('splash-particles');
