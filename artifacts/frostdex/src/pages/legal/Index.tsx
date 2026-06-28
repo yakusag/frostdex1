@@ -73,7 +73,7 @@ export default function LegalPage() {
 
           <Section id="privacy" title="🔒 Privacy Policy">
             <p>
-              FrostDex is a decentralized application (dApp) built on the Orderly Network protocol. We are committed to protecting your privacy.
+              FrostDex is a decentralized application (dApp) built by FrostDex protocol. We are committed to protecting your privacy.
             </p>
 
             <h3>Data We Collect</h3>
@@ -92,13 +92,13 @@ export default function LegalPage() {
 
             <h3>Third-Party Services</h3>
             <p>
-              The Platform integrates with Orderly Network, Privy, and analytics providers. On-chain transactions are permanently recorded on public blockchains and are not subject to erasure.
+              The Platform integrates with all Markets, Privy, and analytics providers. On-chain transactions are permanently recorded on public blockchains and are not subject to erasure.
             </p>
           </Section>
 
           <Section id="protocol" title="🔗 Protocol Disclaimer">
             <p>
-              FrostDex is a front-end interface for the <strong>Orderly Network</strong> decentralized perpetuals protocol. FrostDex does not:
+              FrostDex stands for the <strong>Freedom,Trust,Trade</strong> decentralized perpetuals protocol. FrostDex does not:
             </p>
             <ul>
               <li>Control or custody user funds at any point.</li>
