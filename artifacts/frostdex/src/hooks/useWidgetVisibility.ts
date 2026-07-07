@@ -38,7 +38,14 @@ export function useWidgetVisibility() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS)); } catch {}
   }, []);
 
+  const ALL_HIDDEN: Visibility = { ai: false, whale: false, sentiment: false, frost: false, smartmoney: false, heatmap: false, macdRsi: false };
+
+  const hideAll = useCallback(() => {
+    setVisibility(ALL_HIDDEN);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ALL_HIDDEN)); } catch {}
+  }, []);
+
   const anyHidden = (Object.keys(DEFAULTS) as (keyof Visibility)[]).some(k => !visibility[k]);
 
-  return { visibility, toggle, showAll, anyHidden };
+  return { visibility, toggle, showAll, hideAll, anyHidden };
 }

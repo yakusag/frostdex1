@@ -26,7 +26,7 @@ const MacdRsiWidget      = lazy(() => import("@/components/MacdRsiWidget"));
 export default function App() {
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const { visibility, toggle, showAll, anyHidden } = useWidgetVisibility();
+  const { visibility, toggle, showAll, hideAll, anyHidden } = useWidgetVisibility();
 
   useEffect(() => {
     if (typeof (window as any).__hideSplash === "function") {
@@ -69,6 +69,7 @@ export default function App() {
         anyHidden={anyHidden}
         onToggle={toggle}
         onShowAll={showAll}
+        onHideAll={hideAll}
       />
     </>
   );

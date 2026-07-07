@@ -5,6 +5,7 @@ interface Props {
   anyHidden: boolean;
   onToggle: (key: "ai" | "whale" | "sentiment" | "frost" | "smartmoney" | "heatmap" | "macdRsi") => void;
   onShowAll: () => void;
+  onHideAll: () => void;
 }
 
 const WIDGETS = [
@@ -17,10 +18,8 @@ const WIDGETS = [
   { key: "macdRsi"    as const, label: "MACD · RSI",       icon: "📉" },
 ];
 
-export default function WidgetManager({ visibility, anyHidden, onToggle, onShowAll }: Props) {
+export default function WidgetManager({ visibility, anyHidden, onToggle, onShowAll, onHideAll }: Props) {
   const [open, setOpen] = useState(false);
-
-  if (!anyHidden && !open) return null;
 
   return (
     <div className="wm-wrap">
@@ -46,9 +45,13 @@ export default function WidgetManager({ visibility, anyHidden, onToggle, onShowA
               </button>
             </div>
           ))}
-          {anyHidden && (
+          {anyHidden ? (
             <button className="wm-show-all" onClick={() => { onShowAll(); setOpen(false); }}>
               Show All
+            </button>
+          ) : (
+            <button className="wm-show-all" onClick={() => { onHideAll(); setOpen(false); }}>
+              Hide All
             </button>
           )}
         </div>
