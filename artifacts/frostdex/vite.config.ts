@@ -94,7 +94,16 @@ export default defineConfig({
       onwarn: () => {},
       plugins: [fixVpnpShims],
       output: {
+        hoistTransitiveImports: false,
+        interop: "auto",
         manualChunks(id) {
+          // React must be in its own chunk so it initialises before everyone else
+          if (
+            id.includes("/node_modules/react/") ||
+            id.includes("/node_modules/react-dom/") ||
+            id.includes("/node_modules/scheduler/")
+          )
+            return "chunk-react";
           if (id.includes("@orderly.network")) return "chunk-orderly";
           if (
             id.includes("/wagmi/") ||
