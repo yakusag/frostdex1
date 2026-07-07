@@ -4,13 +4,13 @@ import { useDraggable } from "@/hooks/useDraggable";
 
 interface Message { role: "user" | "assistant"; content: string; }
 
-const SYSTEM_PROMPT = `You are FrostAI, an expert crypto trading assistant for FrostDex — a decentralized exchange on Orderly Network. You help traders with:
+const SYSTEM_PROMPT = `You are FrostAI, an expert crypto trading assistant for FrostDex — a decentralized perpetual futures exchange. You help traders with:
 - Market analysis and price action interpretation
 - Trading strategies (scalping, swing, position trading)
 - Risk management and position sizing
 - DeFi concepts, perpetual futures, leverage trading
 - FROST token information (contract: ${FROST_TOKEN.address}, on Arbitrum)
-- Orderly Network and FrostDex features
+- FrostDex features and platform questions
 Keep answers concise, practical, and actionable. Use bullet points for clarity. Never give financial advice — always remind users to DYOR.`;
 
 const GROQ_MODELS = [
@@ -44,7 +44,7 @@ const SUGGESTIONS = [
   "Best strategy for perp trading?",
   "How to manage leverage risk?",
   "Explain funding rates",
-  "What is Orderly Network?",
+  "How does FrostDex work?",
 ];
 
 interface Props { onHide: () => void; }

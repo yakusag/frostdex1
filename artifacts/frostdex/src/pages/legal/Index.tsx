@@ -36,7 +36,7 @@ export default function LegalPage() {
             <p>FrostDex is committed to protecting your privacy. This policy explains what information we collect and how we use it.</p>
             <p><strong style={{ color: "rgba(var(--oui-color-base-foreground),0.9)" }}>On-chain Data:</strong> All trades are executed on public blockchains. Your wallet address and transaction history are publicly visible on-chain. We do not control this.</p>
             <p><strong style={{ color: "rgba(var(--oui-color-base-foreground),0.9)" }}>Local Storage:</strong> We use your browser's local storage solely for user preferences (theme, language, referral code). No personal data is transmitted to our servers.</p>
-            <p><strong style={{ color: "rgba(var(--oui-color-base-foreground),0.9)" }}>Third Parties:</strong> The Platform connects to Orderly Network's infrastructure for order matching and liquidity. Please review Orderly Network's privacy policy for their data practices.</p>
+            <p><strong style={{ color: "rgba(var(--oui-color-base-foreground),0.9)" }}>Third Parties:</strong> The Platform connects to decentralized infrastructure for order matching and liquidity. Please review the privacy policies of any third-party services you interact with.</p>
             <p><strong style={{ color: "rgba(var(--oui-color-base-foreground),0.9)" }}>Analytics:</strong> We may use anonymous, aggregated analytics to improve the Platform. No personally identifiable information is collected.</p>
           </div>
         </section>
@@ -66,7 +66,7 @@ export default function LegalPage() {
 
         {/* Footer */}
         <div style={{ borderTop: "1px solid rgba(var(--oui-color-primary),0.1)", paddingTop: 24, fontSize: 12, color: "rgba(var(--oui-color-base-foreground),0.35)", textAlign: "center" }}>
-          Last updated: June 2025 · FrostDex is a decentralized exchange interface powered by Orderly Network.
+          Last updated: June 2025 · FrostDex — Decentralized Perpetual Futures Exchange.
         </div>
       </div>
     </div>

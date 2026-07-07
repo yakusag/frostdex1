@@ -42,10 +42,10 @@ const ServiceDisclaimerDialog = () => {
   const content = {
     intro: `${getRuntimeConfig(
       "VITE_ORDERLY_BROKER_NAME"
-    )} uses Orderly Network's white-label solution and is not a direct operator of the orderbook.`,
-    disclaimer: `By clicking 'Agree', users will access a third-party website using Orderly software. ${getRuntimeConfig(
+    )} is a non-custodial decentralized exchange interface and is not a direct operator of the orderbook.`,
+    disclaimer: `By clicking 'Agree', users will access FrostDex's decentralized trading interface. ${getRuntimeConfig(
       "VITE_ORDERLY_BROKER_NAME"
-    )} confirms that it does not directly operate or control the infrastructure or take responsibility for code operations.`,
+    )} confirms that it does not directly operate or control the underlying smart contract infrastructure or take responsibility for on-chain operations.`,
   };
 
   return (

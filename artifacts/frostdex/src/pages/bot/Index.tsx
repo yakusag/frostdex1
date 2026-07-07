@@ -1529,7 +1529,7 @@ export default function BotPage() {
               >
                 {liveMode
                   ? isConnected
-                    ? "Real orders will be placed on Orderly Network using your portfolio."
+                    ? "Real orders will be placed on FrostDex using your portfolio."
                     : "⚠ Connect your wallet first to use live trading."
                   : "Bot runs in simulation mode — no real orders are placed."}
               </div>

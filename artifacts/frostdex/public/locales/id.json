@@ -182,7 +182,7 @@
   "markets.symbolInfoBar.Index": "Indeks",
   "markets.symbolInfoBar.Index.tooltip": "Rata-rata dari harga terakhir di bursa lain.",
   "markets.symbolInfoBar.24hVolume": "Volume 24h",
-  "markets.symbolInfoBar.24hVolume.tooltip": "Total volume trading 24 jam di Orderly Network.",
+  "markets.symbolInfoBar.24hVolume.tooltip": "Total volume trading 24 jam di FrostDex.",
   "markets.symbolInfoBar.predFundingRate": "Tingkat pend. perkiraan",
   "markets.symbolInfoBar.predFundingRate.tooltip": "Tingkat pendanaan adalah pembayaran antara trader yang long dan short. Ketika positif, posisi long membayar pendanaan ke posisi short. Ketika negatif, posisi short membayar pendanaan ke posisi long.",
   "markets.symbolInfoBar.riskNotice.content": "{{symbolWithBroker}} adalah pencatatan tanpa izin yang hanya mendukung margin terisolasi, dikerahkan dan dioperasikan secara independen oleh {{brokerName}}. Harap perhatikan risiko yang lebih tinggi, termasuk likuiditas rendah, volatilitas tinggi, dan peningkatan risiko likuidasi.",

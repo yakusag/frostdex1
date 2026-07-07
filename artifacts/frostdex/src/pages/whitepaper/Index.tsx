@@ -167,7 +167,7 @@ export default function WhitepaperIndex() {
           >
             FrostDex is a next-generation decentralized exchange (DEX) offering
             perpetual futures trading with institutional-grade liquidity, ultra-low
-            fees, and zero KYC — powered by the Orderly Network's cross-chain
+            fees, and zero KYC — powered by FrostDex's cross-chain
             infrastructure.
           </p>
 
@@ -218,8 +218,7 @@ export default function WhitepaperIndex() {
             your assets stay in your wallet until you choose to trade.
           </p>
           <p className="text-base leading-relaxed mb-4" style={{ color: "rgba(255,255,255,0.72)" }}>
-            Built on the <strong style={{ color: "rgba(56,224,248,0.85)" }}>Orderly Network</strong>, 
-            FrostDex benefits from a shared liquidity layer that aggregates order books across all
+            FrostDex is built on a shared liquidity layer that aggregates order books across all
             connected DEXs, giving users tighter spreads and deeper markets than any
             single exchange could achieve alone.
           </p>

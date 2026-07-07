@@ -36,9 +36,9 @@ export const getEvmConnectors = (): CreateConnectorFn[] => {
         projectId: walletConnectProjectId,
         showQrModal: true,
         metadata: {
-          name: getRuntimeConfig("VITE_APP_NAME") || "Orderly App",
+          name: getRuntimeConfig("VITE_APP_NAME") || "FrostDex",
           description:
-            getRuntimeConfig("VITE_APP_DESCRIPTION") || "Orderly Application",
+            getRuntimeConfig("VITE_APP_DESCRIPTION") || "FrostDex — Decentralized Exchange",
           url: window.location.origin,
           icons: [`${window.location.origin}/favicon.webp`],
         },
