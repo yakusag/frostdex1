@@ -20,6 +20,9 @@ const bufferShim  = path.join(vpnpDir, "shims/buffer/dist/index.cjs");
 const processShim = path.join(vpnpDir, "shims/process/dist/index.cjs");
 const globalShim  = path.join(vpnpDir, "shims/global/dist/index.cjs");
 
+// Force ESM build of eventemitter3 (has proper default export)
+const ee3Esm = _require.resolve("eventemitter3").replace(/index\.js$/, "index.mjs");
+
 const fixVpnpShims = {
   name: "fix-vpnp-shims",
   resolveId(id: string) {
@@ -33,9 +36,14 @@ const fixVpnpShims = {
 const fixTrailingSlashShims = {
   name: "fix-trailing-slash-shims",
   setup(build: any) {
+    // trailing-slash variants (e.g. `buffer/`)
     build.onResolve({ filter: /^process\/$/ }, () => ({ path: processShim }));
     build.onResolve({ filter: /^buffer\/$/ },  () => ({ path: bufferShim  }));
     build.onResolve({ filter: /^global\/$/  }, () => ({ path: globalShim  }));
+    // full shim paths — needed so optimizeDeps.include can pre-bundle them
+    build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/buffer/  }, () => ({ path: bufferShim  }));
+    build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/process/ }, () => ({ path: processShim }));
+    build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/global/  }, () => ({ path: globalShim  }));
   },
 };
 
@@ -48,7 +56,9 @@ export default defineConfig({
     ...(process.env.NODE_ENV !== "production" ? [runtimeErrorOverlay()] : []),
     nodePolyfills({
       include: ["buffer", "crypto", "stream", "process"],
-      globals: { Buffer: true, process: true, global: true },
+      // Disable shim-injection (globals) — it causes TDZ circular-dep crashes.
+      // Buffer/process are injected manually in src/main.tsx instead.
+      globals: { Buffer: false, process: false, global: false },
       protocolImports: true,
     }),
     cjsInterop({
@@ -73,6 +83,7 @@ export default defineConfig({
       "vite-plugin-node-polyfills/shims/process": processShim,
       "vite-plugin-node-polyfills/shims/buffer":  bufferShim,
       "vite-plugin-node-polyfills/shims/global":  globalShim,
+      "eventemitter3": ee3Esm,
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
@@ -152,6 +163,7 @@ export default defineConfig({
       "react",
       "react-dom",
       "react-router-dom",
+      "eventemitter3",
       "vite-plugin-node-polyfills/shims/buffer",
       "vite-plugin-node-polyfills/shims/process",
       "vite-plugin-node-polyfills/shims/global",
@@ -199,6 +211,7 @@ export default defineConfig({
       "@web3-onboard/walletconnect",
       "woofi-swap-widget-kit",
     ],
+    force: true,
     esbuildOptions: {
       define: { global: "globalThis" },
       plugins: [fixTrailingSlashShims],

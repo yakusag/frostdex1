@@ -1,4 +1,14 @@
 // build: 2026-06-19
+// Polyfill Buffer/process/global before any other import to avoid TDZ crashes
+// from vite-plugin-node-polyfills shim injection.
+import { Buffer } from 'buffer';
+if (typeof globalThis.Buffer === 'undefined') {
+  (globalThis as any).Buffer = Buffer;
+}
+if (typeof globalThis.global === 'undefined') {
+  (globalThis as any).global = globalThis;
+}
+
 import React, { lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
