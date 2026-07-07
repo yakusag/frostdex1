@@ -49,6 +49,7 @@ export default defineConfig({
     nodePolyfills({
       include: ["buffer", "crypto", "stream", "process"],
       globals: { Buffer: true, process: true, global: true },
+      protocolImports: true,
     }),
     cjsInterop({
       dependencies: ["bs58", "@coral-xyz/anchor", "lodash"],
@@ -138,7 +139,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom"],
+    include: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "vite-plugin-node-polyfills/shims/buffer",
+      "vite-plugin-node-polyfills/shims/process",
+      "vite-plugin-node-polyfills/shims/global",
+    ],
     exclude: [
       "@keystonehq/bc-ur-registry",
       "babel-runtime",
