@@ -51,7 +51,8 @@ function ReferralDashboardInner() {
     if (!generateCode) return;
     setGenerating(true);
     try {
-      await generateCode.createCode?.();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (generateCode as any).createCode?.();
     } catch {}
     setGenerating(false);
   };

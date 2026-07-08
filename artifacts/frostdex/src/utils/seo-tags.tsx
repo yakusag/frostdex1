@@ -1,3 +1,4 @@
+import React from "react";
 import { Helmet } from "react-helmet-async";
 
 type MetaTag =
@@ -14,17 +15,19 @@ type LinkTag = {
 export type SEOTag = MetaTag | LinkTag;
 
 export function renderSEOTags(tags: SEOTag[], pageTitle?: string) {
-  const metaTags: JSX.Element[] = [];
-  const linkTags: JSX.Element[] = [];
-  let titleElement: JSX.Element | null = null;
+  const elements: React.ReactElement[] = [];
+
+  if (pageTitle) {
+    elements.push(<title key="title">{pageTitle}</title>);
+  }
 
   tags.forEach((tag, index) => {
     if ('title' in tag) {
       if (!pageTitle) {
-        titleElement = <title key="title">{tag.title}</title>;
+        elements.push(<title key="title">{tag.title}</title>);
       }
     } else if ('rel' in tag) {
-      linkTags.push(
+      elements.push(
         <link
           key={`link-${index}`}
           rel={tag.rel}
@@ -33,11 +36,11 @@ export function renderSEOTags(tags: SEOTag[], pageTitle?: string) {
         />
       );
     } else if ('name' in tag) {
-      metaTags.push(
+      elements.push(
         <meta key={`meta-name-${index}`} name={tag.name} content={tag.content} />
       );
     } else if ('property' in tag) {
-      metaTags.push(
+      elements.push(
         <meta key={`meta-property-${index}`} property={tag.property} content={tag.content} />
       );
     }
@@ -45,11 +48,7 @@ export function renderSEOTags(tags: SEOTag[], pageTitle?: string) {
 
   return (
     <Helmet>
-      {pageTitle && <title>{pageTitle}</title>}
-      {!pageTitle && titleElement}
-      {metaTags}
-      {linkTags}
+      {elements as unknown as React.ReactNode}
     </Helmet>
   );
 }
-

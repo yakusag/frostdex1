@@ -24,7 +24,8 @@ const WalletConnector = ({ children, networkId }: WalletConnectorProps) => {
   return (
     <WalletConnectorProvider
       solanaInitial={solanaInitial}
-      evmInitial={evmInitial}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      evmInitial={evmInitial as any}
     >
       {children}
     </WalletConnectorProvider>

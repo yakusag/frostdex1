@@ -349,7 +349,7 @@ export default function LiquidityHeatmap({ onHide }: Props) {
                   ))}
                   <span style={{ marginLeft: 2 }}>Bear → Bull</span>
                 </div>
-                <span style={{ marginLeft: "auto" }}>Auto-refresh 30s · Orderly</span>
+                <span style={{ marginLeft: "auto" }}>Auto-refresh 30s · FrostDex</span>
               </div>
             </div>
           )}

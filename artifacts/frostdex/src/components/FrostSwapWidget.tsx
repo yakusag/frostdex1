@@ -130,7 +130,7 @@ export default function FrostSwapWidget() {
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
   const [errMsg, setErrMsg] = useState<string | null>(null);
-  const quoteTimer = useRef<ReturnType<typeof setTimeout>>();
+  const quoteTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const address = wallet?.accounts?.[0]?.address as Address | undefined;
   const isConnected = !!address;
@@ -169,7 +169,7 @@ export default function FrostSwapWidget() {
           functionName: "quoteExactInputSingle",
           args: [{ tokenIn, tokenOut, amountIn, fee: POOL_FEE, sqrtPriceLimitX96: 0n }],
         });
-        setQuote((result.result as [bigint])[0]);
+        setQuote((result.result as unknown as [bigint])[0]);
       } catch { setQuote(null); }
       setQuoteLoading(false);
     }, 600);
@@ -177,7 +177,8 @@ export default function FrostSwapWidget() {
 
   const getWalletClient = useCallback(() => {
     if (!wallet?.provider) return null;
-    return createWalletClient({ chain: arbitrum, transport: custom(wallet.provider) });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return createWalletClient({ chain: arbitrum, transport: custom(wallet.provider as any) });
   }, [wallet]);
 
   const switchToArbitrum = useCallback(async () => {

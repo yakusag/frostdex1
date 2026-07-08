@@ -1,4 +1,4 @@
-// build: 2026-06-19
+// build: 2026-07-08
 // Polyfill Buffer/process/global before any other import to avoid TDZ crashes
 // from vite-plugin-node-polyfills shim injection.
 import { Buffer } from 'buffer';
@@ -8,8 +8,11 @@ if (typeof globalThis.Buffer === 'undefined') {
 if (typeof globalThis.global === 'undefined') {
   (globalThis as any).global = globalThis;
 }
+if (typeof globalThis.process === 'undefined') {
+  (globalThis as any).process = { env: { NODE_ENV: import.meta.env.MODE }, browser: true, version: '', versions: {} };
+}
 
-import React, { lazy } from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
@@ -225,7 +228,9 @@ loadRuntimeConfig().then(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <HelmetProvider>
-        <RouterProvider router={router} />
+        <Suspense fallback={null}>
+          <RouterProvider router={router} />
+        </Suspense>
       </HelmetProvider>
     </React.StrictMode>
   );
