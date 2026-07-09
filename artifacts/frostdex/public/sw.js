@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `frostdex-${CACHE_VERSION}`;
 
 const NEVER_CACHE = ['/', '/index.html', '/config.js', '/sw.js', '/manifest.json'];

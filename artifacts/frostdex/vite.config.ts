@@ -43,6 +43,10 @@ const dayjsCjsSrc = dayjsDir
     })()
   : null;
 
+// ── Read CJS shim sources for ESM wrapping ───────────────────────────────────
+const bufferShimSrc  = fs.existsSync(bufferShim)  ? fs.readFileSync(bufferShim,  "utf-8") : null;
+const processShimSrc = fs.existsSync(processShim) ? fs.readFileSync(processShim, "utf-8") : null;
+
 // ── Virtual module IDs ────────────────────────────────────────────────────────
 const V = {
   USS_SHIM:      "\0polyfill:uss-shim",
@@ -50,6 +54,11 @@ const V = {
   USS_WITH_SEL:  "\0polyfill:uss-with-selector",
   USS_INDEX:     "\0polyfill:uss-index",
   DAYJS_MIN:     "\0polyfill:dayjs-min",
+  // CJS shims wrapped as proper ESM to avoid "Object.defineProperty on non-object"
+  // in Rollup production builds (exports is undefined in ESM context).
+  GLOBAL_SHIM:   "\0polyfill:global-shim",
+  BUFFER_SHIM:   "\0polyfill:buffer-shim",
+  PROCESS_SHIM:  "\0polyfill:process-shim",
 };
 
 // ── Central plugin: virtual ESM polyfills for pnpm-store CJS packages ─────────
@@ -57,10 +66,12 @@ const fixCjsImports = {
   name: "fix-cjs-imports",
 
   resolveId(id: string) {
-    // vite-plugin-node-polyfills shims
-    if (id.startsWith("vite-plugin-node-polyfills/shims/buffer"))  return bufferShim;
-    if (id.startsWith("vite-plugin-node-polyfills/shims/process")) return processShim;
-    if (id.startsWith("vite-plugin-node-polyfills/shims/global"))  return globalShim;
+    // vite-plugin-node-polyfills shims → return virtual ESM IDs instead of CJS
+    // files. The CJS files use Object.defineProperties(exports, ...) which
+    // crashes Rollup production builds because exports is undefined in ESM scope.
+    if (id.startsWith("vite-plugin-node-polyfills/shims/buffer"))  return V.BUFFER_SHIM;
+    if (id.startsWith("vite-plugin-node-polyfills/shims/process")) return V.PROCESS_SHIM;
+    if (id.startsWith("vite-plugin-node-polyfills/shims/global"))  return V.GLOBAL_SHIM;
 
     // use-sync-external-store — redirect to virtual ESM (React 19 has it built-in)
     if (id === "use-sync-external-store/shim/with-selector.js" ||
@@ -117,6 +128,36 @@ export default module.exports;
 `;
     }
 
+    // vite-plugin-node-polyfills global shim — trivial ESM replacement
+    if (id === V.GLOBAL_SHIM) {
+      return `const g = globalThis;\nexport { g as global };\nexport default g;\n`;
+    }
+
+    // vite-plugin-node-polyfills buffer shim — wrap CJS with module/exports scaffold
+    if (id === V.BUFFER_SHIM && bufferShimSrc) {
+      return `
+const module = { exports: {} };
+const exports = module.exports;
+${bufferShimSrc}
+export const Buffer = module.exports.Buffer ?? module.exports.default;
+export const Blob = module.exports.Blob;
+export const atob = module.exports.atob;
+export const btoa = module.exports.btoa;
+export default module.exports.default ?? module.exports.Buffer ?? module.exports;
+`;
+    }
+
+    // vite-plugin-node-polyfills process shim — wrap CJS with module/exports scaffold
+    if (id === V.PROCESS_SHIM && processShimSrc) {
+      return `
+const module = { exports: {} };
+const exports = module.exports;
+${processShimSrc}
+export const process = module.exports.process ?? module.exports.default;
+export default module.exports.default ?? module.exports;
+`;
+    }
+
     return null;
   },
 };
@@ -166,9 +207,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "vite-plugin-node-polyfills/shims/process": processShim,
-      "vite-plugin-node-polyfills/shims/buffer":  bufferShim,
-      "vite-plugin-node-polyfills/shims/global":  globalShim,
+      // shims handled by fixCjsImports plugin (virtual ESM) — no CJS alias needed
       "eventemitter3": ee3Esm,
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
@@ -229,9 +268,7 @@ export default defineConfig({
       "react-dom",
       "react-router-dom",
       "eventemitter3",
-      "vite-plugin-node-polyfills/shims/buffer",
-      "vite-plugin-node-polyfills/shims/process",
-      "vite-plugin-node-polyfills/shims/global",
+      // shims are now virtual ESM modules — no need to pre-bundle the CJS files
     ],
     exclude: [
       "@keystonehq/bc-ur-registry",
