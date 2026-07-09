@@ -136,45 +136,65 @@ export default module.exports;
     }
 
     if (id === V.BUFFER_SHIM) {
-      // Re-export from the 'buffer' npm package (already resolved to the browser
-      // polyfill by vite-plugin-node-polyfills / Vite's built-in aliasing).
+      // Full faithful re-export from the 'buffer' npm package (already resolved
+      // to the browser polyfill by vite-plugin-node-polyfills). Exporting all
+      // named members that the upstream CJS shim exposes so nothing is missing.
       return `
-import { Buffer as _Buffer } from 'buffer';
-export { _Buffer as Buffer };
-export const Blob = globalThis.Blob;
-export const atob = globalThis.atob;
-export const btoa = globalThis.btoa;
-export default _Buffer;
+import * as _buf from 'buffer';
+export const Buffer           = _buf.Buffer;
+export const Blob             = _buf.Blob             ?? globalThis.Blob;
+export const File             = _buf.File             ?? globalThis.File;
+export const atob             = _buf.atob             ?? globalThis.atob;
+export const btoa             = _buf.btoa             ?? globalThis.btoa;
+export const SlowBuffer       = _buf.SlowBuffer;
+export const INSPECT_MAX_BYTES= _buf.INSPECT_MAX_BYTES;
+export const kMaxLength       = _buf.kMaxLength;
+export const kStringMaxLength = _buf.kStringMaxLength;
+export const constants        = _buf.constants;
+export const transcode        = _buf.transcode;
+export const isAscii          = _buf.isAscii;
+export const isUtf8           = _buf.isUtf8;
+export const resolveObjectURL = _buf.resolveObjectURL;
+export default _buf.Buffer;
 `;
     }
 
     if (id === V.PROCESS_SHIM) {
-      // Minimal browser-safe process object — no external imports needed.
+      // Browser-safe process polyfill — matches the upstream shim surface.
+      // nextTick uses a micro-task queue so ordering matches Node semantics.
       return `
+const _noop = () => _process;
+const _ntQueue = [];
+let _ntScheduled = false;
+function _drainNt() { _ntScheduled = false; const q = _ntQueue.splice(0); for (const [fn, a] of q) fn(...a); }
 const _process = {
+  title: 'browser',
+  browser: true,
   env: {},
   argv: [],
   version: '',
   versions: {},
   platform: 'browser',
-  browser: true,
-  on: () => _process,
-  addListener: () => _process,
-  once: () => _process,
-  off: () => _process,
-  removeListener: () => _process,
-  removeAllListeners: () => _process,
+  on: _noop,
+  addListener: _noop,
+  once: _noop,
+  off: _noop,
+  removeListener: _noop,
+  removeAllListeners: _noop,
   emit: () => false,
-  prependListener: () => _process,
-  prependOnceListener: () => _process,
+  prependListener: _noop,
+  prependOnceListener: _noop,
   listeners: () => [],
-  binding: (name) => { throw new Error('process.binding is not supported'); },
+  binding: (n) => { throw new Error('process.binding is not supported'); },
   cwd: () => '/',
   chdir: () => { throw new Error('process.chdir is not supported'); },
   umask: () => 0,
-  nextTick: (fn, ...args) => Promise.resolve().then(() => fn(...args)),
-  hrtime: () => [0, 0],
+  hrtime: (t) => t ? [0, 0] : [0, 0],
   exit: () => {},
+  nextTick(fn, ...args) {
+    _ntQueue.push([fn, args]);
+    if (!_ntScheduled) { _ntScheduled = true; Promise.resolve().then(_drainNt); }
+  },
 };
 export { _process as process };
 export default _process;
