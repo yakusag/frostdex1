@@ -205,16 +205,52 @@ export default _process;
   },
 };
 
+// ── esbuild virtual-module helpers ────────────────────────────────────────────
+const USS_CODE = `export { useSyncExternalStore } from 'react';\nexport { useSyncExternalStore as default } from 'react';\n`;
+const USS_SEL_CODE = `
+import { useSyncExternalStore } from 'react';
+export function useSyncExternalStoreWithSelector(subscribe, getSnapshot, getServerSnapshot, selector, isEqual) {
+  let selected;
+  const getSelected = () => {
+    const next = selector(getSnapshot());
+    if (selected !== undefined && isEqual && isEqual(selected, next)) return selected;
+    return (selected = next);
+  };
+  const getServerSelected = getServerSnapshot ? () => selector(getServerSnapshot()) : undefined;
+  return useSyncExternalStore(subscribe, getSelected, getServerSelected);
+}
+export default { useSyncExternalStoreWithSelector };
+`;
+
 // ── esbuild plugin for optimizeDeps shim resolution ───────────────────────────
 const fixEsbuildShims = {
   name: "fix-esbuild-shims",
   setup(build: any) {
+    // node-polyfills shims still point to CJS files in esbuild/dev context
+    // (esbuild handles CJS fine in dev; these redirects are kept for safety)
     build.onResolve({ filter: /^process\/$/ }, () => ({ path: processShim }));
     build.onResolve({ filter: /^buffer\/$/ },  () => ({ path: bufferShim  }));
     build.onResolve({ filter: /^global\/$/  }, () => ({ path: globalShim  }));
     build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/buffer/  }, () => ({ path: bufferShim  }));
     build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/process/ }, () => ({ path: processShim }));
     build.onResolve({ filter: /vite-plugin-node-polyfills\/shims\/global/  }, () => ({ path: globalShim  }));
+
+    // use-sync-external-store: resolve all sub-paths to a virtual ESM module.
+    // Without this, esbuild auto-discovers and pre-bundles the CJS shim producing
+    // a default-only export; named imports like { useSyncExternalStore } then
+    // fail at runtime. React 19 has useSyncExternalStore built-in so we just
+    // re-export from there.
+    build.onResolve(
+      { filter: /use-sync-external-store/ },
+      (args: any) => ({ path: args.path, namespace: "uss-virtual" })
+    );
+    build.onLoad(
+      { filter: /.*/, namespace: "uss-virtual" },
+      (args: any) => ({
+        contents: args.path.includes("with-selector") ? USS_SEL_CODE : USS_CODE,
+        loader: "js" as const,
+      })
+    );
   },
 };
 
@@ -250,7 +286,22 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // shims handled by fixCjsImports plugin (virtual ESM) — no CJS alias needed
+      // use-sync-external-store: alias ALL sub-paths to local ESM polyfills.
+      // resolve.alias fires before esbuild pre-bundling AND Rollup, so neither
+      // tool ever sees the CJS shim file that lacks named ESM exports.
+      "use-sync-external-store/shim/with-selector":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-with-selector.js"),
+      "use-sync-external-store/shim/with-selector.js":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-with-selector.js"),
+      "use-sync-external-store/with-selector":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-with-selector.js"),
+      "use-sync-external-store/shim/index.js":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-shim.js"),
+      "use-sync-external-store/shim":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-shim.js"),
+      "use-sync-external-store":
+        path.resolve(import.meta.dirname, "src/polyfills/uss-shim.js"),
+      // shims for other packages handled by fixCjsImports plugin (virtual ESM)
       "eventemitter3": ee3Esm,
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
@@ -323,6 +374,7 @@ export default defineConfig({
       // shims are now virtual ESM modules — no need to pre-bundle the CJS files
     ],
     exclude: [
+      // use-sync-external-store is now handled by resolve.alias → local ESM file
       "@keystonehq/bc-ur-registry",
       "babel-runtime",
       "@particle-network/solana-wallet",
