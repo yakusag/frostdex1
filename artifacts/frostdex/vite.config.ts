@@ -43,9 +43,7 @@ const dayjsCjsSrc = dayjsDir
     })()
   : null;
 
-// ── Read CJS shim sources for ESM wrapping ───────────────────────────────────
-const bufferShimSrc  = fs.existsSync(bufferShim)  ? fs.readFileSync(bufferShim,  "utf-8") : null;
-const processShimSrc = fs.existsSync(processShim) ? fs.readFileSync(processShim, "utf-8") : null;
+// (CJS shim sources no longer needed — shims are pure inline ESM now)
 
 // ── Virtual module IDs ────────────────────────────────────────────────────────
 const V = {
@@ -128,33 +126,58 @@ export default module.exports;
 `;
     }
 
-    // vite-plugin-node-polyfills global shim — trivial ESM replacement
+    // vite-plugin-node-polyfills shims — pure inline ESM, zero require() calls.
+    // Embedding the raw CJS source doesn't work in Rollup production builds because
+    // the CJS files call require() (no-op in ESM) and Object.defineProperties(exports,…)
+    // where exports is undefined. These inline replacements are self-contained.
+
     if (id === V.GLOBAL_SHIM) {
       return `const g = globalThis;\nexport { g as global };\nexport default g;\n`;
     }
 
-    // vite-plugin-node-polyfills buffer shim — wrap CJS with module/exports scaffold
-    if (id === V.BUFFER_SHIM && bufferShimSrc) {
+    if (id === V.BUFFER_SHIM) {
+      // Re-export from the 'buffer' npm package (already resolved to the browser
+      // polyfill by vite-plugin-node-polyfills / Vite's built-in aliasing).
       return `
-const module = { exports: {} };
-const exports = module.exports;
-${bufferShimSrc}
-export const Buffer = module.exports.Buffer ?? module.exports.default;
-export const Blob = module.exports.Blob;
-export const atob = module.exports.atob;
-export const btoa = module.exports.btoa;
-export default module.exports.default ?? module.exports.Buffer ?? module.exports;
+import { Buffer as _Buffer } from 'buffer';
+export { _Buffer as Buffer };
+export const Blob = globalThis.Blob;
+export const atob = globalThis.atob;
+export const btoa = globalThis.btoa;
+export default _Buffer;
 `;
     }
 
-    // vite-plugin-node-polyfills process shim — wrap CJS with module/exports scaffold
-    if (id === V.PROCESS_SHIM && processShimSrc) {
+    if (id === V.PROCESS_SHIM) {
+      // Minimal browser-safe process object — no external imports needed.
       return `
-const module = { exports: {} };
-const exports = module.exports;
-${processShimSrc}
-export const process = module.exports.process ?? module.exports.default;
-export default module.exports.default ?? module.exports;
+const _process = {
+  env: {},
+  argv: [],
+  version: '',
+  versions: {},
+  platform: 'browser',
+  browser: true,
+  on: () => _process,
+  addListener: () => _process,
+  once: () => _process,
+  off: () => _process,
+  removeListener: () => _process,
+  removeAllListeners: () => _process,
+  emit: () => false,
+  prependListener: () => _process,
+  prependOnceListener: () => _process,
+  listeners: () => [],
+  binding: (name) => { throw new Error('process.binding is not supported'); },
+  cwd: () => '/',
+  chdir: () => { throw new Error('process.chdir is not supported'); },
+  umask: () => 0,
+  nextTick: (fn, ...args) => Promise.resolve().then(() => fn(...args)),
+  hrtime: () => [0, 0],
+  exit: () => {},
+};
+export { _process as process };
+export default _process;
 `;
     }
 
