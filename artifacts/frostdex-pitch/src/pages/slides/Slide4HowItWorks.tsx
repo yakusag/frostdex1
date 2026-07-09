@@ -94,7 +94,7 @@ export default function Slide4HowItWorks() {
             className="font-body text-muted leading-relaxed"
             style={{ fontSize: "2.4vw", textWrap: "pretty" }}
           >
-            Assets deposited to a non-custodial Orderly smart contract.
+            Assets deposited to a non-custodial FrostDex smart contract.
           </p>
         </div>
 
@@ -129,7 +129,7 @@ export default function Slide4HowItWorks() {
             className="font-body text-muted leading-relaxed"
             style={{ fontSize: "2.4vw", textWrap: "pretty" }}
           >
-            Orders route to Orderly's shared orderbook for fast, deep execution.
+            Orders route to FrostDex's shared orderbook for fast, deep execution.
           </p>
         </div>
 

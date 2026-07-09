@@ -85,7 +85,7 @@ export default function Slide2Value() {
               className="font-body text-muted leading-relaxed"
               style={{ fontSize: "2.3vw" }}
             >
-              Orderbook execution via Orderly Network's shared liquidity layer.
+              Orderbook execution via FrostDex's shared liquidity layer.
             </p>
           </div>
 

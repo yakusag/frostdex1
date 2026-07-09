@@ -35,7 +35,7 @@
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567805",
     "position": 5,
     "filepath": "src/pages/slides/Slide5Orderly.tsx",
-    "title": "Orderly Network",
+    "title": "FrostDex",
     "description": "Technology stack: shared orderbook, multi-chain, non-custodial, cross-margin",
     "speakerNotes": ""
   },

@@ -56,7 +56,7 @@ export default function Slide1Cover() {
           className="font-body text-muted mt-[1.5vh]"
           style={{ fontSize: "2.4vw" }}
         >
-          Powered by Orderly Network
+          Powered by FrostDex
         </p>
       </div>
 

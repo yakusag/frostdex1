@@ -75,7 +75,7 @@ export default function Slide7CTA() {
               className="font-body font-bold text-primary"
               style={{ fontSize: "2.6vw" }}
             >
-              Orderly Network
+              FrostDex
             </p>
             <p
               className="font-body text-muted mt-[0.5vh]"

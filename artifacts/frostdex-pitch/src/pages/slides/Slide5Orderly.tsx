@@ -27,7 +27,7 @@ export default function Slide5Orderly() {
             className="font-display font-extrabold text-primary tracking-tight leading-tight"
             style={{ fontSize: "5vw", textWrap: "balance" }}
           >
-            Orderly Network
+            FrostDex
           </h2>
           <p
             className="font-body text-muted mt-[3vh] leading-relaxed"
