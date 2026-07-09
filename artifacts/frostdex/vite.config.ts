@@ -268,10 +268,19 @@ export default defineConfig({
     reportCompressedSize: false,
     chunkSizeWarningLimit: 10000,
     maxParallelFileOps: 2,
+    // Force Rollup's built-in @rollup/plugin-commonjs to transform ALL
+    // node_modules files (not just .cjs) so that CJS-only packages don't
+    // emit bare `Object.defineProperty(exports, ...)` calls at runtime.
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       treeshake: false,
       onwarn: () => {},
-      plugins: [fixCjsImports],
+      // fixCjsImports is already in top-level `plugins`; do NOT add it here
+      // again — duplicate plugin registration causes resolveId to fire twice
+      // and can prevent virtual module IDs from being matched correctly.
       output: {
         format: "es",
         hoistTransitiveImports: false,
