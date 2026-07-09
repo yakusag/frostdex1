@@ -136,6 +136,12 @@ const fixEsbuildShims = {
 
 export default defineConfig({
   base: basePath,
+  define: {
+    // Replace bare `global` references in production Rollup build.
+    // Without this, CJS libraries that call Object.defineProperty(global, ...)
+    // receive undefined and throw "Object.defineProperty called on non-object".
+    global: "globalThis",
+  },
   plugins: [
     fixCjsImports,
     react(),
