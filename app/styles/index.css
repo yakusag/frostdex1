@@ -1,0 +1,411 @@
+@import "@orderly.network/ui/dist/styles.css";
+@import "../styles/theme.css";
+@import "../styles/fonts.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── animated gradient glow — top nav bar ─────────────────────────── */
+header,
+nav,
+.oui-top-nav,
+[class*="oui-header"],
+[class*="oui-nav-bar"] {
+  position: relative;
+  overflow: hidden;
+}
+
+header::after,
+nav::after,
+.oui-top-nav::after,
+[class*="oui-header"]::after,
+[class*="oui-nav-bar"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: -100%;
+  width: 300%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 210, 140, 0.6) 30%,
+    rgba(60, 230, 255, 0.9) 50%,
+    rgba(0, 210, 140, 0.6) 70%,
+    transparent 100%
+  );
+  animation: ice-glow-slide 4s linear infinite;
+}
+
+@keyframes ice-glow-slide {
+  0%   { left: -100%; }
+  100% { left: 100%;  }
+}
+
+/* ─── frosted ice glow — cards & panels ────────────────────────────── */
+.oui-bg-base-8,
+.oui-bg-base-7,
+.oui-bg-base-6 {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ─── subtle glow on primary buttons & accents ─────────────────────── */
+.oui-bg-primary,
+[class*="oui-bg-primary"] {
+  box-shadow: 0 0 12px 0 rgba(60, 230, 255, 0.25);
+}
+
+/* ─── glowing border on focused inputs ─────────────────────────────── */
+.oui-input:focus-within,
+input:focus {
+  box-shadow: 0 0 0 1px rgba(60, 230, 255, 0.4), 0 0 8px 0 rgba(60, 230, 255, 0.15) !important;
+}
+
+/* ─── ice shimmer on table/orderbook row hover ──────────────────────── */
+.oui-orderbook-row:hover,
+tr:hover td {
+  background: rgba(60, 230, 255, 0.04) !important;
+}
+
+/* ─── custom ice scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(4, 6, 20, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(0, 210, 140, 0.6), rgba(60, 230, 255, 0.6));
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(0, 210, 140, 0.9), rgba(60, 230, 255, 0.9));
+}
+
+/* ─── text selection highlight ──────────────────────────────────────── */
+::selection {
+  background: rgba(60, 230, 255, 0.2);
+  color: #e1f5ff;
+}
+
+/* ─── glassmorphism on modals & dialogs ─────────────────────────────── */
+[role="dialog"],
+[data-radix-popper-content-wrapper],
+.oui-dialog,
+[class*="oui-modal"],
+[class*="oui-popover"] {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background: rgba(6, 10, 30, 0.85) !important;
+  border: 1px solid rgba(60, 230, 255, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(60, 230, 255, 0.06) !important;
+}
+
+/* ─── glowing border on active/selected tabs ────────────────────────── */
+[aria-selected="true"],
+[data-state="active"] {
+  text-shadow: 0 0 8px rgba(60, 230, 255, 0.5);
+}
+
+/* ─── profit & loss number glow ─────────────────────────────────────── */
+[class*="oui-text-profit"],
+[class*="text-profit"] {
+  text-shadow: 0 0 6px rgba(60, 230, 180, 0.5);
+}
+[class*="oui-text-loss"],
+[class*="text-loss"] {
+  text-shadow: 0 0 6px rgba(255, 80, 110, 0.4);
+}
+
+/* ─── smooth page transitions ───────────────────────────────────────── */
+main,
+.oui-page,
+[class*="oui-content"] {
+  animation: page-fade-in 0.2s ease-out;
+}
+
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ─── market ticker bar ──────────────────────────────────────────────── */
+.market-ticker-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9000;
+  height: 28px;
+  background: rgba(4, 6, 20, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(60, 230, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.ticker-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  white-space: nowrap;
+  animation: ticker-scroll 60s linear infinite;
+  will-change: transform;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  font-size: 11px;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  border-right: 1px solid rgba(60, 230, 255, 0.08);
+  cursor: default;
+}
+
+.ticker-base {
+  color: rgba(180, 210, 255, 0.7);
+  letter-spacing: 0.5px;
+}
+
+.ticker-price {
+  color: #e2eeff;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.ticker-change {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.ticker-change.up   { color: #00d28c; }
+.ticker-change.down { color: #ff4d6a; }
+
+/* push page content below the ticker bar */
+body {
+  padding-top: 28px;
+}
+
+/* ─── referral welcome popup ────────────────────────────────────────── */
+.referral-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  background: rgba(4, 6, 20, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: rw-fade-in 0.4s ease forwards;
+}
+.referral-welcome-overlay.rw-closing {
+  animation: rw-fade-out 0.4s ease forwards;
+}
+@keyframes rw-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes rw-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.referral-welcome-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: linear-gradient(160deg, rgba(18,40,98,0.95) 0%, rgba(8,16,48,0.98) 100%);
+  border: 1px solid rgba(60,230,255,0.25);
+  border-radius: 24px;
+  padding: 40px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 60px rgba(60,230,255,0.1), 0 24px 64px rgba(0,0,0,0.6);
+  overflow: hidden;
+  animation: rw-slide-up 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+@keyframes rw-slide-up {
+  from { opacity: 0; transform: translateY(32px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rw-closing .referral-welcome-card {
+  animation: rw-slide-down 0.35s ease forwards;
+}
+@keyframes rw-slide-down {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(24px) scale(0.95); }
+}
+
+.rw-glow {
+  position: absolute;
+  top: -60px; left: 50%; transform: translateX(-50%);
+  width: 220px; height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(60,230,255,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.rw-icon {
+  font-size: 52px;
+  animation: rw-spin 8s linear infinite;
+  filter: drop-shadow(0 0 16px rgba(60,230,255,0.7));
+}
+@keyframes rw-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.rw-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #3ce6ff 0%, #00d28c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.rw-sub {
+  font-size: 13px;
+  color: rgba(180,210,255,0.65);
+  text-align: center;
+  margin-top: -8px;
+}
+
+.rw-code-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(60,230,255,0.06);
+  border: 1px solid rgba(60,230,255,0.2);
+  border-radius: 12px;
+  padding: 10px 24px;
+  width: 100%;
+}
+.rw-code-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(60,230,255,0.5);
+}
+.rw-code-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Manrope', monospace;
+  color: #3ce6ff;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.rw-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+.rw-perk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(180,210,255,0.8);
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.rw-perk-icon { font-size: 16px; }
+
+.rw-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #3ce6ff 0%, #00d28c 100%);
+  color: #040614;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 0 20px rgba(60,230,255,0.35);
+}
+.rw-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+.rw-btn:active { opacity: 1;   transform: translateY(0); }
+
+
+/* ─── smooth scrolling ──────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ─── mobile button press feedback ──────────────────────────────────── */
+button:active,
+a:active,
+[role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
+}
+
+/* ─── all interactive elements — smooth transitions ─────────────────── */
+button,
+a,
+input,
+select,
+[role="button"],
+[role="tab"] {
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+
+/* ─── price flash — green when price goes up ─────────────────────────── */
+.price-flash-up {
+  animation: flash-up 0.6s ease-out;
+}
+@keyframes flash-up {
+  0%   { color: rgb(60, 230, 180); text-shadow: 0 0 8px rgba(60,230,180,0.8); }
+  100% { color: inherit;           text-shadow: none; }
+}
+
+/* ─── price flash — red when price goes down ─────────────────────────── */
+.price-flash-down {
+  animation: flash-down 0.6s ease-out;
+}
+@keyframes flash-down {
+  0%   { color: rgb(255, 80, 110); text-shadow: 0 0 8px rgba(255,80,110,0.8); }
+  100% { color: inherit;           text-shadow: none; }
+}
+
+/* ─── network status slide-up animation ─────────────────────────────── */
+@keyframes net-slide-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+}
+
+/* ─── hide trading rewards on mobile ────────────────────────────────── */
+.oui-portfolio-page .oui-box.oui-flex.oui-flex-nowrap > div:nth-child(2).oui-box.oui-flex.oui-justify-start.oui-flex-nowrap.oui-relative {
+  display: none;
+}

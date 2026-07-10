@@ -1,0 +1,54 @@
+{
+  "name": "FrostDex",
+  "short_name": "FrostDex",
+  "description": "FrostDex — Decentralized Exchange",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#122862",
+  "theme_color": "#3ce6ff",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.webp",
+      "sizes": "200x200",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "finance",
+    "business"
+  ],
+  "shortcuts": [
+    {
+      "name": "Trading",
+      "short_name": "Trade",
+      "description": "Start trading perpetuals",
+      "url": "/perp",
+      "icons": [
+        {
+          "src": "/favicon.webp",
+          "sizes": "200x200",
+          "type": "image/webp"
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your portfolio",
+      "url": "/portfolio",
+      "icons": [
+        {
+          "src": "/favicon.webp",
+          "sizes": "200x200",
+          "type": "image/webp"
+        }
+      ]
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
