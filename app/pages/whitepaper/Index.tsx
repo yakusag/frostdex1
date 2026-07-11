@@ -187,8 +187,8 @@ export default function WhitepaperIndex() {
                 {[
                   { quarter: "Q1 2025", title: "Platform Launch", items: ["DEX live on Arbitrum & Base", "Perpetual futures trading", "TradingView charts integration", "Wallet connect (EVM + Solana)"], done: true },
                   { quarter: "Q2 2025", title: "Advanced Features", items: ["FrostAI trading assistant", "Grid & DCA trading bots", "Whale alert tracker", "Referral program launch"], done: true },
-                  { quarter: "Q3 2025", title: "Ecosystem Expansion", items: ["Mobile app (iOS & Android)", "Multi-language support (10+ langs)", "Token Search & Screener", "Vaults & yield strategies"], done: false },
-                  { quarter: "Q4 2025", title: "FROST Token", items: ["FROST token public launch", "Staking & governance", "Fee discounts for holders", "Community airdrop program"], done: false },
+                  { quarter: "Q3 2025", title: "FROST Token & Swap", items: ["FROST token deployed & live", "FROST available on FrostDex Swap", "Fee discounts for FROST holders", "Community distribution program"], done: true },
+                  { quarter: "Q4 2025", title: "Ecosystem Expansion", items: ["Mobile app (iOS & Android)", "Multi-language support (10+ langs)", "Vaults & yield strategies", "Staking & governance"], done: false },
                   { quarter: "Q1 2026", title: "Launchpad & DeFi Hub", items: ["Token Launchpad — create & list tokens", "Cross-chain bridge integration", "Institutional API access", "DAO governance activation"], done: false },
                 ].map((phase, i) => (
                   <div key={i} className="oui-flex oui-gap-5 oui-pl-8 oui-relative">
