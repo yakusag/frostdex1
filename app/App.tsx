@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import OrderlyProvider from "@/components/orderlyProvider";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
 import { NetworkStatus } from "@/components/NetworkStatus";
@@ -14,7 +15,6 @@ import PWAInstallBanner from "@/components/PWAInstallBanner";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
-import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 const FrostTradeWidget  = lazy(() => import("@/components/FrostTradeWidget"));
 const AIAssistant       = lazy(() => import("@/components/AIAssistant"));
@@ -54,6 +54,7 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" type="image/webp" href={withBasePath("/favicon.webp")} />
       </Helmet>
+      <SpeedInsights />
       <PWAInstallBanner />
       <HttpsRequiredWarning />
       <NetworkStatus />
