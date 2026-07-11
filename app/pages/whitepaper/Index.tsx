@@ -1,7 +1,8 @@
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import { generatePageTitle } from "@/utils/utils";
 import { withBasePath } from "@/utils/base-path";
-import { Zap, Shield, DollarSign, Globe, Layers, TrendingUp, BookOpen, Snowflake, ChevronRight, Map } from "lucide-react";
+import { Zap, Shield, DollarSign, Globe, Layers, TrendingUp, BookOpen, Snowflake, ChevronRight, Map, Rocket } from "lucide-react";
 
 const CYAN = "rgba(56,224,248,0.9)";
 const GREEN = "#0ecb81";
@@ -56,6 +57,21 @@ export default function WhitepaperIndex() {
               <span style={{ color: GREEN }} className="oui-font-semibold">limitless</span> DeFi trading with
               ultra-low fees and true financial freedom.
             </p>
+            <div className="oui-flex oui-justify-center oui-pt-2">
+              <Link
+                to="/"
+                className="oui-inline-flex oui-items-center oui-gap-2 oui-px-8 oui-py-3 oui-rounded-xl oui-font-bold oui-text-sm oui-transition-all"
+                style={{
+                  background: "linear-gradient(135deg, rgba(56,224,248,0.2) 0%, rgba(14,203,129,0.15) 100%)",
+                  color: "rgba(56,224,248,0.95)",
+                  border: "1px solid rgba(56,224,248,0.35)",
+                  boxShadow: "0 0 24px rgba(56,224,248,0.12)",
+                }}
+              >
+                <Rocket size={15} />
+                Launch App
+              </Link>
+            </div>
           </div>
 
           {/* ── Feature cards ── */}
