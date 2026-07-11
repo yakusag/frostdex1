@@ -1,122 +1,156 @@
 import { useEffect, useState } from "react";
 import { X, Download } from "lucide-react";
 
+function isAndroid() {
+  return /android/i.test(navigator.userAgent);
+}
+
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
+}
+
+function isInStandaloneMode() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    (window.navigator as any).standalone === true;
+}
+
 export default function PWAInstallPrompt() {
-  const [prompt, setPrompt] = useState<any>(null);
-  const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [show, setShow] = useState(false);
+  const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    if (dismissed) return;
+    if (isInStandaloneMode()) return;
     if (sessionStorage.getItem("pwa-dismissed")) return;
 
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setPrompt(e);
-      setVisible(true);
-    };
-    window.addEventListener("beforeinstallprompt", handler as any);
-    return () => window.removeEventListener("beforeinstallprompt", handler as any);
-  }, [dismissed]);
+    if (isAndroid()) {
+      const handler = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        setShow(true);
+      };
+      window.addEventListener("beforeinstallprompt", handler as any);
+      return () => window.removeEventListener("beforeinstallprompt", handler as any);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("appinstalled", () => setInstalled(true));
+  }, []);
 
   const handleInstall = async () => {
-    if (!prompt) return;
-    prompt.prompt();
-    const { outcome } = await prompt.userChoice;
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
-      setVisible(false);
-      setDismissed(true);
+      setShow(false);
+      setInstalled(true);
     }
+    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
-    setVisible(false);
-    setDismissed(true);
+    setShow(false);
     sessionStorage.setItem("pwa-dismissed", "1");
   };
 
-  if (!visible) return null;
+  if (!show || installed) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: "80px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 99998,
-        width: "calc(100% - 32px)",
-        maxWidth: "400px",
-        background: "linear-gradient(135deg, #0d1219 0%, #111827 100%)",
-        border: "1px solid rgba(56,224,248,0.25)",
-        borderRadius: "16px",
-        padding: "16px",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(56,224,248,0.08)",
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        animation: "pwa-slide-up 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
-      }}
-    >
+    <>
       <style>{`
-        @keyframes pwa-slide-up {
-          from { opacity: 0; transform: translateX(-50%) translateY(24px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        @keyframes pwa-rise {
+          from { opacity: 0; transform: translateY(100%); }
+          to   { opacity: 1; transform: translateY(0); }
         }
+        .pwa-btn:active { transform: scale(0.97); }
       `}</style>
 
-      <img
-        src="/favicon.webp"
-        alt="FrostDex"
-        style={{ width: "44px", height: "44px", borderRadius: "10px", flexShrink: 0 }}
-      />
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 99999,
+          padding: "12px 16px 20px",
+          background: "linear-gradient(180deg, rgba(10,13,20,0.0) 0%, rgba(10,13,20,0.98) 18%)",
+          animation: "pwa-rise 0.45s cubic-bezier(0.34,1.56,0.64,1) both",
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          style={{
+            pointerEvents: "all",
+            maxWidth: "480px",
+            margin: "0 auto",
+            background: "rgba(14,18,28,0.96)",
+            border: "1px solid rgba(56,224,248,0.22)",
+            borderRadius: "20px",
+            padding: "14px 14px 14px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            boxShadow: "0 -4px 40px rgba(56,224,248,0.08), 0 8px 32px rgba(0,0,0,0.7)",
+          }}
+        >
+          <img
+            src="/favicon.webp"
+            alt="FrostDex"
+            style={{ width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0 }}
+          />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ color: "#ffffff", fontWeight: 700, fontSize: "14px", margin: 0 }}>
-          Install FrostDex
-        </p>
-        <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "12px", margin: "2px 0 0" }}>
-          Add to home screen for the full experience
-        </p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ color: "#fff", fontWeight: 700, fontSize: "14px", margin: 0, lineHeight: 1.3 }}>
+              Install FrostDex App
+            </p>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", margin: "3px 0 0" }}>
+              Trade faster from your home screen
+            </p>
+          </div>
+
+          <button
+            className="pwa-btn"
+            onClick={handleInstall}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "linear-gradient(135deg, rgba(56,224,248,0.22) 0%, rgba(14,203,129,0.16) 100%)",
+              color: "rgba(56,224,248,1)",
+              border: "1px solid rgba(56,224,248,0.4)",
+              borderRadius: "12px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: 800,
+              cursor: "pointer",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+              boxShadow: "0 0 16px rgba(56,224,248,0.18)",
+              transition: "transform 0.1s",
+            }}
+          >
+            <Download size={14} />
+            Install
+          </button>
+
+          <button
+            onClick={handleDismiss}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.25)",
+              cursor: "pointer",
+              padding: "6px",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <X size={15} />
+          </button>
+        </div>
       </div>
-
-      <button
-        onClick={handleInstall}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          background: "rgba(56,224,248,0.15)",
-          color: "rgba(56,224,248,0.9)",
-          border: "1px solid rgba(56,224,248,0.3)",
-          borderRadius: "10px",
-          padding: "8px 14px",
-          fontSize: "13px",
-          fontWeight: 700,
-          cursor: "pointer",
-          flexShrink: 0,
-          whiteSpace: "nowrap",
-        }}
-      >
-        <Download size={13} />
-        Install
-      </button>
-
-      <button
-        onClick={handleDismiss}
-        style={{
-          background: "none",
-          border: "none",
-          color: "rgba(255,255,255,0.3)",
-          cursor: "pointer",
-          padding: "4px",
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        <X size={16} />
-      </button>
-    </div>
+    </>
   );
 }
