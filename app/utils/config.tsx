@@ -301,6 +301,7 @@ export const useOrderlyConfig = () => {
       { id: "Token", href: "/token", name: "Token Search" },
       { id: "About", href: "/about", name: "Legal" },
       { id: "Referral", href: "/referral", name: "Refer & Earn" },
+      { id: "Whitepaper", href: "/whitepaper", name: "Whitepaper" },
       { id: "Vaults", href: "/vaults", name: t("common.vaults") },
       {
         id: "Points",
@@ -417,15 +418,16 @@ export const useOrderlyConfig = () => {
           discordUrl: getRuntimeConfig("VITE_DISCORD_URL") || undefined,
           twitterUrl: getRuntimeConfig("VITE_TWITTER_URL") || undefined,
           trailing: (
-            <span className="oui-text-2xs oui-text-base-contrast-54">
-              Charts powered by{" "}
-              <a
-                href="https://tradingview.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                TradingView
-              </a>
+            <span className="oui-text-2xs oui-text-base-contrast-54 oui-flex oui-items-center oui-gap-3 oui-flex-wrap">
+              <span>
+                Charts powered by{" "}
+                <a href="https://tradingview.com" target="_blank" rel="noopener noreferrer">
+                  TradingView
+                </a>
+              </span>
+              <span style={{ color: "rgba(56,224,248,0.5)", fontWeight: 700 }}>
+                ❄ Powered by FrostDex
+              </span>
             </span>
           ),
         },

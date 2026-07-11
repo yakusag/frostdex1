@@ -23,6 +23,11 @@ nav,
 
 /* ─── glowing border on focused inputs — disabled ───────────────────── */
 
+/* ─── hide Orderly "Powered by" branding, show FrostDex instead ─────── */
+.oui-scaffold-footer-powered-by {
+  display: none !important;
+}
+
 /* ─── row hover ─────────────────────────────────────────────────── */
 .oui-orderbook-row:hover,
 tr:hover td {
