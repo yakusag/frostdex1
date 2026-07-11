@@ -380,12 +380,12 @@ export const useOrderlyConfig = () => {
                 externalLinks={customMenus}
               />
             )}
-            <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "18px" }}>
+            <Link to="/" style={{ display: "inline-flex", alignItems: "center", overflow: "hidden", maxHeight: "32px" }}>
               {isMobile ? (
                 <img
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
-                  style={{ height: "18px", width: "auto", objectFit: "contain", maxWidth: "90px" }}
+                  style={{ height: "32px", width: "auto", objectFit: "contain", maxWidth: "110px" }}
                 />
               ) : (
                 components.title
