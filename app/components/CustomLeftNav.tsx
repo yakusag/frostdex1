@@ -8,7 +8,7 @@ import {
   VectorIcon,
 } from "@orderly.network/ui";
 import { LeftNavProps, LeftNavItem } from "@orderly.network/ui-scaffold";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Download } from "lucide-react";
 import {
   getRuntimeConfig,
   getRuntimeConfigBoolean,
@@ -101,6 +101,34 @@ const LeftNavSheet = modal.create<LeftNavUIProps>((props) => {
                   ))}
                 </>
               )}
+
+            <div className="oui-w-full oui-border-t oui-border-line-12 oui-my-2"></div>
+            <button
+              onClick={() => {
+                hide();
+                window.dispatchEvent(new CustomEvent("trigger-pwa-install"));
+              }}
+              className="oui-flex oui-items-center oui-gap-3 oui-px-3 oui-py-4 oui-w-full oui-bg-transparent oui-border-none oui-cursor-pointer"
+              style={{ outline: "none" }}
+            >
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  background: "rgba(56,224,248,0.1)",
+                  flexShrink: 0,
+                }}
+              >
+                <Download size={15} style={{ color: "rgba(56,224,248,0.9)" }} />
+              </span>
+              <span className="oui-text-base oui-font-semibold" style={{ color: "rgba(56,224,248,0.9)" }}>
+                Download App
+              </span>
+            </button>
           </div>
         </div>
       </SheetContent>
