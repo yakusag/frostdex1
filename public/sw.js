@@ -1,4 +1,4 @@
-let CACHE_NAME = 'orderly-dex-v1';
+let CACHE_NAME = 'frostdex-v1';
 const CACHE_VERSION = 'v1';
 let cacheNameInitialized = false;
 

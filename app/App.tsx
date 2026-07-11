@@ -23,6 +23,7 @@ import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -78,6 +79,7 @@ export default function App() {
         onShowAll={showAll}
         onHideAll={hideAll}
       />
+      <PWAInstallPrompt />
       <SpeedInsights />
       <Analytics />
     </>

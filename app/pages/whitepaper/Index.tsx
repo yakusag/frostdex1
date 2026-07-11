@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { generatePageTitle } from "@/utils/utils";
 import { withBasePath } from "@/utils/base-path";
-import { Zap, Shield, DollarSign, Globe, Layers, TrendingUp, BookOpen, Snowflake, ChevronRight } from "lucide-react";
+import { Zap, Shield, DollarSign, Globe, Layers, TrendingUp, BookOpen, Snowflake, ChevronRight, Map } from "lucide-react";
 
 const CYAN = "rgba(56,224,248,0.9)";
 const GREEN = "#0ecb81";
@@ -172,6 +172,64 @@ export default function WhitepaperIndex() {
                   <p className="oui-text-sm oui-text-base-contrast-54">{feat}</p>
                 </div>
               ))}
+            </div>
+          </Section>
+
+          {/* ── Roadmap ── */}
+          <Section>
+            <div className="oui-flex oui-items-center oui-gap-2 oui-mb-6">
+              <Map size={16} style={{ color: CYAN }} />
+              <h2 className="oui-text-lg oui-font-bold oui-text-base-contrast">Roadmap</h2>
+            </div>
+            <div className="oui-relative">
+              <div className="oui-absolute oui-left-3 oui-top-0 oui-bottom-0 oui-w-px" style={{ background: "rgba(56,224,248,0.12)" }} />
+              <div className="oui-space-y-6">
+                {[
+                  { quarter: "Q1 2025", title: "Platform Launch", items: ["DEX live on Arbitrum & Base", "Perpetual futures trading", "TradingView charts integration", "Wallet connect (EVM + Solana)"], done: true },
+                  { quarter: "Q2 2025", title: "Advanced Features", items: ["FrostAI trading assistant", "Grid & DCA trading bots", "Whale alert tracker", "Referral program launch"], done: true },
+                  { quarter: "Q3 2025", title: "Ecosystem Expansion", items: ["Mobile app (iOS & Android)", "Multi-language support (10+ langs)", "Token Search & Screener", "Vaults & yield strategies"], done: false },
+                  { quarter: "Q4 2025", title: "FROST Token", items: ["FROST token public launch", "Staking & governance", "Fee discounts for holders", "Community airdrop program"], done: false },
+                  { quarter: "Q1 2026", title: "Launchpad & DeFi Hub", items: ["Token Launchpad — create & list tokens", "Cross-chain bridge integration", "Institutional API access", "DAO governance activation"], done: false },
+                ].map((phase, i) => (
+                  <div key={i} className="oui-flex oui-gap-5 oui-pl-8 oui-relative">
+                    <div className="oui-absolute oui-left-0 oui-top-1 oui-w-6 oui-h-6 oui-rounded-full oui-flex oui-items-center oui-justify-center oui-flex-shrink-0"
+                      style={{
+                        background: phase.done ? `${GREEN}20` : "rgba(255,255,255,0.05)",
+                        border: `2px solid ${phase.done ? GREEN : "rgba(255,255,255,0.12)"}`,
+                        boxShadow: phase.done ? `0 0 10px ${GREEN}50` : "none",
+                      }}>
+                      {phase.done
+                        ? <span style={{ color: GREEN, fontSize: "11px", fontWeight: 700 }}>✓</span>
+                        : <span style={{ color: "rgba(56,224,248,0.5)", fontSize: "8px" }}>●</span>
+                      }
+                    </div>
+                    <div className="oui-flex-1">
+                      <div className="oui-flex oui-items-center oui-gap-2 oui-flex-wrap oui-mb-2">
+                        <span className="oui-text-xs oui-font-bold oui-px-2 oui-py-0.5 oui-rounded"
+                          style={{
+                            background: phase.done ? `${GREEN}15` : `${CYAN}10`,
+                            color: phase.done ? GREEN : CYAN,
+                          }}>
+                          {phase.quarter}
+                        </span>
+                        <span className="oui-text-sm oui-font-bold oui-text-base-contrast">{phase.title}</span>
+                        {phase.done && (
+                          <span className="oui-text-xs oui-font-semibold oui-px-2 oui-py-0.5 oui-rounded-full"
+                            style={{ background: `${GREEN}15`, color: GREEN }}>Completed</span>
+                        )}
+                      </div>
+                      <div className="oui-flex oui-flex-wrap oui-gap-1.5">
+                        {phase.items.map((item) => (
+                          <span key={item} className="oui-text-xs oui-px-2 oui-py-1 oui-rounded-md"
+                            style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </Section>
 
