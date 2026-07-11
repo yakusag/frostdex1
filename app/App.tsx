@@ -24,6 +24,7 @@ import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import IOSInstallGuide from "@/components/IOSInstallGuide";
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -80,6 +81,7 @@ export default function App() {
         onHideAll={hideAll}
       />
       <PWAInstallPrompt />
+      <IOSInstallGuide />
       <SpeedInsights />
       <Analytics />
     </>
