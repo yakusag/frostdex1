@@ -25,6 +25,7 @@ import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import IOSInstallGuide from "@/components/IOSInstallGuide";
+import { initOnboardBrandingPatch } from "@/utils/patchOnboardBranding";
 
 export default function App() {
   const seoConfig = getSEOConfig();
@@ -36,6 +37,7 @@ export default function App() {
       (window as any).__hideSplash();
     }
     startFaviconAnimation(withBasePath("/favicon.webp"));
+    initOnboardBrandingPatch();
 
     // One-time reset of widget positions to new left-side layout
     const LAYOUT_VER = "left-v1";
