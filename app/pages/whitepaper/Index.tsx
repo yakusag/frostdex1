@@ -175,7 +175,7 @@ export default function WhitepaperIndex() {
                 "TradingView-powered professional charts",
                 "One-click trading mode",
                 "Affiliate & referral program (up to 20% rebate)",
-                "FrostAI — AI trading assistant powered by Groq",
+                "FrostAI — AI trading assistant powered by FrostDex",
                 "Real-time whale alert tracker",
                 "Market sentiment dashboard",
                 "Grid & DCA trading bots",

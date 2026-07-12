@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="x-dns-prefetch-control" content="on" />
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
@@ -17,6 +18,10 @@
 
     <title>FrostDex</title>
 
+    <!-- critical resource preload -->
+    <link rel="preload" as="image" href="/frostdex-logo.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/favicon.webp" />
+
     <!-- speed: preconnect + prefetch critical origins -->
     <link rel="preconnect" href="https://api.orderly.org" crossorigin />
     <link rel="preconnect" href="https://api.groq.com" crossorigin />
@@ -30,6 +35,11 @@
     <link rel="dns-prefetch" href="https://static.orderly.org" />
 
     <style>
+      /* ── critical inline CSS: prevent FOUC ── */
+      *,*::before,*::after{box-sizing:border-box}
+      html,body{margin:0;padding:0;background:#0b0e11;color:#fff;font-family:'Manrope','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeSpeed}
+      #root{min-height:100vh}
+
       /* ── base ── */
       #splash {
         position: fixed;
@@ -117,6 +127,10 @@
         background-clip: text;
         animation: name-appear 0.6s ease 0.9s both;
       }
+      @keyframes name-appear {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
 
       /* ── falling snowflakes ── */
       #splash-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
@@ -140,7 +154,7 @@
     <div id="splash">
       <div id="splash-aurora"></div>
       <div id="splash-particles"></div>
-      <img id="splash-flake" src="/frostdex-logo.webp" alt="FrostDex" />
+      <img id="splash-flake" src="/frostdex-logo.webp" alt="FrostDex" fetchpriority="high" decoding="async" />
       <div id="splash-name">FROSTDEX</div>
       <div id="splash-tag">Decentralized Exchange</div>
       <div id="splash-motto">TRUST &bull; FREEDOM &bull; TRADE</div>

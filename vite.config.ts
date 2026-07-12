@@ -41,6 +41,7 @@ function htmlTitlePlugin(): Plugin {
 
 export default defineConfig(() => {
   const basePath = process.env.PUBLIC_PATH || "/";
+  const isProd = process.env.NODE_ENV === "production";
 
   return {
     server: {
@@ -48,6 +49,13 @@ export default defineConfig(() => {
       host: "0.0.0.0",
       port: 5000,
       allowedHosts: true,
+      warmup: {
+        clientFiles: [
+          "./app/main.tsx",
+          "./app/App.tsx",
+          "./app/components/orderlyProvider/index.tsx",
+        ],
+      },
     },
     define: {
       __GROQ_KEY__: JSON.stringify(process.env.GROQ_API_KEY || ""),
@@ -69,13 +77,19 @@ export default defineConfig(() => {
       target: "es2022",
       chunkSizeWarningLimit: 2000,
       cssCodeSplit: true,
+      cssMinify: "esbuild",
       reportCompressedSize: false,
       sourcemap: false,
       minify: "esbuild",
       assetsInlineLimit: 8192,
       modulePreload: { polyfill: false },
       rollupOptions: {
-        maxParallelFileOps: 4,
+        maxParallelFileOps: 8,
+        treeshake: {
+          moduleSideEffects: false,
+          propertyReadSideEffects: false,
+          tryCatchDeoptimization: false,
+        },
         output: {
           manualChunks: {
             "vendor-react":     ["react", "react-dom", "react-router-dom"],
@@ -88,21 +102,34 @@ export default defineConfig(() => {
             "vendor-solana":    ["@solana/wallet-adapter-base", "@solana/wallet-adapter-wallets"],
           },
           compact: true,
+          generatedCode: {
+            constBindings: true,
+            objectShorthand: true,
+          },
         },
       },
     },
     optimizeDeps: {
-      include: ["react", "react-dom", "react-router-dom"],
+      include: [
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "@orderly.network/react-app",
+        "@orderly.network/ui",
+      ],
       force: false,
     },
     esbuild: {
-      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
+      drop: isProd ? ["console", "debugger"] : [],
       legalComments: "none",
       treeShaking: true,
       target: "es2022",
       minifyIdentifiers: true,
       minifySyntax: true,
       minifyWhitespace: true,
+      pure: isProd
+        ? ["console.log", "console.info", "console.debug", "console.trace"]
+        : [],
     },
     css: {
       devSourcemap: false,
