@@ -99,9 +99,7 @@ export const getOnboardEvmWallets = () => {
 
   return [
     injectedOnboard({
-      displayUnavailable: [
-        ProviderLabel.Brave,
-      ],
+      displayUnavailable: [ProviderLabel.Brave],
     }),
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
@@ -116,14 +114,20 @@ export const getOnboardEvmWallets = () => {
 
 export const getEvmInitialConfig = () => {
   const wallets = getOnboardEvmWallets();
+  const brokerName = getRuntimeConfig("VITE_ORDERLY_BROKER_NAME") || "FrostDex";
 
   return wallets.length > 0
     ? {
         options: {
           wallets,
+          connect: {
+            autoConnectAllPreviousWallet: true,
+          },
           appMetadata: {
-            name: getRuntimeConfig("VITE_ORDERLY_BROKER_NAME"),
-            description: getRuntimeConfig("VITE_ORDERLY_BROKER_NAME"),
+            name: brokerName,
+            description: `${brokerName} — Decentralized Exchange`,
+            icon: `${typeof window !== "undefined" ? window.location.origin : ""}/favicon.webp`,
+            logo: `${typeof window !== "undefined" ? window.location.origin : ""}/frostdex-logo.webp`,
           },
         },
       }
