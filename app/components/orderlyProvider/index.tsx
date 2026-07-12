@@ -160,15 +160,17 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
     []
   );
 
-  const RTL_LOCALES = ["ar", "dz", "ma"];
+  const RTL_LOCALES = ["ar", "ma"];
 
   const onLanguageChanged = async (lang: LocaleCode) => {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       if (lang === LocaleEnum.en) {
         url.searchParams.delete("lang");
+        localStorage.removeItem("frostdex_lang");
       } else {
         url.searchParams.set("lang", lang);
+        localStorage.setItem("frostdex_lang", lang);
       }
       window.history.replaceState({}, "", url.toString());
 
@@ -203,7 +205,6 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   const availableLanguages = getAvailableLanguages();
   const customLanguages = [
     { localCode: "ar", displayName: "العربية" },
-    { localCode: "dz", displayName: "الدارجة (دز)" },
     { localCode: "ma", displayName: "الدارجة المغربية" },
   ];
   const filteredLanguages = [

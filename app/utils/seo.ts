@@ -46,8 +46,12 @@ export function getUserLanguage(): string {
     const urlParams = new URLSearchParams(window.location.search);
     const langParam = urlParams.get("lang");
     if (langParam) {
+      localStorage.setItem("frostdex_lang", langParam);
       return langParam;
     }
+
+    const saved = localStorage.getItem("frostdex_lang");
+    if (saved) return saved;
 
     if (navigator.language) {
       return navigator.language.split("-")[0];
