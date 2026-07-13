@@ -96,8 +96,8 @@ export default function SmartMoney({ onHide }: Props) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   const defaultPos = {
-    x: typeof window !== "undefined" ? window.innerWidth - 66 : 1200,
-    y: typeof window !== "undefined" ? window.innerHeight - 280 : 380,
+    x: 12,
+    y: typeof window !== "undefined" ? window.innerHeight - 500 : 260,
   };
   const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps, wasDragged } =
     useDraggable("smart-money", defaultPos);
@@ -186,7 +186,7 @@ export default function SmartMoney({ onHide }: Props) {
           </div>
 
           {/* Tabs */}
-          <div className="sm-tabs">
+          <div className="sm-tabs" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
             {(["all", "accumulation", "distribution"] as const).map(t => (
               <button key={t} className={`sm-tab ${tab === t ? "sm-tab--active" : ""}`} onClick={() => setTab(t)}>
                 {t === "all" ? "All" : t === "accumulation" ? "🟢 Accum" : "🔴 Distr"}
@@ -200,7 +200,7 @@ export default function SmartMoney({ onHide }: Props) {
           </div>
 
           {/* List */}
-          <div className="sm-list">
+          <div className="sm-list" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
             {loading && signals.length === 0 && (
               <div className="sm-empty">Analyzing market flows…</div>
             )}

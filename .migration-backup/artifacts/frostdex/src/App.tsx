@@ -13,6 +13,9 @@ import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import IOSInstallGuide from "@/components/IOSInstallGuide";
+import { initOnboardBrandingPatch } from "@/utils/patchOnboardBranding";
 
 const FrostTradeWidget   = lazy(() => import("@/components/FrostTradeWidget"));
 const AIAssistant        = lazy(() => import("@/components/AIAssistant"));
@@ -23,13 +26,23 @@ const SentimentDashboard = lazy(() => import("@/components/SentimentDashboard"))
 export default function App() {
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const { visibility, toggle, showAll, anyHidden } = useWidgetVisibility();
+  const { visibility, toggle, showAll, hideAll, anyHidden, allVisible } = useWidgetVisibility();
 
   useEffect(() => {
     if (typeof (window as any).__hideSplash === "function") {
       (window as any).__hideSplash();
     }
     startFaviconAnimation(withBasePath("/favicon.webp"));
+    initOnboardBrandingPatch();
+
+    // One-time reset of widget positions to new left-side layout
+    const LAYOUT_VER = "left-v1";
+    if (localStorage.getItem("frost-layout-ver") !== LAYOUT_VER) {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith("widget-pos-"))
+        .forEach(k => localStorage.removeItem(k));
+      localStorage.setItem("frost-layout-ver", LAYOUT_VER);
+    }
   }, []);
 
   return (
@@ -59,8 +72,10 @@ export default function App() {
       <WidgetManager
         visibility={visibility}
         anyHidden={anyHidden}
+        allVisible={allVisible}
         onToggle={toggle}
         onShowAll={showAll}
+        onHideAll={hideAll}
       />
     </>
   );

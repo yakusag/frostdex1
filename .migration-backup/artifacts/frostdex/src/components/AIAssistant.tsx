@@ -50,7 +50,7 @@ const SUGGESTIONS = [
 interface Props { onHide: () => void; }
 
 export default function AIAssistant({ onHide }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]         = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,7 +60,7 @@ export default function AIAssistant({ onHide }: Props) {
   const [hovered, setHovered] = useState(false);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
 
   const defaultPos = { x: 12, y: typeof window !== "undefined" ? window.innerHeight - 122 : 600 };
   const { pos, isDragging, isSnapping, elementRef, isBottomHalf, dragHandleProps, wasDragged } =
@@ -100,6 +100,8 @@ export default function AIAssistant({ onHide }: Props) {
   const panelStyle: React.CSSProperties = isBottomHalf
     ? { position: "absolute", bottom: "calc(100% + 8px)", left: 0 }
     : { position: "absolute", top: "calc(100% + 8px)", left: 0 };
+
+  const storedKey = localStorage.getItem(LS_KEY);
 
   return (
     <div
@@ -149,8 +151,8 @@ export default function AIAssistant({ onHide }: Props) {
               <div>
                 <div className="ai-panel-name">FrostAI</div>
                 <div className="ai-panel-sub" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: "#0ecb81", fontSize: 9 }}>●</span>
-                  <span>Powered by Groq</span>
+                  <span style={{ color: needsKey ? "#f6465d" : "#0ecb81", fontSize: 9 }}>●</span>
+                  <span>{needsKey ? "Needs API key" : "Powered by Groq"}</span>
                 </div>
               </div>
             </div>
@@ -190,9 +192,7 @@ export default function AIAssistant({ onHide }: Props) {
                 <div className="ai-welcome-title">FrostAI</div>
                 <div className="ai-welcome-sub">Ask me anything about crypto trading, market analysis, or FrostDex.</div>
                 <div className="ai-suggestions">
-                  {SUGGESTIONS.map(s => (
-                    <button key={s} className="ai-suggestion" onClick={() => send(s)}>{s}</button>
-                  ))}
+                  {SUGGESTIONS.map(s => <button key={s} className="ai-suggestion" onClick={() => send(s)}>{s}</button>)}
                 </div>
               </div>
             )}
@@ -200,32 +200,18 @@ export default function AIAssistant({ onHide }: Props) {
               <div key={i} className={`ai-msg ai-msg--${msg.role}`}>
                 {msg.role === "assistant" && <span className="ai-msg-avatar">❄</span>}
                 <div className="ai-msg-bubble">
-                  {msg.content.split("\n").map((line, j) => (
-                    <span key={j}>{line}{j < msg.content.split("\n").length - 1 && <br />}</span>
-                  ))}
+                  {msg.content.split("\n").map((line, j) => <span key={j}>{line}{j < msg.content.split("\n").length - 1 && <br />}</span>)}
                 </div>
               </div>
             ))}
-            {loading && (
-              <div className="ai-msg ai-msg--assistant">
-                <span className="ai-msg-avatar">❄</span>
-                <div className="ai-msg-bubble ai-thinking"><span /><span /><span /></div>
-              </div>
-            )}
+            {loading && <div className="ai-msg ai-msg--assistant"><span className="ai-msg-avatar">❄</span><div className="ai-msg-bubble ai-thinking"><span/><span/><span/></div></div>}
             {error && <div className="ai-error">{error}</div>}
             <div ref={bottomRef} />
           </div>
 
-          <div className="ai-input-row">
-            <input
-              ref={inputRef}
-              className="ai-input"
-              placeholder="Ask about markets, strategies…"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") send(); }}
-              disabled={loading}
-            />
+          <div className="ai-input-row" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+            <input ref={inputRef} className="ai-input" placeholder="Ask about markets, strategies…" value={input}
+              onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} disabled={loading} />
             <button className="ai-send-btn" onClick={() => send()} disabled={loading || !input.trim()}>↑</button>
           </div>
         </div>

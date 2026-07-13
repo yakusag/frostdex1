@@ -3,6 +3,9 @@
   "installCommand": "NODE_OPTIONS='--max-old-space-size=8192' pnpm install --frozen-lockfile --filter '!@workspace/frostdex-mobile'",
   "outputDirectory": "artifacts/frostdex/dist/public",
   "framework": null,
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=3072"
+  },
   "rewrites": [
     { "source": "/((?!api|assets|locales|config\\.js|manifest\\.json|favicon\\.|frostdex-logo|tradingview|whitepaper-banner).*)", "destination": "/index.html" }
   ],

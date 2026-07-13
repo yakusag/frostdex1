@@ -8,14 +8,17 @@ interface Visibility {
   sentiment: boolean;
   frost: boolean;
   smartmoney: boolean;
+  liq: boolean;
+  mac: boolean;
+  palert: boolean;
 }
 
 function load(): Visibility {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, ...JSON.parse(saved) };
+    if (saved) return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true, ...JSON.parse(saved) };
   } catch {}
-  return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true };
+  return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true };
 }
 
 export function useWidgetVisibility() {
@@ -30,12 +33,19 @@ export function useWidgetVisibility() {
   }, []);
 
   const showAll = useCallback(() => {
-    const next = { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true };
+    const next = { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true };
     setVisibility(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
   }, []);
 
-  const anyHidden = !visibility.ai || !visibility.whale || !visibility.sentiment || !visibility.frost || !visibility.smartmoney;
+  const hideAll = useCallback(() => {
+    const next = { ai: false, whale: false, sentiment: false, frost: false, smartmoney: false, liq: false, mac: false, palert: false };
+    setVisibility(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  }, []);
 
-  return { visibility, toggle, showAll, anyHidden };
+  const anyHidden = Object.values(visibility).some(v => !v);
+  const allVisible = Object.values(visibility).every(v => v);
+
+  return { visibility, toggle, showAll, hideAll, anyHidden, allVisible };
 }

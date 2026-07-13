@@ -1,32 +1,31 @@
 import { useState } from "react";
 
 interface Props {
-  visibility: { ai: boolean; whale: boolean; sentiment: boolean; frost: boolean; smartmoney: boolean };
+  visibility: { ai: boolean; whale: boolean; sentiment: boolean; frost: boolean; smartmoney: boolean; liq: boolean; mac: boolean; palert: boolean };
   anyHidden: boolean;
-  onToggle: (key: "ai" | "whale" | "sentiment" | "frost" | "smartmoney") => void;
+  allVisible: boolean;
+  onToggle: (key: "ai" | "whale" | "sentiment" | "frost" | "smartmoney" | "liq" | "mac" | "palert") => void;
   onShowAll: () => void;
+  onHideAll: () => void;
 }
 
 const WIDGETS = [
-  { key: "frost"      as const, label: "FROST Widget",  icon: "❄" },
-  { key: "ai"         as const, label: "FrostAI",        icon: "🤖" },
-  { key: "whale"      as const, label: "Whale Alerts",   icon: "🐋" },
-  { key: "smartmoney" as const, label: "Smart Money",    icon: "🧠" },
-  { key: "sentiment"  as const, label: "Market Mood",    icon: "📊" },
+  { key: "frost"      as const, label: "FROST Widget",       icon: "❄" },
+  { key: "ai"         as const, label: "FrostAI",             icon: "🤖" },
+  { key: "whale"      as const, label: "Whale Alerts",        icon: "🐋" },
+  { key: "smartmoney" as const, label: "Smart Money",         icon: "🧠" },
+  { key: "liq"        as const, label: "Liq Heatmap",         icon: "🔥" },
+  { key: "mac"        as const, label: "MAC + Liquidity",     icon: "📈" },
+  { key: "palert"     as const, label: "Price Alerts",        icon: "🔔" },
+  { key: "sentiment"  as const, label: "Market Mood",         icon: "📊" },
 ];
 
-export default function WidgetManager({ visibility, anyHidden, onToggle, onShowAll }: Props) {
+export default function WidgetManager({ visibility, anyHidden, allVisible, onToggle, onShowAll, onHideAll }: Props) {
   const [open, setOpen] = useState(false);
-
-  if (!anyHidden && !open) return null;
 
   return (
     <div className="wm-wrap">
-      <button
-        className="wm-fab"
-        onClick={() => setOpen(v => !v)}
-        title="Manage widgets"
-      >
+      <button className="wm-fab" onClick={() => setOpen(v => !v)} title="Manage widgets">
         {open ? "✕" : "⠿"}
       </button>
 
@@ -44,7 +43,12 @@ export default function WidgetManager({ visibility, anyHidden, onToggle, onShowA
               </button>
             </div>
           ))}
-          {anyHidden && (
+
+          {allVisible ? (
+            <button className="wm-show-all" onClick={() => { onHideAll(); setOpen(false); }}>
+              Hide All
+            </button>
+          ) : (
             <button className="wm-show-all" onClick={() => { onShowAll(); setOpen(false); }}>
               Show All
             </button>

@@ -84,7 +84,7 @@ export default function SentimentDashboard({ onHide }: Props) {
         </div>
       )}
 
-      <button className="sentiment-fab" onClick={() => { if (wasDragged()) return; setOpen(v => !v); }} aria-label="Market Sentiment">
+      <button className="sentiment-fab" onClick={() => { if ((wasDragged as () => boolean)()) return; setOpen(v => !v); }} aria-label="Market Sentiment">
         📊 <span>Mood</span>
       </button>
 

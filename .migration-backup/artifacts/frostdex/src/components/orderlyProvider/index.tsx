@@ -166,8 +166,10 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       const url = new URL(window.location.href);
       if (lang === LocaleEnum.en) {
         url.searchParams.delete("lang");
+        localStorage.removeItem("frostdex_lang");
       } else {
         url.searchParams.set("lang", lang);
+        localStorage.setItem("frostdex_lang", lang);
       }
       window.history.replaceState({}, "", url.toString());
 

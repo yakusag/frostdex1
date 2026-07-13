@@ -186,10 +186,16 @@ function prefetchRoutes() {
     import('./pages/swap/Index');
     import('./pages/bot/Layout');
     import('./pages/bot/Index');
-    import('./pages/rewards/Layout');
-    import('./pages/rewards/Index');
     import('./pages/vaults/Layout');
     import('./pages/vaults/Index');
+    import('./pages/about/Layout');
+    import('./pages/about/Index');
+    import('./pages/token/Layout');
+    import('./pages/token/Index');
+    import('./pages/referral/Layout');
+    import('./pages/referral/Index');
+    import('./pages/whitepaper/Layout');
+    import('./pages/whitepaper/Index');
   };
 
   if ('requestIdleCallback' in window) {

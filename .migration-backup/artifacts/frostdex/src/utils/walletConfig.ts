@@ -17,7 +17,7 @@ import {
   SolanaMobileWalletAdapter,
 } from "@solana-mobile/wallet-adapter-mobile";
 import type { NetworkId } from "@orderly.network/types";
-import injectedOnboard from "@web3-onboard/injected-wallets";
+import injectedOnboard, { ProviderLabel } from "@web3-onboard/injected-wallets";
 import { getRuntimeConfig } from "./runtime-config";
 import walletConnectOnboard from "@web3-onboard/walletconnect";
 import binanceWallet from "@binance/w3w-blocknative-connector";
@@ -98,7 +98,9 @@ export const getOnboardEvmWallets = () => {
   }
 
   return [
-    injectedOnboard(),
+    injectedOnboard({
+      displayUnavailable: [ProviderLabel.Brave],
+    }),
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
       projectId: walletConnectProjectId,
@@ -112,14 +114,20 @@ export const getOnboardEvmWallets = () => {
 
 export const getEvmInitialConfig = () => {
   const wallets = getOnboardEvmWallets();
+  const brokerName = getRuntimeConfig("VITE_ORDERLY_BROKER_NAME") || "FrostDex";
 
   return wallets.length > 0
     ? {
         options: {
           wallets,
+          connect: {
+            autoConnectAllPreviousWallet: true,
+          },
           appMetadata: {
-            name: getRuntimeConfig("VITE_ORDERLY_BROKER_NAME"),
-            description: getRuntimeConfig("VITE_ORDERLY_BROKER_NAME"),
+            name: brokerName,
+            description: `${brokerName} — Decentralized Exchange`,
+            icon: `${typeof window !== "undefined" ? window.location.origin : ""}/favicon.webp`,
+            logo: `${typeof window !== "undefined" ? window.location.origin : ""}/frostdex-logo.webp`,
           },
         },
       }
