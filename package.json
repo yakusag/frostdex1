@@ -80,16 +80,17 @@
     "vite-plugin-cjs-interop": "^2.3.0",
     "vite-plugin-node-polyfills": "0.24.0",
     "vite-tsconfig-paths": "^5.1.4"
+  
   },
   "lint-staged": {
     "*.{ts,tsx}": [
       "prettier --write"
     ]
   },
-  
-"pnpm": {
-  "overrides": {
-    "@amplitude/analytics-browser": "2.11.13",
-    "@reown/appkit": "1.7.8"
+  "pnpm": {
+    "overrides": {
+      "@amplitude/analytics-browser": "2.11.13",
+      "@reown/appkit": "1.7.8"
+    }
   }
 }
