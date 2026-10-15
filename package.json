@@ -86,8 +86,10 @@
       "prettier --write"
     ]
   },
-  "resolutions": {
-    "**/*/@amplitude/analytics-browser": "2.11.13",
-    "**/*/@reown/appkit": "1.7.8"
+  
+"pnpm": {
+  "overrides": {
+    "@amplitude/analytics-browser": "2.11.13",
+    "@reown/appkit": "1.7.8"
   }
 }
