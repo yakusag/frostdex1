@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const groqRes = await fetch("https://api.groq.com/openai/v1", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
