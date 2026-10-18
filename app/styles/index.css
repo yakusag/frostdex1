@@ -185,6 +185,12 @@ body {
   top: 28px !important;
 }
 
+@media (min-width: 768px) {
+  #oui-markets-home-page .oui-table-thead {
+    top: 0 !important;
+  }
+}
+
 /* Orderly symbol info bar on mobile — stays below the mobile header */
 @media (max-width: 767px) {
   .oui-trading-symbolInfoBar-container {
@@ -1783,4 +1789,3 @@ select,
   direction: rtl;
   flex-direction: row-reverse;
 }
-
