@@ -177,6 +177,12 @@ body {
   padding-top: 28px;
 }
 
+@media (max-width: 767px) {
+  .market-ticker-bar {
+    z-index: 5;
+  }
+}
+
 /* Any OUI element that is sticky or fixed at top:0 must shift down */
 .oui-sticky.oui-top-0,
 .oui-fixed.oui-top-0,
