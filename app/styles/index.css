@@ -181,6 +181,11 @@ body {
   .market-ticker-bar {
     z-index: 5;
   }
+
+  .oui-scaffold-topNavbar:has(.frost-mobile-header),
+  .oui-scaffold-topNavbar:has(.frost-mobile-header) > .oui-flex {
+    height: 128px !important;
+  }
 }
 
 /* Any OUI element that is sticky or fixed at top:0 must shift down */

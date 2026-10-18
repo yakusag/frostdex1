@@ -450,7 +450,10 @@ export const useOrderlyConfig = () => {
 
     mainNavProps.customRender = (components) => {
       return (
-        <Flex justify="between" className="oui-w-full">
+        <Flex
+          justify="between"
+          className={cn("oui-w-full", isMobile && "frost-mobile-header")}
+        >
           <Flex
             itemAlign={"center"}
             className={cn("oui-gap-3", "oui-overflow-hidden")}
@@ -467,7 +470,7 @@ export const useOrderlyConfig = () => {
                 display: "inline-flex",
                 alignItems: "center",
                 overflow: "hidden",
-                maxHeight: "44px",
+                maxHeight: "124px",
                 flexShrink: 0,
               }}
             >
@@ -476,10 +479,10 @@ export const useOrderlyConfig = () => {
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
                   style={{
-                    height: "40px",
+                    height: "120px",
                     width: "auto",
                     objectFit: "contain",
-                    maxWidth: "148px",
+                    maxWidth: "calc(100vw - 160px)",
                   }}
                 />
               ) : (
