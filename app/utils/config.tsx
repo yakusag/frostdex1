@@ -456,7 +456,7 @@ export const useOrderlyConfig = () => {
         >
           <Flex
             itemAlign={"center"}
-            className={cn("oui-gap-3", "oui-overflow-hidden")}
+            className={cn("oui-gap-3", !isMobile && "oui-overflow-hidden")}
           >
             {isMobile && (
               <CustomLeftNav
@@ -467,10 +467,12 @@ export const useOrderlyConfig = () => {
             <Link
               to="/"
               style={{
+                position: "relative",
                 display: "inline-flex",
                 alignItems: "center",
-                overflow: "hidden",
-                maxHeight: "100px",
+                overflow: "visible",
+                width: isMobile ? "min(148px, calc(100vw - 180px))" : undefined,
+                height: isMobile ? "44px" : undefined,
                 flexShrink: 0,
               }}
             >
@@ -479,10 +481,14 @@ export const useOrderlyConfig = () => {
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
                   style={{
+                    position: "absolute",
+                    left: 0,
+                    top: "50%",
                     height: "96px",
                     width: "auto",
                     objectFit: "contain",
-                    maxWidth: "min(148px, calc(100vw - 180px))",
+                    maxWidth: "100%",
+                    transform: "translateY(-50%)",
                   }}
                 />
               ) : (
