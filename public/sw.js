@@ -1,5 +1,5 @@
 let CACHE_NAME = 'frostdex-v1';
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 let cacheNameInitialized = false;
 
 const NEVER_CACHE = ['/', '/index.html', '/config.js'];
@@ -95,23 +95,32 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    initializeCacheName().then(() => {
+    initializeCacheName().then(async () => {
       if (isHashedModule) {
-        return caches.match(request).then((cachedResponse) => {
+        const cache = await caches.open(CACHE_NAME);
+        return fetch(request).then(async (response) => {
+          const contentType = response.headers.get('content-type') || '';
+          const isJavaScript = /(?:java|ecma)script/i.test(contentType);
+
+          if (response.ok && response.type === 'basic' && isJavaScript) {
+            const responseToCache = response.clone();
+            cache.put(request, responseToCache).catch((err) => {
+              console.warn('Failed to cache hashed module:', url.pathname, err);
+            });
+            return response;
+          }
+
+          const cachedResponse = await cache.match(request);
+          if (cachedResponse) {
+            await cache.delete(request);
+          }
+          return response;
+        }).catch(async (error) => {
+          const cachedResponse = await cache.match(request);
           if (cachedResponse) {
             return cachedResponse;
           }
-          return fetch(request).then((response) => {
-            if (response && response.status === 200 && response.type === 'basic') {
-              const responseToCache = response.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, responseToCache).catch((err) => {
-                  console.warn('Failed to cache hashed module:', url.pathname, err);
-                });
-              });
-            }
-            return response;
-          });
+          throw error;
         });
       }
 
@@ -146,4 +155,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-
