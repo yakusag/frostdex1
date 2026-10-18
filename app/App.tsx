@@ -1,35 +1,36 @@
 import { useEffect } from "react";
-import { Outlet } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { SpeedInsights } from "@vercel/speed-insights/react";
+import { Outlet } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
-import OrderlyProvider from "@/components/orderlyProvider";
-import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
-import { NetworkStatus } from "@/components/NetworkStatus";
-import LeverageAutoMax from "@/components/LeverageAutoMax";
-import ReferralHandler from "@/components/ReferralHandler";
-import ReferralWelcome from "@/components/ReferralWelcome";
-import MarketTickerBar from "@/components/MarketTickerBar";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import AIAssistant from "@/components/AIAssistant";
-import WhaleAlerts from "@/components/WhaleAlerts";
-import SentimentDashboard from "@/components/SentimentDashboard";
 import FrostTradeWidget from "@/components/FrostTradeWidget";
-import SmartMoney from "@/components/SmartMoney";
+import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
+import IOSInstallGuide from "@/components/IOSInstallGuide";
+import LeverageAutoMax from "@/components/LeverageAutoMax";
 import LiqHeatmap from "@/components/LiqHeatmap";
 import MACWidget from "@/components/MACWidget";
+import MarketTickerBar from "@/components/MarketTickerBar";
+import { NetworkStatus } from "@/components/NetworkStatus";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import PriceAlert from "@/components/PriceAlert";
+import ReferralHandler from "@/components/ReferralHandler";
+import ReferralWelcome from "@/components/ReferralWelcome";
+import SentimentDashboard from "@/components/SentimentDashboard";
+import SmartMoney from "@/components/SmartMoney";
+import WhaleAlerts from "@/components/WhaleAlerts";
 import WidgetManager from "@/components/WidgetManager";
+import OrderlyProvider from "@/components/orderlyProvider";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { withBasePath } from "./utils/base-path";
-import { getSEOConfig, getUserLanguage } from "./utils/seo";
 import { startFaviconAnimation } from "./utils/favicon-animation";
-import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-import IOSInstallGuide from "@/components/IOSInstallGuide";
+import { getSEOConfig, getUserLanguage } from "./utils/seo";
 
 export default function App() {
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const { visibility, toggle, showAll, hideAll, anyHidden, allVisible } = useWidgetVisibility();
+  const { visibility, toggle, showAll, hideAll, anyHidden, allVisible } =
+    useWidgetVisibility();
 
   useEffect(() => {
     if (typeof (window as any).__hideSplash === "function") {
@@ -41,8 +42,8 @@ export default function App() {
     const LAYOUT_VER = "left-v1";
     if (localStorage.getItem("frost-layout-ver") !== LAYOUT_VER) {
       Object.keys(localStorage)
-        .filter(k => k.startsWith("widget-pos-"))
-        .forEach(k => localStorage.removeItem(k));
+        .filter((k) => k.startsWith("widget-pos-"))
+        .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem("frost-layout-ver", LAYOUT_VER);
     }
   }, []);
@@ -50,10 +51,14 @@ export default function App() {
   return (
     <>
       <Helmet>
-        <html lang={seoConfig.language || defaultLanguage} />
+        <html lang={defaultLanguage || seoConfig.language || "en"} />
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" type="image/webp" href={withBasePath("/favicon.webp")} />
+        <link
+          rel="icon"
+          type="image/webp"
+          href={withBasePath("/favicon.webp")}
+        />
       </Helmet>
       <HttpsRequiredWarning />
       <NetworkStatus />
@@ -64,14 +69,18 @@ export default function App() {
         <LeverageAutoMax />
         <Outlet />
       </OrderlyProvider>
-      {visibility.frost      && <FrostTradeWidget  onHide={() => toggle("frost")} />}
-      {visibility.ai         && <AIAssistant        onHide={() => toggle("ai")} />}
-      {visibility.whale      && <WhaleAlerts         onHide={() => toggle("whale")} />}
-      {visibility.smartmoney && <SmartMoney          onHide={() => toggle("smartmoney")} />}
-      {visibility.liq        && <LiqHeatmap          onHide={() => toggle("liq")} />}
-      {visibility.mac        && <MACWidget            onHide={() => toggle("mac")} />}
-      {visibility.palert     && <PriceAlert           onHide={() => toggle("palert")} />}
-      {visibility.sentiment  && <SentimentDashboard  onHide={() => toggle("sentiment")} />}
+      {visibility.frost && <FrostTradeWidget onHide={() => toggle("frost")} />}
+      {visibility.ai && <AIAssistant onHide={() => toggle("ai")} />}
+      {visibility.whale && <WhaleAlerts onHide={() => toggle("whale")} />}
+      {visibility.smartmoney && (
+        <SmartMoney onHide={() => toggle("smartmoney")} />
+      )}
+      {visibility.liq && <LiqHeatmap onHide={() => toggle("liq")} />}
+      {visibility.mac && <MACWidget onHide={() => toggle("mac")} />}
+      {visibility.palert && <PriceAlert onHide={() => toggle("palert")} />}
+      {visibility.sentiment && (
+        <SentimentDashboard onHide={() => toggle("sentiment")} />
+      )}
       <WidgetManager
         visibility={visibility}
         anyHidden={anyHidden}

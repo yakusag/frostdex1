@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, lazy, Suspense } from "react";
+import { ReactNode, useCallback, lazy, Suspense, useState } from "react";
 import {
   LocaleProvider,
   LocaleCode,
@@ -106,6 +106,8 @@ const WalletConnector = lazy(
 const OrderlyProvider = (props: { children: ReactNode }) => {
   const config = useOrderlyConfig();
   const networkId = getNetworkId();
+  const [activeLanguage, setActiveLanguage] =
+    useState<LocaleCode>(getDefaultLanguage);
 
   const privyAppId = getRuntimeConfig("VITE_PRIVY_APP_ID");
   const usePrivy = !!privyAppId;
@@ -175,6 +177,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   const RTL_LOCALES = ["ar", "ma"];
 
   const onLanguageChanged = async (lang: LocaleCode) => {
+    setActiveLanguage(lang);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       if (lang === LocaleEnum.en) {
@@ -194,9 +197,9 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
 
   // Apply RTL on initial load
   if (typeof window !== "undefined") {
-    const isRtl = RTL_LOCALES.includes(getDefaultLanguage());
+    const isRtl = RTL_LOCALES.includes(activeLanguage);
     document.documentElement.setAttribute("dir", isRtl ? "rtl" : "ltr");
-    document.documentElement.setAttribute("lang", getDefaultLanguage());
+    document.documentElement.setAttribute("lang", activeLanguage);
   }
 
   const loadPath = (lang: LocaleCode) => {
@@ -211,8 +214,6 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       withBasePath(`/locales/extend/${lang}.json`),
     ];
   };
-
-  const defaultLanguage = getDefaultLanguage();
 
   const availableLanguages = getAvailableLanguages();
   const customLanguages = [
@@ -262,7 +263,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       onLanguageChanged={onLanguageChanged}
       backend={{ loadPath }}
       resources={resources}
-      locale={defaultLanguage}
+      locale={activeLanguage}
       languages={filteredLanguages}
     >
       <Suspense fallback={<LoadingSpinner />}>{walletConnector}</Suspense>
