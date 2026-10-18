@@ -40,25 +40,42 @@ async function askGroq(
   apiKey: string,
   model: string,
 ): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+  const usePersonalKey = Boolean(apiKey);
+  const res = await fetch(
+    usePersonalKey
+      ? "https://api.groq.com/openai/v1/chat/completions"
+      : "/api/frostai",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(usePersonalKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify(
+        usePersonalKey
+          ? {
+              model,
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                ...messages,
+              ],
+              max_tokens: 800,
+              temperature: 0.7,
+            }
+          : { model, messages },
+      ),
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      max_tokens: 800,
-      temperature: 0.7,
-    }),
-  });
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Groq API error ${res.status}`);
+    throw new Error(
+      err?.error?.message || err?.error || `Groq API error ${res.status}`,
+    );
   }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "No response.";
+  return usePersonalKey
+    ? (data.choices?.[0]?.message?.content ?? "No response.")
+    : (data.content ?? "No response.");
 }
 
 const SUGGESTIONS = [
@@ -85,8 +102,6 @@ export default function AIAssistant({ onHide }: Props) {
   const [apiKey, setApiKey] = useState(getApiKey);
   const [keyInput, setKeyInput] = useState("");
   const [keySaved, setKeySaved] = useState(false);
-
-  const needsKey = !apiKey;
 
   const [model, setModel] = useState(getSavedModel);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -144,10 +159,6 @@ export default function AIAssistant({ onHide }: Props) {
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || loading) return;
-    if (needsKey) {
-      setShowSettings(true);
-      return;
-    }
     const userMsg: Message = { role: "user", content };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -247,13 +258,13 @@ export default function AIAssistant({ onHide }: Props) {
                 >
                   <span
                     style={{
-                      color: needsKey ? "#f6465d" : "#0ecb81",
+                      color: "#0ecb81",
                       fontSize: 9,
                     }}
                   >
                     ●
                   </span>
-                  <span>{needsKey ? "Needs API key" : "Powered by Groq"}</span>
+                  <span>Powered by Groq</span>
                 </div>
               </div>
             </div>
@@ -290,7 +301,7 @@ export default function AIAssistant({ onHide }: Props) {
                   className="ai-key-label"
                   style={{ color: "#38e0f8", marginBottom: 6 }}
                 >
-                  Groq API Key
+                  Optional Groq API Key
                   {storedKey && (
                     <span
                       style={{ color: "#0ecb81", fontSize: 10, marginLeft: 6 }}
@@ -376,7 +387,8 @@ export default function AIAssistant({ onHide }: Props) {
                         marginTop: 5,
                       }}
                     >
-                      Free key at{" "}
+                      Optional. Otherwise FrostDex provides access. Personal
+                      keys are available at{" "}
                       <a
                         href="https://console.groq.com"
                         target="_blank"
@@ -432,43 +444,7 @@ export default function AIAssistant({ onHide }: Props) {
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            {needsKey && !showSettings && (
-              <div className="ai-welcome">
-                <div className="ai-welcome-icon">❄</div>
-                <div className="ai-welcome-title">FrostAI</div>
-                <div
-                  className="ai-welcome-sub"
-                  style={{ color: "rgba(246,70,93,0.85)", marginBottom: 10 }}
-                >
-                  API key not configured.
-                </div>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  style={{
-                    background: "#38e0f8",
-                    color: "#000",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "8px 18px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Add Groq API Key
-                </button>
-                <p
-                  style={{
-                    fontSize: 10,
-                    color: "rgba(180,190,210,0.35)",
-                    marginTop: 8,
-                  }}
-                >
-                  Free at console.groq.com
-                </p>
-              </div>
-            )}
-            {messages.length === 0 && !showSettings && !needsKey && (
+            {messages.length === 0 && !showSettings && (
               <div className="ai-welcome">
                 <div className="ai-welcome-icon">❄</div>
                 <div className="ai-welcome-title">FrostAI</div>
