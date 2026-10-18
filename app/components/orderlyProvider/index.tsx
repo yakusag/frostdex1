@@ -1,7 +1,4 @@
 import { ReactNode, useCallback, lazy, Suspense } from "react";
-import { OrderlyAppProvider } from "@orderly.network/react-app";
-import { useOrderlyConfig } from "@/utils/config";
-import type { NetworkId } from "@orderly.network/types";
 import {
   LocaleProvider,
   LocaleCode,
@@ -9,25 +6,33 @@ import {
   defaultLanguages,
   Resources,
 } from "@orderly.network/i18n";
+import { OrderlyAppProvider } from "@orderly.network/react-app";
+import type { NetworkId } from "@orderly.network/types";
+import { DemoGraduationChecker } from "@/components/DemoGraduationChecker";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import {
+  ExtendLocaleMessages,
+  extendMessages,
+  extendMessagesAr,
+  extendMessagesMa,
+} from "@/i18n/extend";
 import { withBasePath } from "@/utils/base-path";
-import { getSEOConfig, getUserLanguage } from "@/utils/seo";
+import { useOrderlyConfig } from "@/utils/config";
 import {
   getRuntimeConfigBoolean,
   getRuntimeConfigArray,
   getRuntimeConfig,
 } from "@/utils/runtime-config";
+import { getSEOConfig, getUserLanguage } from "@/utils/seo";
 import { createSymbolDataAdapter } from "@/utils/symbol-filter";
-import { DemoGraduationChecker } from "@/components/DemoGraduationChecker";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
 import ServiceDisclaimerDialog from "./ServiceDisclaimerDialog";
-import { ExtendLocaleMessages, extendMessages, extendMessagesAr, extendMessagesDz, extendMessagesMa } from "@/i18n/extend";
+
 const NETWORK_ID_KEY = "orderly_network_id";
 
 //  preload extend messages to prevent the key name from being displayed when the language file is loaded slowly
 const resources: Resources<ExtendLocaleMessages> = {
   [LocaleEnum.en]: extendMessages,
   ["ar" as string]: extendMessagesAr,
-  ["dz" as string]: extendMessagesDz,
   ["ma" as string]: extendMessagesMa,
 };
 
@@ -57,7 +62,9 @@ const setNetworkId = (networkId: NetworkId) => {
 const getAvailableLanguages = (): string[] => {
   const languages = getRuntimeConfigArray("VITE_AVAILABLE_LANGUAGES");
 
-  return languages.length > 0 ? languages : ["en"];
+  return languages.length > 0
+    ? languages.filter((language) => language !== "dz")
+    : ["en"];
 };
 
 const getDefaultLanguage = (): LocaleCode => {
@@ -70,6 +77,11 @@ const getDefaultLanguage = (): LocaleCode => {
     const langParam = urlParams.get("lang");
     if (langParam && availableLanguages.includes(langParam)) {
       return langParam as LocaleCode;
+    }
+
+    const savedLanguage = localStorage.getItem("frostdex_lang");
+    if (savedLanguage && availableLanguages.includes(savedLanguage)) {
+      return savedLanguage as LocaleCode;
     }
   }
 
@@ -85,10 +97,10 @@ const getDefaultLanguage = (): LocaleCode => {
 };
 
 const PrivyConnector = lazy(
-  () => import("@/components/orderlyProvider/privyConnector")
+  () => import("@/components/orderlyProvider/privyConnector"),
 );
 const WalletConnector = lazy(
-  () => import("@/components/orderlyProvider/walletConnector")
+  () => import("@/components/orderlyProvider/walletConnector"),
 );
 
 const OrderlyProvider = (props: { children: ReactNode }) => {
@@ -99,7 +111,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   const usePrivy = !!privyAppId;
 
   const parseChainIds = (
-    envVar: string | undefined
+    envVar: string | undefined,
   ): Array<{ id: number }> | undefined => {
     if (!envVar) return undefined;
     return envVar
@@ -111,7 +123,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   };
 
   const parseDefaultChain = (
-    envVar: string | undefined
+    envVar: string | undefined,
   ): { mainnet: { id: number } } | undefined => {
     if (!envVar) return undefined;
 
@@ -137,7 +149,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       : undefined;
 
   const defaultChain = parseDefaultChain(
-    getRuntimeConfig("VITE_DEFAULT_CHAIN")
+    getRuntimeConfig("VITE_DEFAULT_CHAIN"),
   );
 
   const dataAdapter = createSymbolDataAdapter();
@@ -157,7 +169,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
         }, 100);
       }
     },
-    []
+    [],
   );
 
   const RTL_LOCALES = ["ar", "ma"];
@@ -209,10 +221,10 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
   ];
   const filteredLanguages = [
     ...defaultLanguages.filter((lang) =>
-      availableLanguages.includes(lang.localCode)
+      availableLanguages.includes(lang.localCode),
     ),
     ...customLanguages.filter((lang) =>
-      availableLanguages.includes(lang.localCode)
+      availableLanguages.includes(lang.localCode),
     ),
   ];
 
@@ -229,7 +241,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       dataAdapter={dataAdapter}
       restrictedInfo={{
         customRestrictedRegions: getRuntimeConfigArray(
-          "VITE_RESTRICTED_REGIONS"
+          "VITE_RESTRICTED_REGIONS",
         ),
       }}
     >
