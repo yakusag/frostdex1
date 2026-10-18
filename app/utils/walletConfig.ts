@@ -104,6 +104,7 @@ export const getOnboardEvmWallets = () => {
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
       projectId: walletConnectProjectId,
+      additionalRequiredMethods: ["eth_signTypedData_v4"],
       qrModalOptions: {
         themeMode: "dark",
       },
