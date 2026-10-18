@@ -470,7 +470,7 @@ export const useOrderlyConfig = () => {
                 display: "inline-flex",
                 alignItems: "center",
                 overflow: "hidden",
-                maxHeight: "52px",
+                maxHeight: "100px",
                 flexShrink: 0,
               }}
             >
@@ -479,7 +479,7 @@ export const useOrderlyConfig = () => {
                   src={withBasePath("/logo.webp")}
                   alt="FrostDex"
                   style={{
-                    height: "48px",
+                    height: "96px",
                     width: "auto",
                     objectFit: "contain",
                     maxWidth: "min(148px, calc(100vw - 180px))",

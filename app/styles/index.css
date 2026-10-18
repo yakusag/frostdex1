@@ -184,7 +184,7 @@ body {
 
   .oui-scaffold-topNavbar:has(.frost-mobile-header),
   .oui-scaffold-topNavbar:has(.frost-mobile-header) > .oui-flex {
-    height: 56px !important;
+    height: 104px !important;
   }
 }
 
