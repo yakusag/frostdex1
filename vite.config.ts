@@ -1,10 +1,10 @@
-import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
-import { cjsInterop } from "vite-plugin-cjs-interop";
-import { nodePolyfills } from "vite-plugin-node-polyfills";
 import fs from "fs";
 import path from "path";
+import { defineConfig, Plugin } from "vite";
+import { cjsInterop } from "vite-plugin-cjs-interop";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
+import tsconfigPaths from "vite-tsconfig-paths";
 
 function loadConfigTitle(): string {
   try {
@@ -41,18 +41,43 @@ function htmlTitlePlugin(): Plugin {
 
 export default defineConfig(() => {
   const basePath = process.env.PUBLIC_PATH || "/";
+  const usePrivy = !!process.env.VITE_PRIVY_APP_ID;
+  const dropConfig: Array<"console" | "debugger"> =
+    process.env.NODE_ENV === "production" ? ["console", "debugger"] : [];
+
+  const esbuildOptions = {
+    drop: dropConfig,
+    legalComments: "none" as const,
+    treeShaking: true,
+    target: "es2022",
+    minifyIdentifiers: true,
+    minifySyntax: true,
+    minifyWhitespace: true,
+  } as const;
+
+  const privyAlias: Record<string, string> = usePrivy
+    ? {}
+    : {
+        "@orderly.network/wallet-connector-privy": path.resolve(
+          __dirname,
+          "app/stubs/privy-wallet.tsx",
+        ),
+      };
 
   return {
     server: {
       open: false,
       host: "0.0.0.0",
       port: 5000,
-      allowedHosts: true,
+      allowedHosts: true as const,
     },
     define: {
       __GROQ_KEY__: JSON.stringify(process.env.GROQ_API_KEY || ""),
     },
     base: basePath,
+    resolve: {
+      alias: privyAlias,
+    },
     plugins: [
       react(),
       tsconfigPaths(),
@@ -71,21 +96,36 @@ export default defineConfig(() => {
       cssCodeSplit: true,
       reportCompressedSize: false,
       sourcemap: false,
-      minify: "esbuild",
+      minify: "esbuild" as const,
       assetsInlineLimit: 8192,
       modulePreload: { polyfill: false },
       rollupOptions: {
         maxParallelFileOps: 4,
         output: {
           manualChunks: {
-            "vendor-react":     ["react", "react-dom", "react-router-dom"],
-            "vendor-orderly-a": ["@orderly.network/react-app", "@orderly.network/ui"],
-            "vendor-orderly-b": ["@orderly.network/ui-scaffold", "@orderly.network/trading"],
-            "vendor-orderly-c": ["@orderly.network/markets", "@orderly.network/portfolio"],
-            "vendor-orderly-d": ["@orderly.network/affiliate", "@orderly.network/vaults"],
+            "vendor-react": ["react", "react-dom", "react-router-dom"],
+            "vendor-orderly-a": [
+              "@orderly.network/react-app",
+              "@orderly.network/ui",
+            ],
+            "vendor-orderly-b": [
+              "@orderly.network/ui-scaffold",
+              "@orderly.network/trading",
+            ],
+            "vendor-orderly-c": [
+              "@orderly.network/markets",
+              "@orderly.network/portfolio",
+            ],
+            "vendor-orderly-d": [
+              "@orderly.network/affiliate",
+              "@orderly.network/vaults",
+            ],
             "vendor-orderly-e": ["@orderly.network/wallet-connector"],
-            "vendor-web3":      ["wagmi"],
-            "vendor-solana":    ["@solana/wallet-adapter-base", "@solana/wallet-adapter-wallets"],
+            "vendor-web3": ["wagmi"],
+            "vendor-solana": [
+              "@solana/wallet-adapter-base",
+              "@solana/wallet-adapter-wallets",
+            ],
           },
           compact: true,
         },
@@ -95,15 +135,7 @@ export default defineConfig(() => {
       include: ["react", "react-dom", "react-router-dom"],
       force: false,
     },
-    esbuild: {
-      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
-      legalComments: "none",
-      treeShaking: true,
-      target: "es2022",
-      minifyIdentifiers: true,
-      minifySyntax: true,
-      minifyWhitespace: true,
-    },
+    esbuild: esbuildOptions,
     css: {
       devSourcemap: false,
     },
