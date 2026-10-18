@@ -71,9 +71,6 @@ export default defineConfig(() => {
       port: 5000,
       allowedHosts: true as const,
     },
-    define: {
-      __GROQ_KEY__: JSON.stringify(process.env.GROQ_API_KEY || ""),
-    },
     base: basePath,
     resolve: {
       alias: privyAlias,

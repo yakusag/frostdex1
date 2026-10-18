@@ -32,12 +32,7 @@ function getSavedModel(): string {
 }
 
 function getApiKey(): string {
-  return (
-    localStorage.getItem(LS_KEY) ||
-    (window as any).__RUNTIME_CONFIG__?.GROQ_API_KEY ||
-    (typeof __GROQ_KEY__ !== "undefined" ? __GROQ_KEY__ : "") ||
-    ""
-  );
+  return localStorage.getItem(LS_KEY) || "";
 }
 
 async function askGroq(
