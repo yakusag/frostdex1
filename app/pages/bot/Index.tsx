@@ -13,7 +13,7 @@ import type { Candle } from "@/components/BotChart";
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
-type BotStrategy = "grid" | "dca" | "signal";
+type BotStrategy = "grid" | "dca" | "signal" | "trend";
 type BotStatus = "running" | "stopped" | "paused";
 
 interface BotConfig {
@@ -29,6 +29,9 @@ interface BotConfig {
   createdAt: number;
   params: Record<string, string | number>;
   liveMode: boolean;
+  paperPosition?: ManagedPosition | null;
+  paperRealizedPnl?: number;
+  paperLastCandle?: number;
 }
 
 interface TradeLog {
@@ -49,6 +52,14 @@ interface PendingOrder {
   side: "BUY" | "SELL";
   qty: string;
   triggerPrice: number;
+  position?: ManagedPosition;
+}
+
+interface ManagedPosition {
+  qty: number;
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
 }
 
 const STORAGE_KEY = "frostdex_bots_v1";
@@ -72,16 +83,16 @@ const POPULAR_SYMBOLS = [
 ];
 
 const SYMBOL_DISPLAY_MAP: Record<string, string> = {
-  "PERP_XAU_USDC":           "XAU/USDC",
-  "PERP_XAG_USDC":           "XAG/USDC",
-  "PERP_CL_USDC":            "OIL/USDC",
+  "PERP_XAU_USDC": "XAU/USDC",
+  "PERP_XAG_USDC": "XAG/USDC",
+  "PERP_CL_USDC": "OIL/USDC",
   "PERP_NATGAS_USDC_arthur": "GAS/USDC",
 };
 
 const BASE_SYMBOL_MAP: Record<string, string> = {
-  "PERP_XAU_USDC":           "XAU",
-  "PERP_XAG_USDC":           "XAG",
-  "PERP_CL_USDC":            "CL",
+  "PERP_XAU_USDC": "XAU",
+  "PERP_XAG_USDC": "XAG",
+  "PERP_CL_USDC": "CL",
   "PERP_NATGAS_USDC_arthur": "NATGAS",
 };
 
@@ -133,6 +144,22 @@ function computeEMA(candles: Candle[], period: number): number[] {
   return ema;
 }
 
+function computeATR(candles: Candle[], period = 14): number[] {
+  const atr: number[] = Array(candles.length).fill(0);
+  for (let i = 1; i < candles.length; i++) {
+    const trueRange = Math.max(
+      candles[i].h - candles[i].l,
+      Math.abs(candles[i].h - candles[i - 1].c),
+      Math.abs(candles[i].l - candles[i - 1].c)
+    );
+    atr[i] =
+      i < period
+        ? (atr[i - 1] * (i - 1) + trueRange) / i
+        : (atr[i - 1] * (period - 1) + trueRange) / period;
+  }
+  return atr;
+}
+
 const STRATEGY_INFO: Record<
   BotStrategy,
   { label: string; desc: string; icon: string; color: string }
@@ -154,6 +181,12 @@ const STRATEGY_INFO: Record<
     desc: "Trades on RSI + EMA crossover signals for momentum-based entries.",
     icon: "◈",
     color: "#f0b90b",
+  },
+  trend: {
+    label: "Risk-Managed Trend",
+    desc: "Trend-confirmed entries, 1% risk sizing, ATR stop and 2.5R target. Risk is limited, not eliminated.",
+    icon: "↗",
+    color: "#ff8a65",
   },
 };
 
@@ -215,6 +248,13 @@ function BotLiveEngine({
   const entryPriceRef = useRef(0);
   const lastEvalRef = useRef(0);
   const dcaCycleRef = useRef(0);
+  const [managedPosition, setManagedPosition] = useState<ManagedPosition | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`frostdex_bot_position_${bot.id}`) || "null");
+    } catch {
+      return null;
+    }
+  });
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
 
   useEffect(() => {
@@ -279,6 +319,61 @@ function BotLiveEngine({
       shouldBuy = dcaCycleRef.current % intervalsPerCycle === 0;
       shouldSell =
         inPositionRef.current && price > entryPriceRef.current * 1.05;
+    } else if (bot.strategy === "trend") {
+      const last = candles.length - 1;
+      const emaFast = computeEMA(candles, 9);
+      const emaSlow = computeEMA(candles, 21);
+      const rsi = computeRSI(candles, 14);
+      const atr = computeATR(candles, 14)[last];
+      const stopAtr = Number(bot.params.stopAtr) || 2;
+      const rewardRisk = Number(bot.params.rewardRisk) || 2.5;
+      const position = managedPosition;
+
+      shouldBuy =
+        !position &&
+        emaFast[last] > emaSlow[last] &&
+        emaFast[last - 1] <= emaSlow[last - 1] &&
+        rsi[last] >= 45 &&
+        rsi[last] < 70 &&
+        atr > 0;
+      shouldSell =
+        !!position &&
+        (price <= position.stopPrice ||
+          price >= position.targetPrice ||
+          emaFast[last] < emaSlow[last]);
+
+      if (!pendingOrder && shouldBuy && atr > 0) {
+        const stopDistance = atr * stopAtr;
+        const riskBudget = investment * 0.01;
+        const maxNotional = investment * 0.25;
+        const qty = Math.floor(
+          Math.min(riskBudget / stopDistance, maxNotional / price) * 1_000_000
+        ) / 1_000_000;
+        if (qty >= minQty) {
+          setPendingOrder({
+            botId: bot.id,
+            symbol: bot.symbol,
+            side: "BUY",
+            qty: qty.toFixed(6),
+            triggerPrice: price,
+            position: {
+              qty,
+              entryPrice: price,
+              stopPrice: price - stopDistance,
+              targetPrice: price + stopDistance * rewardRisk,
+            },
+          });
+        }
+      } else if (!pendingOrder && shouldSell && position) {
+        setPendingOrder({
+          botId: bot.id,
+          symbol: bot.symbol,
+          side: "SELL",
+          qty: position.qty.toFixed(6),
+          triggerPrice: price,
+        });
+      }
+      return;
     }
 
     if (shouldBuy && !pendingOrder) {
@@ -302,7 +397,7 @@ function BotLiveEngine({
         triggerPrice: price,
       });
     }
-  }, [feed.latestPrice, feed.candles, bot, accountState, pendingOrder]);
+  }, [feed.latestPrice, feed.candles, bot, accountState, managedPosition, pendingOrder]);
 
   if (pendingOrder) {
     return (
@@ -310,6 +405,15 @@ function BotLiveEngine({
         pending={pendingOrder}
         onDone={(result) => {
           if (result.success) {
+            if (bot.strategy === "trend") {
+              const nextPosition = pendingOrder.side === "BUY" ? pendingOrder.position ?? null : null;
+              setManagedPosition(nextPosition);
+              if (nextPosition) {
+                localStorage.setItem(`frostdex_bot_position_${bot.id}`, JSON.stringify(nextPosition));
+              } else {
+                localStorage.removeItem(`frostdex_bot_position_${bot.id}`);
+              }
+            }
             onTradeExecuted({
               botId: bot.id,
               side: pendingOrder.side,
@@ -326,6 +430,127 @@ function BotLiveEngine({
       />
     );
   }
+
+  return null;
+}
+
+function BotPaperEngine({
+  bot,
+  onPaperUpdate,
+}: {
+  bot: BotConfig;
+  onPaperUpdate: (
+    botId: string,
+    update: Pick<BotConfig, "paperPosition" | "paperRealizedPnl" | "paperLastCandle" | "pnl" | "pnlPct">,
+    trade?: Omit<TradeLog, "id">
+  ) => void;
+}) {
+  const feed = useBinanceFeed(getBaseSymbol(bot.symbol), "15m", true);
+
+  useEffect(() => {
+    if (bot.status !== "running" || !feed.latestPrice || feed.candles.length < 22) return;
+
+    const price = feed.latestPrice;
+    const candles = feed.candles;
+    const last = candles.length - 1;
+    const candleTime = candles[last].t;
+    let position = bot.paperPosition ?? null;
+    let realizedPnl = bot.paperRealizedPnl ?? 0;
+    let trade: Omit<TradeLog, "id"> | undefined;
+
+    if (position) {
+      let exitPrice: number | null = null;
+      if (price <= position.stopPrice) exitPrice = position.stopPrice;
+      else if (price >= position.targetPrice) exitPrice = position.targetPrice;
+      else if (
+        candleTime !== bot.paperLastCandle &&
+        computeEMA(candles, 9)[last] < computeEMA(candles, 21)[last]
+      ) {
+        exitPrice = price;
+      }
+
+      if (exitPrice !== null) {
+        realizedPnl += position.qty * (exitPrice - position.entryPrice);
+        trade = {
+          botId: bot.id,
+          side: "SELL",
+          symbol: bot.symbol,
+          qty: position.qty,
+          price: exitPrice,
+          ts: Date.now(),
+          live: false,
+        };
+        position = null;
+      }
+    } else if (candleTime !== bot.paperLastCandle) {
+      const emaFast = computeEMA(candles, 9);
+      const emaSlow = computeEMA(candles, 21);
+      const rsi = computeRSI(candles, 14);
+      const atr = computeATR(candles, 14)[last];
+      const shouldBuy =
+        emaFast[last] > emaSlow[last] &&
+        emaFast[last - 1] <= emaSlow[last - 1] &&
+        rsi[last] >= 45 &&
+        rsi[last] < 70 &&
+        atr > 0;
+
+      if (shouldBuy) {
+        const stopDistance = atr * (Number(bot.params.stopAtr) || 2);
+        const riskBudget = bot.investment * 0.01;
+        const maxNotional = bot.investment * 0.25;
+        const qty = Math.floor(
+          Math.min(riskBudget / stopDistance, maxNotional / price) * 1_000_000
+        ) / 1_000_000;
+
+        if (qty >= 0.001) {
+          position = {
+            qty,
+            entryPrice: price,
+            stopPrice: price - stopDistance,
+            targetPrice:
+              price + stopDistance * (Number(bot.params.rewardRisk) || 2.5),
+          };
+          trade = {
+            botId: bot.id,
+            side: "BUY",
+            symbol: bot.symbol,
+            qty,
+            price,
+            ts: Date.now(),
+            live: false,
+          };
+        }
+      }
+    }
+
+    const pnl =
+      realizedPnl +
+      (position ? position.qty * (price - position.entryPrice) : 0);
+    onPaperUpdate(
+      bot.id,
+      {
+        paperPosition: position,
+        paperRealizedPnl: realizedPnl,
+        paperLastCandle: candleTime,
+        pnl,
+        pnlPct: (pnl / bot.investment) * 100,
+      },
+      trade
+    );
+  }, [
+    bot.id,
+    bot.status,
+    bot.investment,
+    bot.symbol,
+    bot.params.stopAtr,
+    bot.params.rewardRisk,
+    bot.paperPosition,
+    bot.paperRealizedPnl,
+    bot.paperLastCandle,
+    feed.latestPrice,
+    feed.candles,
+    onPaperUpdate,
+  ]);
 
   return null;
 }
@@ -367,6 +592,8 @@ export default function BotPage() {
   const [dcaAmount, setDcaAmount] = useState("50");
   const [sigRsi, setSigRsi] = useState("14");
   const [sigEma, setSigEma] = useState("20");
+  const [trendStopAtr, setTrendStopAtr] = useState("2");
+  const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
 
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -391,7 +618,7 @@ export default function BotPage() {
           .map((r: any) => r.symbol as string)
           .filter(Boolean)
           .sort((a: string, b: string) => {
-            const priority = ["PERP_BTC_USDC","PERP_ETH_USDC","PERP_SOL_USDC","PERP_ARB_USDC","PERP_BNB_USDC"];
+            const priority = ["PERP_BTC_USDC", "PERP_ETH_USDC", "PERP_SOL_USDC", "PERP_ARB_USDC", "PERP_BNB_USDC"];
             const ai = priority.indexOf(a), bi = priority.indexOf(b);
             if (ai !== -1 && bi !== -1) return ai - bi;
             if (ai !== -1) return -1;
@@ -400,7 +627,7 @@ export default function BotPage() {
           });
         if (syms.length > 0) setAllSymbols(syms);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Simulate PnL for non-live running bots
@@ -408,7 +635,7 @@ export default function BotPage() {
     tickerRef.current = setInterval(() => {
       setBots((prev) => {
         const updated = prev.map((bot) => {
-          if (bot.status !== "running" || bot.liveMode) return bot;
+          if (bot.status !== "running" || bot.liveMode || bot.strategy === "trend") return bot;
           const delta = (Math.random() - 0.47) * (bot.investment * 0.002);
           const newPnl = bot.pnl + delta;
           const newPct = (newPnl / bot.investment) * 100;
@@ -442,6 +669,47 @@ export default function BotPage() {
     []
   );
 
+  const handlePaperUpdate = useCallback(
+    (
+      botId: string,
+      update: Pick<BotConfig, "paperPosition" | "paperRealizedPnl" | "paperLastCandle" | "pnl" | "pnlPct">,
+      trade?: Omit<TradeLog, "id">
+    ) => {
+      if (trade) {
+        setLogs((prev) => {
+          const updated = [{ ...trade, id: generateId() }, ...prev.slice(0, 199)];
+          localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
+      setBots((prev) => {
+        const updated = prev.map((current) =>
+          current.id === botId
+            ? {
+              ...current,
+              ...update,
+              trades: current.trades + (trade ? 1 : 0),
+            }
+            : current
+        );
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    },
+    []
+  );
+
+  const configureLiveBot = (bot: BotConfig) => {
+    setStrategy("trend");
+    setSymbol(bot.symbol);
+    setInvestment(String(bot.investment));
+    setBotName(bot.name);
+    setTrendStopAtr(String(bot.params.stopAtr ?? 2));
+    setTrendRewardRisk(String(bot.params.rewardRisk ?? 2.5));
+    setLiveMode(true);
+    setTab("create");
+  };
+
   const handleCreate = () => {
     setCreating(true);
     const willUseLive = liveMode && isConnected;
@@ -449,13 +717,15 @@ export default function BotPage() {
       const params: Record<string, string | number> =
         strategy === "grid"
           ? {
-              upper: gridUpper || "auto",
-              lower: gridLower || "auto",
-              grids: Number(gridCount),
-            }
+            upper: gridUpper || "auto",
+            lower: gridLower || "auto",
+            grids: Number(gridCount),
+          }
           : strategy === "dca"
-          ? { interval: dcaInterval, amount: Number(dcaAmount) }
-          : { rsi: Number(sigRsi), ema: Number(sigEma) };
+            ? { interval: dcaInterval, amount: Number(dcaAmount) }
+            : strategy === "signal"
+              ? { rsi: Number(sigRsi), ema: Number(sigEma) }
+              : { stopAtr: Number(trendStopAtr), rewardRisk: Number(trendRewardRisk) };
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -486,9 +756,9 @@ export default function BotPage() {
       bots.map((b) =>
         b.id === id
           ? {
-              ...b,
-              status: b.status === "running" ? "stopped" : "running",
-            }
+            ...b,
+            status: b.status === "running" ? "stopped" : "running",
+          }
           : b
       )
     );
@@ -527,6 +797,15 @@ export default function BotPage() {
             key={bot.id}
             bot={bot}
             onTradeExecuted={handleTradeExecuted}
+          />
+        ))}
+      {bots
+        .filter((b) => b.status === "running" && !b.liveMode && b.strategy === "trend")
+        .map((bot) => (
+          <BotPaperEngine
+            key={bot.id}
+            bot={bot}
+            onPaperUpdate={handlePaperUpdate}
           />
         ))}
 
@@ -650,36 +929,36 @@ export default function BotPage() {
             >
               ❄ Powered by FrostDex
             </span>
-          {liveCount > 0 && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#0ecb81",
-                background: "rgba(14,203,129,0.1)",
-                border: "1px solid rgba(14,203,129,0.25)",
-                borderRadius: 4,
-                padding: "2px 8px",
-              }}
-            >
+            {liveCount > 0 && (
               <span
                 style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: "#0ecb81",
-                  boxShadow: "0 0 6px #0ecb81",
-                  animation: "dot-pulse 1.5s ease infinite",
-                  display: "inline-block",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#0ecb81",
+                  background: "rgba(14,203,129,0.1)",
+                  border: "1px solid rgba(14,203,129,0.25)",
+                  borderRadius: 4,
+                  padding: "2px 8px",
                 }}
-              />
-              {liveCount} bot{liveCount > 1 ? "s" : ""} trading live
-            </span>
-          )}
-        </div>
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#0ecb81",
+                    boxShadow: "0 0 6px #0ecb81",
+                    animation: "dot-pulse 1.5s ease infinite",
+                    display: "inline-block",
+                  }}
+                />
+                {liveCount} bot{liveCount > 1 ? "s" : ""} trading live
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -726,9 +1005,9 @@ export default function BotPage() {
             label: "Free Collateral",
             value: isConnected
               ? (freeCollateral ?? 0).toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
               : "—",
             prefix: isConnected ? "$" : "",
             color: "#eaecef",
@@ -793,10 +1072,10 @@ export default function BotPage() {
             {t === "bots"
               ? `My Bots (${bots.length})`
               : t === "create"
-              ? "+ Create Bot"
-              : t === "backtest"
-              ? "📊 Backtest"
-              : `Trade History (${logs.length})`}
+                ? "+ Create Bot"
+                : t === "backtest"
+                  ? "📊 Backtest"
+                  : `Trade History (${logs.length})`}
           </button>
         ))}
       </div>
@@ -870,13 +1149,14 @@ export default function BotPage() {
                             width: 40,
                             height: 40,
                             borderRadius: 10,
-                            background: `rgba(${
-                              info.color === "#38e0f8"
-                                ? "56,224,248"
-                                : info.color === "#0ecb81"
+                            background: `rgba(${info.color === "#38e0f8"
+                              ? "56,224,248"
+                              : info.color === "#0ecb81"
                                 ? "14,203,129"
-                                : "240,185,11"
-                            },0.12)`,
+                                : info.color === "#ff8a65"
+                                  ? "255,138,101"
+                                  : "240,185,11"
+                              },0.12)`,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -905,9 +1185,8 @@ export default function BotPage() {
                               {bot.name}
                             </span>
                             <span
-                              className={`bot-status-dot ${
-                                isRunning ? "running" : "stopped"
-                              }`}
+                              className={`bot-status-dot ${isRunning ? "running" : "stopped"
+                                }`}
                             />
                             <span
                               style={{
@@ -948,7 +1227,7 @@ export default function BotPage() {
                                   letterSpacing: 0.5,
                                 }}
                               >
-                                SIMULATION
+                                {bot.strategy === "trend" ? "PAPER · LIVE PRICES" : "SIMULATION"}
                               </span>
                             )}
                           </div>
@@ -998,17 +1277,34 @@ export default function BotPage() {
                         </div>
 
                         <div style={{ display: "flex", gap: 8 }}>
+                          {!isLive && bot.strategy === "trend" && (
+                            <button
+                              onClick={() => configureLiveBot(bot)}
+                              style={{
+                                background: "rgba(56,224,248,0.08)",
+                                border: "1px solid rgba(56,224,248,0.25)",
+                                borderRadius: 6,
+                                color: "#38e0f8",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                padding: "6px 10px",
+                                fontFamily: "Manrope, sans-serif",
+                              }}
+                            >
+                              Configure Live
+                            </button>
+                          )}
                           <button
                             onClick={() => toggleBot(bot.id)}
                             style={{
                               background: isRunning
                                 ? "rgba(246,70,93,0.1)"
                                 : "rgba(14,203,129,0.1)",
-                              border: `1px solid ${
-                                isRunning
-                                  ? "rgba(246,70,93,0.25)"
-                                  : "rgba(14,203,129,0.25)"
-                              }`,
+                              border: `1px solid ${isRunning
+                                ? "rgba(246,70,93,0.25)"
+                                : "rgba(14,203,129,0.25)"
+                                }`,
                               borderRadius: 6,
                               color: isRunning ? "#f6465d" : "#0ecb81",
                               cursor: "pointer",
@@ -1099,11 +1395,11 @@ export default function BotPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
+                gridTemplateColumns: "repeat(2, 1fr)",
                 gap: 10,
               }}
             >
-              {(["grid", "dca", "signal"] as BotStrategy[]).map((s) => {
+              {(["grid", "dca", "signal", "trend"] as BotStrategy[]).map((s) => {
                 const info = STRATEGY_INFO[s];
                 const selected = strategy === s;
                 return (
@@ -1112,17 +1408,17 @@ export default function BotPage() {
                     onClick={() => setStrategy(s)}
                     style={{
                       background: selected
-                        ? `rgba(${
-                            info.color === "#38e0f8"
-                              ? "56,224,248"
-                              : info.color === "#0ecb81"
-                              ? "14,203,129"
+                        ? `rgba(${info.color === "#38e0f8"
+                          ? "56,224,248"
+                          : info.color === "#0ecb81"
+                            ? "14,203,129"
+                            : info.color === "#ff8a65"
+                              ? "255,138,101"
                               : "240,185,11"
-                          },0.1)`
+                        },0.1)`
                         : "rgb(20,24,30)",
-                      border: `1px solid ${
-                        selected ? info.color : "rgba(30,36,50,1)"
-                      }`,
+                      border: `1px solid ${selected ? info.color : "rgba(30,36,50,1)"
+                        }`,
                       borderRadius: 10,
                       padding: "14px 10px",
                       cursor: "pointer",
@@ -1465,17 +1761,64 @@ export default function BotPage() {
             </div>
           )}
 
+          {strategy === "trend" && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={sectionLabelStyle}>Risk-Managed Trend Parameters</div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <label style={labelStyle}>Stop Distance (ATR)</label>
+                  <input
+                    type="number"
+                    value={trendStopAtr}
+                    onChange={(e) => setTrendStopAtr(e.target.value)}
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Target (R multiple)</label>
+                  <input
+                    type="number"
+                    value={trendRewardRisk}
+                    onChange={(e) => setTrendRewardRisk(e.target.value)}
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: "rgba(180,190,210,0.5)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Position size risks up to 1% of the bot allocation, capped at 25% notional. Live stops are monitored by this app and can slip or fail during outages.
+              </div>
+            </div>
+          )}
+
           {/* Live Mode Toggle */}
           <div
             style={{
               background: liveMode
                 ? "rgba(14,203,129,0.06)"
                 : "rgba(20,24,30,1)",
-              border: `1px solid ${
-                liveMode
-                  ? "rgba(14,203,129,0.25)"
-                  : "rgba(30,36,50,1)"
-              }`,
+              border: `1px solid ${liveMode
+                ? "rgba(14,203,129,0.25)"
+                : "rgba(30,36,50,1)"
+                }`,
               borderRadius: 8,
               padding: "14px 16px",
               marginBottom: 20,
@@ -1522,7 +1865,9 @@ export default function BotPage() {
                   ? isConnected
                     ? "Real orders will be placed on Orderly Network using your portfolio."
                     : "⚠ Connect your wallet first to use live trading."
-                  : "Bot runs in simulation mode — no real orders are placed."}
+                  : strategy === "trend"
+                    ? "Paper trades follow live Binance prices and the selected strategy. No real orders or funds are used."
+                    : "Bot runs in simulation mode — no real orders are placed."}
               </div>
             </div>
             <button
@@ -1587,7 +1932,7 @@ export default function BotPage() {
               padding: "14px",
               background:
                 creating ||
-                (liveMode && !isConnected)
+                  (liveMode && !isConnected)
                   ? "rgba(56,224,248,0.3)"
                   : "linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%)",
               border: "none",
@@ -1607,9 +1952,8 @@ export default function BotPage() {
             {creating
               ? "Creating Bot..."
               : liveMode && !isConnected
-              ? "Connect Wallet to Use Live Mode"
-              : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
-                  liveMode ? " (Live)" : " (Simulation)"
+                ? "Connect Wallet to Use Live Mode"
+                : `🚀 Launch ${STRATEGY_INFO[strategy].label}${liveMode ? " (Live)" : " (Simulation)"
                 }`}
           </button>
         </div>

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import BotChart, { Candle, Signal } from "./BotChart";
 import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 
-type Strategy = "grid" | "dca" | "signal";
+type Strategy = "grid" | "dca" | "signal" | "trend";
 type Timeframe = "15m" | "1h" | "4h" | "1d";
 
 interface BacktestResult {
@@ -67,6 +67,22 @@ function computeEMA(candles: Candle[], period: number): number[] {
   return ema;
 }
 
+function computeATR(candles: Candle[], period = 14): number[] {
+  const atr: number[] = Array(candles.length).fill(0);
+  for (let i = 1; i < candles.length; i++) {
+    const trueRange = Math.max(
+      candles[i].h - candles[i].l,
+      Math.abs(candles[i].h - candles[i - 1].c),
+      Math.abs(candles[i].l - candles[i - 1].c)
+    );
+    atr[i] =
+      i < period
+        ? (atr[i - 1] * (i - 1) + trueRange) / i
+        : (atr[i - 1] * (period - 1) + trueRange) / period;
+  }
+  return atr;
+}
+
 function runBacktest(candles: Candle[], strategy: Strategy, params: Record<string, number>, investment: number): BacktestResult {
   const signals: Signal[] = [];
   const equity: number[] = [investment];
@@ -75,12 +91,15 @@ function runBacktest(candles: Candle[], strategy: Strategy, params: Record<strin
   let trades = 0;
   let wins = 0;
   let entryPrice = 0;
+  let stopPrice = 0;
+  let targetPrice = 0;
   let peak = investment;
   let maxDD = 0;
 
   const rsi = computeRSI(candles, params.rsiPeriod || 14);
   const emaFast = computeEMA(candles, params.emaFast || 9);
   const emaSlow = computeEMA(candles, params.emaSlow || 21);
+  const atr = computeATR(candles, 14);
 
   for (let i = 20; i < candles.length; i++) {
     const c = candles[i];
@@ -92,6 +111,7 @@ function runBacktest(candles: Candle[], strategy: Strategy, params: Record<strin
 
     let shouldBuy = false;
     let shouldSell = false;
+    let exitPrice = c.c;
 
     if (strategy === "signal") {
       const rsiBuy = params.rsiOversold || 35;
@@ -111,22 +131,58 @@ function runBacktest(candles: Candle[], strategy: Strategy, params: Record<strin
       const interval = params.intervalCandles || 8;
       shouldBuy = i % interval === 0 && cash >= (params.amountPerBuy || investment * 0.1);
       shouldSell = position > 0 && c.c > entryPrice * 1.05;
+    } else if (strategy === "trend") {
+      const stopAtr = params.stopAtr || 2;
+      const rewardRisk = params.rewardRisk || 2.5;
+      if (position === 0) {
+        shouldBuy =
+          emaFast[i] > emaSlow[i] &&
+          emaFast[i - 1] <= emaSlow[i - 1] &&
+          rsi[i] >= 45 &&
+          rsi[i] < 70 &&
+          atr[i] > 0;
+      } else if (c.l <= stopPrice) {
+        shouldSell = true;
+        exitPrice = stopPrice;
+      } else if (c.h >= targetPrice) {
+        shouldSell = true;
+        exitPrice = targetPrice;
+      } else if (emaFast[i] < emaSlow[i]) {
+        shouldSell = true;
+      }
     }
 
     if (shouldBuy && cash > c.c * 0.05) {
-      const amount = Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
-      position += amount / c.c;
-      entryPrice = c.c;
-      cash -= amount;
-      trades++;
-      signals.push({ t: c.t, price: c.c, side: "BUY" });
+      if (strategy === "trend") {
+        const stopDistance = atr[i] * (params.stopAtr || 2);
+        const quantity = Math.min(
+          (cash * 0.01) / stopDistance,
+          (cash * 0.25) / c.c
+        );
+        if (quantity > 0) {
+          position = quantity;
+          entryPrice = c.c;
+          cash -= position * c.c;
+          stopPrice = c.c - stopDistance;
+          targetPrice = c.c + stopDistance * (params.rewardRisk || 2.5);
+          trades++;
+          signals.push({ t: c.t, price: c.c, side: "BUY" });
+        }
+      } else {
+        const amount = Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
+        position += amount / c.c;
+        entryPrice = c.c;
+        cash -= amount;
+        trades++;
+        signals.push({ t: c.t, price: c.c, side: "BUY" });
+      }
     } else if (shouldSell && position > 0) {
-      const proceeds = position * c.c;
+      const proceeds = position * exitPrice;
       if (proceeds > entryPrice * (position)) wins++;
       cash += proceeds;
       position = 0;
       trades++;
-      signals.push({ t: c.t, price: c.c, side: "SELL" });
+      signals.push({ t: c.t, price: exitPrice, side: "SELL" });
     }
   }
 
@@ -211,6 +267,8 @@ export default function BotBacktest({ defaultStrategy = "signal", defaultSymbol 
   const [grids, setGrids] = useState(10);
   const [dcaInterval, setDcaInterval] = useState(8);
   const [dcaAmount, setDcaAmount] = useState(100);
+  const [trendStopAtr, setTrendStopAtr] = useState(2);
+  const [trendRewardRisk, setTrendRewardRisk] = useState(2.5);
 
   // Reset results when symbol/tf changes
   useEffect(() => {
@@ -226,8 +284,10 @@ export default function BotBacktest({ defaultStrategy = "signal", defaultSymbol 
         strategy === "signal"
           ? { rsiOversold, rsiOverbought, emaFast, emaSlow }
           : strategy === "grid"
-          ? { grids }
-          : { intervalCandles: dcaInterval, amountPerBuy: dcaAmount };
+            ? { grids }
+            : strategy === "dca"
+              ? { intervalCandles: dcaInterval, amountPerBuy: dcaAmount }
+              : { stopAtr: trendStopAtr, rewardRisk: trendRewardRisk };
       const res = runBacktest(snapshot, strategy, params, investment);
       setResult(res);
       setRunning(false);
@@ -273,7 +333,7 @@ export default function BotBacktest({ defaultStrategy = "signal", defaultSymbol 
         <div>
           <label style={labelSt}>Strategy</label>
           <div style={{ display: "flex", gap: 4 }}>
-            {(["grid", "dca", "signal"] as Strategy[]).map((s) => (
+            {(["grid", "dca", "signal", "trend"] as Strategy[]).map((s) => (
               <button key={s} onClick={() => setStrategy(s)} style={{
                 ...btnSm,
                 background: strategy === s ? "rgba(56,224,248,0.12)" : "rgb(20,24,30)",
@@ -345,6 +405,15 @@ export default function BotBacktest({ defaultStrategy = "signal", defaultSymbol 
           <>
             <ParamInput label="Buy every (candles)" value={dcaInterval} min={1} max={100} onChange={setDcaInterval} />
             <ParamInput label="Amount per buy ($)" value={dcaAmount} min={1} max={10000} onChange={setDcaAmount} />
+          </>
+        )}
+        {strategy === "trend" && (
+          <>
+            <ParamInput label="Stop Distance (ATR)" value={trendStopAtr} min={1} max={5} onChange={setTrendStopAtr} />
+            <ParamInput label="Target (R multiple)" value={trendRewardRisk} min={1} max={5} onChange={setTrendRewardRisk} />
+            <span style={{ alignSelf: "flex-end", fontSize: 11, color: "rgba(180,190,210,0.45)" }}>
+              1% risk per trade · max 25% exposure · excludes fees and slippage
+            </span>
           </>
         )}
       </div>
