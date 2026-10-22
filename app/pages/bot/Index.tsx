@@ -8,7 +8,6 @@ import {
 } from "react";
 import { useAccount, useCollateral, useOrderEntry } from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
-import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 import type { Candle } from "@/components/BotChart";
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
@@ -32,6 +31,7 @@ interface BotConfig {
   paperPosition?: ManagedPosition | null;
   paperRealizedPnl?: number;
   paperLastCandle?: number;
+  marketDataStatus?: "ready" | "unavailable";
 }
 
 interface TradeLog {
@@ -62,6 +62,18 @@ interface ManagedPosition {
   targetPrice: number;
 }
 
+type PaperBotUpdate = Partial<
+  Pick<
+    BotConfig,
+    | "paperPosition"
+    | "paperRealizedPnl"
+    | "paperLastCandle"
+    | "marketDataStatus"
+    | "pnl"
+    | "pnlPct"
+  >
+>;
+
 const STORAGE_KEY = "frostdex_bots_v1";
 const LOGS_KEY = "frostdex_bot_logs_v1";
 
@@ -89,23 +101,10 @@ const SYMBOL_DISPLAY_MAP: Record<string, string> = {
   "PERP_NATGAS_USDC_arthur": "GAS/USDC",
 };
 
-const BASE_SYMBOL_MAP: Record<string, string> = {
-  "PERP_XAU_USDC": "XAU",
-  "PERP_XAG_USDC": "XAG",
-  "PERP_CL_USDC": "CL",
-  "PERP_NATGAS_USDC_arthur": "NATGAS",
-};
-
 function symbolDisplay(s: string) {
   if (SYMBOL_DISPLAY_MAP[s]) return SYMBOL_DISPLAY_MAP[s];
   const m = s.match(/^PERP_(.+?)_USDC/);
   return m ? `${m[1]}/USDC` : s;
-}
-
-function getBaseSymbol(s: string) {
-  if (BASE_SYMBOL_MAP[s]) return BASE_SYMBOL_MAP[s];
-  const m = s.match(/^PERP_(.+?)_USDC/);
-  return m ? m[1] : s;
 }
 
 function generateId() {
@@ -158,6 +157,90 @@ function computeATR(candles: Candle[], period = 14): number[] {
         : (atr[i - 1] * (period - 1) + trueRange) / period;
   }
   return atr;
+}
+
+interface OrderlyHistory {
+  s?: string;
+  t?: number[];
+  o?: number[];
+  h?: number[];
+  l?: number[];
+  c?: number[];
+  v?: number[];
+}
+
+function useOrderlyFeed(symbol: string) {
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let fetching = false;
+
+    const load = async () => {
+      if (fetching) return;
+      fetching = true;
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 24 * 60 * 60;
+
+      try {
+        const response = await fetch(
+          `https://api.orderly.org/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=15&from=${from}&to=${to}`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) throw new Error(`Market data unavailable (${response.status})`);
+
+        const data = (await response.json()) as OrderlyHistory;
+        const length = Math.min(
+          data.t?.length ?? 0,
+          data.o?.length ?? 0,
+          data.h?.length ?? 0,
+          data.l?.length ?? 0,
+          data.c?.length ?? 0,
+          data.v?.length ?? 0
+        );
+        if (data.s !== "ok" || length === 0) {
+          throw new Error("No market data available for this symbol");
+        }
+
+        const rows: Candle[] = Array.from({ length }, (_, index) => ({
+          t: (data.t![index] ?? 0) * 1000,
+          o: data.o![index] ?? 0,
+          h: data.h![index] ?? 0,
+          l: data.l![index] ?? 0,
+          c: data.c![index] ?? 0,
+          v: data.v![index] ?? 0,
+        })).filter((candle) => candle.t > 0 && candle.c > 0);
+
+        if (!active) return;
+        setCandles(rows);
+        setLatestPrice(rows.at(-1)?.c ?? null);
+        setError(rows.length < 22 ? "Insufficient candle history for this symbol" : null);
+      } catch (cause) {
+        if (!active) return;
+        setCandles([]);
+        setLatestPrice(null);
+        setError(cause instanceof Error ? cause.message : "Market data unavailable");
+      } finally {
+        fetching = false;
+        if (active) setLoading(false);
+      }
+    };
+
+    setLoading(true);
+    setCandles([]);
+    setLatestPrice(null);
+    void load();
+    const interval = window.setInterval(() => void load(), 20_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [symbol]);
+
+  return { candles, latestPrice, loading, error };
 }
 
 const STRATEGY_INFO: Record<
@@ -236,13 +319,31 @@ function OrderSubmitter({
 function BotLiveEngine({
   bot,
   onTradeExecuted,
+  onMarketDataStatus,
 }: {
   bot: BotConfig;
   onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
+  onMarketDataStatus: (botId: string, status: "ready" | "unavailable") => void;
 }) {
   const { state: accountState } = useAccount();
   const { freeCollateral } = useCollateral() as { freeCollateral: number };
-  const feed = useBinanceFeed(getBaseSymbol(bot.symbol), "15m", true);
+  const feed = useOrderlyFeed(bot.symbol);
+
+  useEffect(() => {
+    if (feed.loading) return;
+    const status = feed.error || !feed.latestPrice || feed.candles.length < 22
+      ? "unavailable"
+      : "ready";
+    if (bot.marketDataStatus !== status) onMarketDataStatus(bot.id, status);
+  }, [
+    bot.id,
+    bot.marketDataStatus,
+    feed.loading,
+    feed.error,
+    feed.latestPrice,
+    feed.candles.length,
+    onMarketDataStatus,
+  ]);
 
   const inPositionRef = useRef(false);
   const entryPriceRef = useRef(0);
@@ -441,14 +542,20 @@ function BotPaperEngine({
   bot: BotConfig;
   onPaperUpdate: (
     botId: string,
-    update: Pick<BotConfig, "paperPosition" | "paperRealizedPnl" | "paperLastCandle" | "pnl" | "pnlPct">,
+    update: PaperBotUpdate,
     trade?: Omit<TradeLog, "id">
   ) => void;
 }) {
-  const feed = useBinanceFeed(getBaseSymbol(bot.symbol), "15m", true);
+  const feed = useOrderlyFeed(bot.symbol);
 
   useEffect(() => {
-    if (bot.status !== "running" || !feed.latestPrice || feed.candles.length < 22) return;
+    if (bot.status !== "running" || feed.loading) return;
+    if (feed.error || !feed.latestPrice || feed.candles.length < 22) {
+      if (bot.marketDataStatus !== "unavailable") {
+        onPaperUpdate(bot.id, { marketDataStatus: "unavailable" });
+      }
+      return;
+    }
 
     const price = feed.latestPrice;
     const candles = feed.candles;
@@ -532,6 +639,7 @@ function BotPaperEngine({
         paperPosition: position,
         paperRealizedPnl: realizedPnl,
         paperLastCandle: candleTime,
+        marketDataStatus: "ready",
         pnl,
         pnlPct: (pnl / bot.investment) * 100,
       },
@@ -547,6 +655,9 @@ function BotPaperEngine({
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
+    bot.marketDataStatus,
+    feed.loading,
+    feed.error,
     feed.latestPrice,
     feed.candles,
     onPaperUpdate,
