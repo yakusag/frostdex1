@@ -5,7 +5,7 @@
   "sideEffects": false,
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.x"
   },
   "scripts": {
     "build": "tsx scripts/generate-manifest.ts && NODE_OPTIONS='--max-old-space-size=8192' vite build && tsx scripts/generate-manifest.ts",
@@ -88,6 +88,6 @@
   },
   "resolutions": {
     "**/*/@amplitude/analytics-browser": "2.11.13",
-    "**/*/@reown/appkit": "1.7.8"
+    "**/*/@reown/appkit": "1.7.11"
   }
 }
