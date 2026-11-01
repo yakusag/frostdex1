@@ -13,11 +13,10 @@ import {
 } from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
 import type { Candle } from "@/components/BotChart";
-import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
-type BotStrategy = "grid" | "dca" | "signal";
+type BotStrategy = "grid" | "dca" | "signal" | "trend";
 type BotStatus = "running" | "stopped" | "paused";
 
 interface BotConfig {
@@ -36,6 +35,10 @@ interface BotConfig {
   realizedPnl?: number;
   position?: BotPosition | null;
   markPrice?: number;
+  paperPosition?: ManagedPosition | null;
+  paperRealizedPnl?: number;
+  paperLastCandle?: number;
+  marketDataStatus?: "ready" | "unavailable";
 }
 
 interface BotPosition {
@@ -68,7 +71,27 @@ interface PendingOrder {
   side: "BUY" | "SELL";
   qty: string;
   triggerPrice: number;
+  position?: ManagedPosition;
 }
+
+interface ManagedPosition {
+  qty: number;
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+}
+
+type PaperBotUpdate = Partial<
+  Pick<
+    BotConfig,
+    | "paperPosition"
+    | "paperRealizedPnl"
+    | "paperLastCandle"
+    | "marketDataStatus"
+    | "pnl"
+    | "pnlPct"
+  >
+>;
 
 const STORAGE_KEY = "frostdex_bots_v1";
 const LOGS_KEY = "frostdex_bot_logs_v1";
@@ -96,24 +119,10 @@ const SYMBOL_DISPLAY_MAP: Record<string, string> = {
   PERP_CL_USDC: "OIL/USDC",
   PERP_NATGAS_USDC_arthur: "GAS/USDC",
 };
-
-const BASE_SYMBOL_MAP: Record<string, string> = {
-  PERP_XAU_USDC: "XAU",
-  PERP_XAG_USDC: "XAG",
-  PERP_CL_USDC: "CL",
-  PERP_NATGAS_USDC_arthur: "NATGAS",
-};
-
 function symbolDisplay(s: string) {
   if (SYMBOL_DISPLAY_MAP[s]) return SYMBOL_DISPLAY_MAP[s];
   const m = s.match(/^PERP_(.+?)_USDC/);
   return m ? `${m[1]}/USDC` : s;
-}
-
-function getBaseSymbol(s: string) {
-  if (BASE_SYMBOL_MAP[s]) return BASE_SYMBOL_MAP[s];
-  const m = s.match(/^PERP_(.+?)_USDC/);
-  return m ? m[1] : s;
 }
 
 function generateId() {
@@ -176,6 +185,113 @@ function computeEMA(candles: Candle[], period: number): number[] {
   return ema;
 }
 
+function computeATR(candles: Candle[], period = 14): number[] {
+  const atr: number[] = Array(candles.length).fill(0);
+  for (let i = 1; i < candles.length; i++) {
+    const trueRange = Math.max(
+      candles[i].h - candles[i].l,
+      Math.abs(candles[i].h - candles[i - 1].c),
+      Math.abs(candles[i].l - candles[i - 1].c),
+    );
+    atr[i] =
+      i < period
+        ? (atr[i - 1] * (i - 1) + trueRange) / i
+        : (atr[i - 1] * (period - 1) + trueRange) / period;
+  }
+  return atr;
+}
+
+interface OrderlyHistory {
+  s?: string;
+  t?: number[];
+  o?: number[];
+  h?: number[];
+  l?: number[];
+  c?: number[];
+  v?: number[];
+}
+
+function useOrderlyFeed(symbol: string) {
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let fetching = false;
+
+    const load = async () => {
+      if (fetching) return;
+      fetching = true;
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 24 * 60 * 60;
+
+      try {
+        const response = await fetch(
+          `https://api.orderly.org/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=15&from=${from}&to=${to}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok)
+          throw new Error(`Market data unavailable (${response.status})`);
+
+        const data = (await response.json()) as OrderlyHistory;
+        const length = Math.min(
+          data.t?.length ?? 0,
+          data.o?.length ?? 0,
+          data.h?.length ?? 0,
+          data.l?.length ?? 0,
+          data.c?.length ?? 0,
+          data.v?.length ?? 0,
+        );
+        if (data.s !== "ok" || length === 0) {
+          throw new Error("No market data available for this symbol");
+        }
+
+        const rows: Candle[] = Array.from({ length }, (_, index) => ({
+          t: (data.t![index] ?? 0) * 1000,
+          o: data.o![index] ?? 0,
+          h: data.h![index] ?? 0,
+          l: data.l![index] ?? 0,
+          c: data.c![index] ?? 0,
+          v: data.v![index] ?? 0,
+        })).filter((candle) => candle.t > 0 && candle.c > 0);
+
+        if (!active) return;
+        setCandles(rows);
+        setLatestPrice(rows.at(-1)?.c ?? null);
+        setError(
+          rows.length < 22
+            ? "Insufficient candle history for this symbol"
+            : null,
+        );
+      } catch (cause) {
+        if (!active) return;
+        setCandles([]);
+        setLatestPrice(null);
+        setError(
+          cause instanceof Error ? cause.message : "Market data unavailable",
+        );
+      } finally {
+        fetching = false;
+        if (active) setLoading(false);
+      }
+    };
+
+    setLoading(true);
+    setCandles([]);
+    setLatestPrice(null);
+    void load();
+    const interval = window.setInterval(() => void load(), 20_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [symbol]);
+
+  return { candles, latestPrice, loading, error };
+}
+
 const STRATEGY_INFO: Record<
   BotStrategy,
   { label: string; desc: string; icon: string; color: string }
@@ -197,6 +313,12 @@ const STRATEGY_INFO: Record<
     desc: "Trades on RSI + EMA crossover signals for momentum-based entries.",
     icon: "◈",
     color: "#f0b90b",
+  },
+  trend: {
+    label: "Risk-Managed Trend",
+    desc: "Trend-confirmed entries, 1% risk sizing, ATR stop and 2.5R target. Risk is limited, not eliminated.",
+    icon: "↗",
+    color: "#ff8a65",
   },
 };
 
@@ -248,18 +370,54 @@ function BotLiveEngine({
   tradeLogs,
   onTradeExecuted,
   onPnlUpdate,
+  onMarketDataStatus,
 }: {
   bot: BotConfig;
   tradeLogs: TradeLog[];
   onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
   onPnlUpdate: (botId: string, performance: BotPerformance) => void;
+  onMarketDataStatus: (botId: string, status: "ready" | "unavailable") => void;
 }) {
   const { state: accountState } = useAccount();
-  const feed = useBinanceFeed(getBaseSymbol(bot.symbol), "15m", true);
+  const feed = useOrderlyFeed(bot.symbol);
 
+  useEffect(() => {
+    if (feed.loading) return;
+    const status =
+      feed.error || !feed.latestPrice || feed.candles.length < 22
+        ? "unavailable"
+        : "ready";
+    if (bot.marketDataStatus !== status) onMarketDataStatus(bot.id, status);
+  }, [
+    bot.id,
+    bot.marketDataStatus,
+    feed.loading,
+    feed.error,
+    feed.latestPrice,
+    feed.candles.length,
+    onMarketDataStatus,
+  ]);
+
+  const [managedPosition, setManagedPosition] =
+    useState<ManagedPosition | null>(() => {
+      try {
+        return JSON.parse(
+          localStorage.getItem(`frostdex_bot_position_${bot.id}`) || "null",
+        );
+      } catch {
+        return null;
+      }
+    });
   const historicalPerformance = getHistoricalPerformance(tradeLogs);
   const initialPosition =
-    bot.position !== undefined ? bot.position : historicalPerformance.position;
+    bot.strategy === "trend" && managedPosition
+      ? {
+          entryPrice: managedPosition.entryPrice,
+          quantity: managedPosition.qty,
+        }
+      : bot.position !== undefined
+        ? bot.position
+        : historicalPerformance.position;
   const initialRealizedPnl =
     bot.realizedPnl ?? historicalPerformance.realizedPnl;
   const positionRef = useRef<BotPosition | null>(initialPosition);
@@ -271,7 +429,13 @@ function BotLiveEngine({
   useEffect(() => {
     if (!feed.latestPrice) return;
 
-    const position = positionRef.current;
+    const position =
+      bot.strategy === "trend" && managedPosition
+        ? {
+            entryPrice: managedPosition.entryPrice,
+            quantity: managedPosition.qty,
+          }
+        : positionRef.current;
     onPnlUpdate(bot.id, {
       pnl:
         realizedPnlRef.current +
@@ -282,7 +446,7 @@ function BotLiveEngine({
       position,
       markPrice: feed.latestPrice,
     });
-  }, [bot.id, feed.latestPrice, onPnlUpdate]);
+  }, [bot.id, bot.strategy, feed.latestPrice, managedPosition, onPnlUpdate]);
 
   useEffect(() => {
     if (bot.status !== "running") return;
@@ -345,6 +509,63 @@ function BotLiveEngine({
       shouldBuy = dcaCycleRef.current % intervalsPerCycle === 0;
       shouldSell =
         !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
+    } else if (bot.strategy === "trend") {
+      const last = candles.length - 1;
+      const emaFast = computeEMA(candles, 9);
+      const emaSlow = computeEMA(candles, 21);
+      const rsi = computeRSI(candles, 14);
+      const atr = computeATR(candles, 14)[last];
+      const stopAtr = Number(bot.params.stopAtr) || 2;
+      const rewardRisk = Number(bot.params.rewardRisk) || 2.5;
+      const position = managedPosition;
+
+      shouldBuy =
+        !position &&
+        emaFast[last] > emaSlow[last] &&
+        emaFast[last - 1] <= emaSlow[last - 1] &&
+        rsi[last] >= 45 &&
+        rsi[last] < 70 &&
+        atr > 0;
+      shouldSell =
+        !!position &&
+        (price <= position.stopPrice ||
+          price >= position.targetPrice ||
+          emaFast[last] < emaSlow[last]);
+
+      if (!pendingOrder && shouldBuy && atr > 0) {
+        const stopDistance = atr * stopAtr;
+        const riskBudget = investment * 0.01;
+        const maxNotional = investment * 0.25;
+        const qty =
+          Math.floor(
+            Math.min(riskBudget / stopDistance, maxNotional / price) *
+              1_000_000,
+          ) / 1_000_000;
+        if (qty >= minQty) {
+          setPendingOrder({
+            botId: bot.id,
+            symbol: bot.symbol,
+            side: "BUY",
+            qty: qty.toFixed(6),
+            triggerPrice: price,
+            position: {
+              qty,
+              entryPrice: price,
+              stopPrice: price - stopDistance,
+              targetPrice: price + stopDistance * rewardRisk,
+            },
+          });
+        }
+      } else if (!pendingOrder && shouldSell && position) {
+        setPendingOrder({
+          botId: bot.id,
+          symbol: bot.symbol,
+          side: "SELL",
+          qty: position.qty.toFixed(6),
+          triggerPrice: price,
+        });
+      }
+      return;
     }
 
     if (shouldBuy && !pendingOrder) {
@@ -365,7 +586,14 @@ function BotLiveEngine({
         triggerPrice: price,
       });
     }
-  }, [feed.latestPrice, feed.candles, bot, accountState, pendingOrder]);
+  }, [
+    feed.latestPrice,
+    feed.candles,
+    bot,
+    accountState,
+    managedPosition,
+    pendingOrder,
+  ]);
 
   if (pendingOrder) {
     return (
@@ -379,6 +607,16 @@ function BotLiveEngine({
                 entryPrice: pendingOrder.triggerPrice,
                 quantity,
               };
+              if (bot.strategy === "trend") {
+                const nextPosition = pendingOrder.position ?? null;
+                setManagedPosition(nextPosition);
+                if (nextPosition) {
+                  localStorage.setItem(
+                    `frostdex_bot_position_${bot.id}`,
+                    JSON.stringify(nextPosition),
+                  );
+                }
+              }
             } else if (positionRef.current) {
               const position = positionRef.current;
               const closedQty = Math.min(position.quantity, quantity);
@@ -389,6 +627,10 @@ function BotLiveEngine({
                 remainingQty > 0
                   ? { ...position, quantity: remainingQty }
                   : null;
+              if (bot.strategy === "trend" && !positionRef.current) {
+                setManagedPosition(null);
+                localStorage.removeItem(`frostdex_bot_position_${bot.id}`);
+              }
             }
 
             const position = positionRef.current;
@@ -419,6 +661,139 @@ function BotLiveEngine({
       />
     );
   }
+
+  return null;
+}
+
+function BotPaperEngine({
+  bot,
+  onPaperUpdate,
+}: {
+  bot: BotConfig;
+  onPaperUpdate: (
+    botId: string,
+    update: PaperBotUpdate,
+    trade?: Omit<TradeLog, "id">,
+  ) => void;
+}) {
+  const feed = useOrderlyFeed(bot.symbol);
+
+  useEffect(() => {
+    if (bot.status !== "running" || feed.loading) return;
+    if (feed.error || !feed.latestPrice || feed.candles.length < 22) {
+      if (bot.marketDataStatus !== "unavailable") {
+        onPaperUpdate(bot.id, { marketDataStatus: "unavailable" });
+      }
+      return;
+    }
+
+    const price = feed.latestPrice;
+    const candles = feed.candles;
+    const last = candles.length - 1;
+    const candleTime = candles[last].t;
+    let position = bot.paperPosition ?? null;
+    let realizedPnl = bot.paperRealizedPnl ?? 0;
+    let trade: Omit<TradeLog, "id"> | undefined;
+
+    if (position) {
+      let exitPrice: number | null = null;
+      if (price <= position.stopPrice) exitPrice = position.stopPrice;
+      else if (price >= position.targetPrice) exitPrice = position.targetPrice;
+      else if (
+        candleTime !== bot.paperLastCandle &&
+        computeEMA(candles, 9)[last] < computeEMA(candles, 21)[last]
+      ) {
+        exitPrice = price;
+      }
+
+      if (exitPrice !== null) {
+        realizedPnl += position.qty * (exitPrice - position.entryPrice);
+        trade = {
+          botId: bot.id,
+          side: "SELL",
+          symbol: bot.symbol,
+          qty: position.qty,
+          price: exitPrice,
+          ts: Date.now(),
+          live: false,
+        };
+        position = null;
+      }
+    } else if (candleTime !== bot.paperLastCandle) {
+      const emaFast = computeEMA(candles, 9);
+      const emaSlow = computeEMA(candles, 21);
+      const rsi = computeRSI(candles, 14);
+      const atr = computeATR(candles, 14)[last];
+      const shouldBuy =
+        emaFast[last] > emaSlow[last] &&
+        emaFast[last - 1] <= emaSlow[last - 1] &&
+        rsi[last] >= 45 &&
+        rsi[last] < 70 &&
+        atr > 0;
+
+      if (shouldBuy) {
+        const stopDistance = atr * (Number(bot.params.stopAtr) || 2);
+        const riskBudget = bot.investment * 0.01;
+        const maxNotional = bot.investment * 0.25;
+        const qty =
+          Math.floor(
+            Math.min(riskBudget / stopDistance, maxNotional / price) *
+              1_000_000,
+          ) / 1_000_000;
+
+        if (qty >= 0.001) {
+          position = {
+            qty,
+            entryPrice: price,
+            stopPrice: price - stopDistance,
+            targetPrice:
+              price + stopDistance * (Number(bot.params.rewardRisk) || 2.5),
+          };
+          trade = {
+            botId: bot.id,
+            side: "BUY",
+            symbol: bot.symbol,
+            qty,
+            price,
+            ts: Date.now(),
+            live: false,
+          };
+        }
+      }
+    }
+
+    const pnl =
+      realizedPnl +
+      (position ? position.qty * (price - position.entryPrice) : 0);
+    onPaperUpdate(
+      bot.id,
+      {
+        paperPosition: position,
+        paperRealizedPnl: realizedPnl,
+        paperLastCandle: candleTime,
+        marketDataStatus: "ready",
+        pnl,
+        pnlPct: (pnl / bot.investment) * 100,
+      },
+      trade,
+    );
+  }, [
+    bot.id,
+    bot.status,
+    bot.investment,
+    bot.symbol,
+    bot.params.stopAtr,
+    bot.params.rewardRisk,
+    bot.paperPosition,
+    bot.paperRealizedPnl,
+    bot.paperLastCandle,
+    bot.marketDataStatus,
+    feed.loading,
+    feed.error,
+    feed.latestPrice,
+    feed.candles,
+    onPaperUpdate,
+  ]);
 
   return null;
 }
@@ -460,6 +835,8 @@ export default function BotPage() {
   const [dcaAmount, setDcaAmount] = useState("50");
   const [sigRsi, setSigRsi] = useState("14");
   const [sigEma, setSigEma] = useState("20");
+  const [trendStopAtr, setTrendStopAtr] = useState("2");
+  const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
 
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -508,7 +885,12 @@ export default function BotPage() {
     tickerRef.current = setInterval(() => {
       setBots((prev) => {
         const updated = prev.map((bot) => {
-          if (bot.status !== "running" || bot.liveMode) return bot;
+          if (
+            bot.status !== "running" ||
+            bot.liveMode ||
+            bot.strategy === "trend"
+          )
+            return bot;
           const delta = (Math.random() - 0.47) * (bot.investment * 0.002);
           const newPnl = bot.pnl + delta;
           const newPct = (newPnl / bot.investment) * 100;
@@ -571,6 +953,63 @@ export default function BotPage() {
     [],
   );
 
+  const handleMarketDataStatus = useCallback(
+    (botId: string, status: "ready" | "unavailable") => {
+      setBots((prev) => {
+        let changed = false;
+        const updated = prev.map((bot) => {
+          if (bot.id !== botId || bot.marketDataStatus === status) return bot;
+          changed = true;
+          return { ...bot, marketDataStatus: status };
+        });
+        if (!changed) return prev;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [],
+  );
+
+  const handlePaperUpdate = useCallback(
+    (botId: string, update: PaperBotUpdate, trade?: Omit<TradeLog, "id">) => {
+      if (trade) {
+        setLogs((prev) => {
+          const updated = [
+            { ...trade, id: generateId() },
+            ...prev.slice(0, 199),
+          ];
+          localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
+      setBots((prev) => {
+        const updated = prev.map((current) =>
+          current.id === botId
+            ? {
+                ...current,
+                ...update,
+                trades: current.trades + (trade ? 1 : 0),
+              }
+            : current,
+        );
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [],
+  );
+
+  const configureLiveBot = (bot: BotConfig) => {
+    setStrategy("trend");
+    setSymbol(bot.symbol);
+    setInvestment(String(bot.investment));
+    setBotName(bot.name);
+    setTrendStopAtr(String(bot.params.stopAtr ?? 2));
+    setTrendRewardRisk(String(bot.params.rewardRisk ?? 2.5));
+    setLiveMode(true);
+    setTab("create");
+  };
+
   const handleCreate = () => {
     setCreating(true);
     const willUseLive = liveMode && isConnected;
@@ -584,7 +1023,12 @@ export default function BotPage() {
             }
           : strategy === "dca"
             ? { interval: dcaInterval, amount: Number(dcaAmount) }
-            : { rsi: Number(sigRsi), ema: Number(sigEma) };
+            : strategy === "signal"
+              ? { rsi: Number(sigRsi), ema: Number(sigEma) }
+              : {
+                  stopAtr: Number(trendStopAtr),
+                  rewardRisk: Number(trendRewardRisk),
+                };
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -663,6 +1107,19 @@ export default function BotPage() {
             tradeLogs={logs.filter((log) => log.botId === bot.id)}
             onTradeExecuted={handleTradeExecuted}
             onPnlUpdate={handlePnlUpdate}
+            onMarketDataStatus={handleMarketDataStatus}
+          />
+        ))}
+      {bots
+        .filter(
+          (b) =>
+            b.status === "running" && !b.liveMode && b.strategy === "trend",
+        )
+        .map((bot) => (
+          <BotPaperEngine
+            key={bot.id}
+            bot={bot}
+            onPaperUpdate={handlePaperUpdate}
           />
         ))}
 
@@ -1014,7 +1471,9 @@ export default function BotPage() {
                                 ? "56,224,248"
                                 : info.color === "#0ecb81"
                                   ? "14,203,129"
-                                  : "240,185,11"
+                                  : info.color === "#ff8a65"
+                                    ? "255,138,101"
+                                    : "240,185,11"
                             },0.12)`,
                             display: "flex",
                             alignItems: "center",
@@ -1087,7 +1546,9 @@ export default function BotPage() {
                                   letterSpacing: 0.5,
                                 }}
                               >
-                                SIMULATION
+                                {bot.strategy === "trend"
+                                  ? "PAPER · LIVE PRICES"
+                                  : "SIMULATION"}
                               </span>
                             )}
                           </div>
@@ -1136,6 +1597,24 @@ export default function BotPage() {
                         </div>
 
                         <div style={{ display: "flex", gap: 8 }}>
+                          {!isLive && bot.strategy === "trend" && (
+                            <button
+                              onClick={() => configureLiveBot(bot)}
+                              style={{
+                                background: "rgba(56,224,248,0.08)",
+                                border: "1px solid rgba(56,224,248,0.25)",
+                                borderRadius: 6,
+                                color: "#38e0f8",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                padding: "6px 10px",
+                                fontFamily: "Manrope, sans-serif",
+                              }}
+                            >
+                              Configure Live
+                            </button>
+                          )}
                           <button
                             onClick={() => toggleBot(bot.id)}
                             style={{
@@ -1233,63 +1712,67 @@ export default function BotPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
+                gridTemplateColumns: "repeat(2, 1fr)",
                 gap: 10,
               }}
             >
-              {(["grid", "dca", "signal"] as BotStrategy[]).map((s) => {
-                const info = STRATEGY_INFO[s];
-                const selected = strategy === s;
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setStrategy(s)}
-                    style={{
-                      background: selected
-                        ? `rgba(${
-                            info.color === "#38e0f8"
-                              ? "56,224,248"
-                              : info.color === "#0ecb81"
-                                ? "14,203,129"
-                                : "240,185,11"
-                          },0.1)`
-                        : "rgb(20,24,30)",
-                      border: `1px solid ${
-                        selected ? info.color : "rgba(30,36,50,1)"
-                      }`,
-                      borderRadius: 10,
-                      padding: "14px 10px",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      transition: "all 0.15s ease",
-                      fontFamily: "Manrope, sans-serif",
-                    }}
-                  >
-                    <div style={{ fontSize: 22, marginBottom: 6 }}>
-                      {info.icon}
-                    </div>
-                    <div
+              {(["grid", "dca", "signal", "trend"] as BotStrategy[]).map(
+                (s) => {
+                  const info = STRATEGY_INFO[s];
+                  const selected = strategy === s;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setStrategy(s)}
                       style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: selected ? info.color : "#eaecef",
+                        background: selected
+                          ? `rgba(${
+                              info.color === "#38e0f8"
+                                ? "56,224,248"
+                                : info.color === "#0ecb81"
+                                  ? "14,203,129"
+                                  : info.color === "#ff8a65"
+                                    ? "255,138,101"
+                                    : "240,185,11"
+                            },0.1)`
+                          : "rgb(20,24,30)",
+                        border: `1px solid ${
+                          selected ? info.color : "rgba(30,36,50,1)"
+                        }`,
+                        borderRadius: 10,
+                        padding: "14px 10px",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s ease",
+                        fontFamily: "Manrope, sans-serif",
                       }}
                     >
-                      {info.label}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "rgba(180,190,210,0.5)",
-                        marginTop: 4,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {info.desc}
-                    </div>
-                  </button>
-                );
-              })}
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>
+                        {info.icon}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: selected ? info.color : "#eaecef",
+                        }}
+                      >
+                        {info.label}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(180,190,210,0.5)",
+                          marginTop: 4,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {info.desc}
+                      </div>
+                    </button>
+                  );
+                },
+              )}
             </div>
           </div>
 
@@ -1606,6 +2089,56 @@ export default function BotPage() {
             </div>
           )}
 
+          {strategy === "trend" && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={sectionLabelStyle}>Risk-Managed Trend Parameters</div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <label style={labelStyle}>Stop Distance (ATR)</label>
+                  <input
+                    type="number"
+                    value={trendStopAtr}
+                    onChange={(e) => setTrendStopAtr(e.target.value)}
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Target (R multiple)</label>
+                  <input
+                    type="number"
+                    value={trendRewardRisk}
+                    onChange={(e) => setTrendRewardRisk(e.target.value)}
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: "rgba(180,190,210,0.5)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Position size risks up to 1% of the bot allocation, capped at
+                25% notional. Live stops are monitored by this app and can slip
+                or fail during outages.
+              </div>
+            </div>
+          )}
+
           {/* Live Mode Toggle */}
           <div
             style={{
@@ -1661,7 +2194,9 @@ export default function BotPage() {
                   ? isConnected
                     ? "Real orders will be placed on Orderly Network using your portfolio."
                     : "⚠ Connect your wallet first to use live trading."
-                  : "Bot runs in simulation mode — no real orders are placed."}
+                  : strategy === "trend"
+                    ? "Paper trades follow live Binance prices and the selected strategy. No real orders or funds are used."
+                    : "Bot runs in simulation mode — no real orders are placed."}
               </div>
             </div>
             <button
