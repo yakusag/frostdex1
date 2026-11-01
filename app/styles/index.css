@@ -28,6 +28,28 @@ nav,
   display: none !important;
 }
 
+@media (min-width: 768px) {
+  .oui-scaffold-footer > div > div:first-child > :nth-child(2),
+  .oui-scaffold-footer > div > div:first-child > :nth-child(3) > :first-child,
+  .oui-scaffold-footer > div > div:first-child > :nth-child(3) > :nth-child(2) {
+    display: none !important;
+  }
+
+  .oui-trading-tradingview-container {
+    position: relative;
+  }
+
+  .oui-trading-tradingview-container::after {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: url("/logo.webp") center / min(34vw, 260px) auto no-repeat;
+    content: "";
+    opacity: 0.06;
+    pointer-events: none;
+  }
+}
+
 /* ─── row hover ─────────────────────────────────────────────────── */
 .oui-orderbook-row:hover,
 tr:hover td {

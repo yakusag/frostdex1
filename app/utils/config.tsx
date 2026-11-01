@@ -522,17 +522,7 @@ export const useOrderlyConfig = () => {
           discordUrl: getRuntimeConfig("VITE_DISCORD_URL") || undefined,
           twitterUrl: getRuntimeConfig("VITE_TWITTER_URL") || undefined,
           trailing: (
-            <span className="oui-text-2xs oui-text-base-contrast-54 oui-flex oui-items-center oui-gap-3 oui-flex-wrap">
-              <span>
-                Charts powered by{" "}
-                <a
-                  href="https://tradingview.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  TradingView
-                </a>
-              </span>
+            <span className="oui-text-2xs oui-text-base-contrast-54">
               <span style={{ color: "rgba(56,224,248,0.5)", fontWeight: 700 }}>
                 ❄ Powered by FrostDex
               </span>
