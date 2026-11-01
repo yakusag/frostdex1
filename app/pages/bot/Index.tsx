@@ -6,10 +6,13 @@ import {
   lazy,
   Suspense,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   useAccount,
   useCollateral,
   useOrderEntry,
+  useSymbolInfo,
+  useSymbolsInfo,
 } from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
 import type { Candle } from "@/components/BotChart";
@@ -74,6 +77,13 @@ interface PendingOrder {
   position?: ManagedPosition;
 }
 
+interface SymbolOrderRules {
+  base_dp: number;
+  base_tick: number;
+  base_min: number;
+  min_notional: number;
+}
+
 interface ManagedPosition {
   qty: number;
   entryPrice: number;
@@ -121,12 +131,61 @@ const SYMBOL_DISPLAY_MAP: Record<string, string> = {
 };
 function symbolDisplay(s: string) {
   if (SYMBOL_DISPLAY_MAP[s]) return SYMBOL_DISPLAY_MAP[s];
-  const m = s.match(/^PERP_(.+?)_USDC/);
-  return m ? `${m[1]}/USDC` : s;
+  const m = s.match(/^PERP_(.+?)_(USDC|USDT)(?:_|$)/);
+  return m ? `${m[1]}/${m[2]}` : s;
+}
+
+function sortMarketSymbols(symbols: string[]) {
+  const priority = [
+    "PERP_BTC_USDT",
+    "PERP_BTC_USDC",
+    "PERP_ETH_USDT",
+    "PERP_ETH_USDC",
+    "PERP_SOL_USDT",
+    "PERP_SOL_USDC",
+    "PERP_ARB_USDT",
+    "PERP_ARB_USDC",
+    "PERP_BNB_USDT",
+    "PERP_BNB_USDC",
+  ];
+
+  return [...new Set(symbols)].sort((a, b) => {
+    const ai = priority.indexOf(a);
+    const bi = priority.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
+}
+
+function getOrderQuantity(
+  targetNotional: number,
+  price: number,
+  rules: SymbolOrderRules,
+) {
+  if (
+    !Number.isFinite(targetNotional) ||
+    targetNotional <= 0 ||
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    return null;
+  }
+
+  const step = rules.base_tick || 10 ** -rules.base_dp;
+  const minimumQuantity = Math.max(rules.base_min, rules.min_notional / price);
+  const quantity =
+    Math.ceil(Math.max(targetNotional / price, minimumQuantity) / step) * step;
+  const roundedQuantity = Number(quantity.toFixed(rules.base_dp));
+
+  return Number.isFinite(roundedQuantity) && roundedQuantity > 0
+    ? roundedQuantity
+    : null;
 }
 
 function getHistoricalPerformance(trades: TradeLog[]) {
@@ -327,10 +386,13 @@ const STRATEGY_INFO: Record<
 function OrderSubmitter({
   pending,
   onDone,
+  onInsufficientBalance,
 }: {
   pending: PendingOrder;
   onDone: (result: { success: boolean; orderId?: string }) => void;
+  onInsufficientBalance: () => void;
 }) {
+  const { freeCollateral } = useCollateral();
   const { submit } = useOrderEntry(pending.symbol, {
     initialOrder: {
       side: pending.side === "BUY" ? OrderSide.BUY : OrderSide.SELL,
@@ -345,6 +407,18 @@ function OrderSubmitter({
   useEffect(() => {
     if (submitted.current || !submit) return;
     submitted.current = true;
+    const orderNotional = Number(pending.qty) * pending.triggerPrice;
+    if (
+      pending.side === "BUY" &&
+      (!Number.isFinite(freeCollateral) ||
+        freeCollateral <= 0 ||
+        orderNotional > freeCollateral)
+    ) {
+      onInsufficientBalance();
+      onDone({ success: false });
+      return;
+    }
+
     Promise.resolve()
       .then(() => (submit as () => Promise<any>)())
       .then((res: any) => {
@@ -358,7 +432,15 @@ function OrderSubmitter({
         }
       })
       .catch(() => onDone({ success: false }));
-  }, [submit, onDone]);
+  }, [
+    submit,
+    onDone,
+    onInsufficientBalance,
+    freeCollateral,
+    pending.qty,
+    pending.side,
+    pending.triggerPrice,
+  ]);
 
   return null;
 }
@@ -371,14 +453,19 @@ function BotLiveEngine({
   onTradeExecuted,
   onPnlUpdate,
   onMarketDataStatus,
+  onInsufficientBalance,
 }: {
   bot: BotConfig;
   tradeLogs: TradeLog[];
   onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
   onPnlUpdate: (botId: string, performance: BotPerformance) => void;
   onMarketDataStatus: (botId: string, status: "ready" | "unavailable") => void;
+  onInsufficientBalance: (message?: string) => void;
 }) {
   const { state: accountState } = useAccount();
+  const { freeCollateral } = useCollateral();
+  const symbolInfo = useSymbolInfo(bot.symbol);
+  const symbolRules = symbolInfo?.();
   const feed = useOrderlyFeed(bot.symbol);
 
   useEffect(() => {
@@ -425,6 +512,7 @@ function BotLiveEngine({
   const lastEvalRef = useRef(0);
   const dcaCycleRef = useRef(0);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const balanceAlertedRef = useRef(false);
 
   useEffect(() => {
     if (!feed.latestPrice) return;
@@ -461,9 +549,51 @@ function BotLiveEngine({
     const candles = feed.candles;
     const investment = bot.investment;
 
-    const minQty = 0.001;
-    const buyQty = Math.max(minQty, (investment * 0.5) / price);
-    const qtyStr = buyQty.toFixed(6);
+    if (!symbolRules) return;
+
+    const availableBudget = Math.min(investment, freeCollateral || 0);
+    const buyNotional =
+      bot.strategy === "dca"
+        ? Math.min(
+            Number(bot.params.amount) || investment * 0.5,
+            availableBudget,
+          )
+        : Math.min(investment * 0.5, availableBudget);
+
+    const queueOrder = (
+      order: PendingOrder,
+      maxOrderBudget = bot.strategy === "dca" ? buyNotional : availableBudget,
+    ) => {
+      if (order.side === "BUY") {
+        const quantity = getOrderQuantity(
+          Number(order.qty) * order.triggerPrice,
+          order.triggerPrice,
+          symbolRules,
+        );
+        if (quantity === null) return;
+        const orderNotional = quantity * order.triggerPrice;
+        if (
+          !Number.isFinite(freeCollateral) ||
+          freeCollateral <= 0 ||
+          orderNotional > freeCollateral ||
+          orderNotional > maxOrderBudget
+        ) {
+          if (!balanceAlertedRef.current) {
+            balanceAlertedRef.current = true;
+            onInsufficientBalance(
+              `Orderly requires at least $${orderNotional.toFixed(2)} for this ${symbolDisplay(
+                bot.symbol,
+              )} order, but your available balance or bot allocation is too low.`,
+            );
+          }
+          return;
+        }
+        balanceAlertedRef.current = false;
+        order.qty = quantity.toFixed(symbolRules.base_dp);
+        if (order.position) order.position.qty = quantity;
+      }
+      setPendingOrder(order);
+    };
 
     let shouldBuy = false;
     let shouldSell = false;
@@ -535,29 +665,32 @@ function BotLiveEngine({
       if (!pendingOrder && shouldBuy && atr > 0) {
         const stopDistance = atr * stopAtr;
         const riskBudget = investment * 0.01;
-        const maxNotional = investment * 0.25;
+        const maxNotional = availableBudget * 0.25;
         const qty =
           Math.floor(
             Math.min(riskBudget / stopDistance, maxNotional / price) *
               1_000_000,
           ) / 1_000_000;
-        if (qty >= minQty) {
-          setPendingOrder({
-            botId: bot.id,
-            symbol: bot.symbol,
-            side: "BUY",
-            qty: qty.toFixed(6),
-            triggerPrice: price,
-            position: {
-              qty,
-              entryPrice: price,
-              stopPrice: price - stopDistance,
-              targetPrice: price + stopDistance * rewardRisk,
+        if (qty > 0) {
+          queueOrder(
+            {
+              botId: bot.id,
+              symbol: bot.symbol,
+              side: "BUY",
+              qty: qty.toFixed(6),
+              triggerPrice: price,
+              position: {
+                qty,
+                entryPrice: price,
+                stopPrice: price - stopDistance,
+                targetPrice: price + stopDistance * rewardRisk,
+              },
             },
-          });
+            availableBudget * 0.25,
+          );
         }
       } else if (!pendingOrder && shouldSell && position) {
-        setPendingOrder({
+        queueOrder({
           botId: bot.id,
           symbol: bot.symbol,
           side: "SELL",
@@ -569,16 +702,16 @@ function BotLiveEngine({
     }
 
     if (shouldBuy && !pendingOrder) {
-      setPendingOrder({
+      queueOrder({
         botId: bot.id,
         symbol: bot.symbol,
         side: "BUY",
-        qty: qtyStr,
+        qty: (buyNotional / price).toFixed(symbolRules.base_dp),
         triggerPrice: price,
       });
     } else if (shouldSell && !pendingOrder && positionRef.current) {
       const position = positionRef.current;
-      setPendingOrder({
+      queueOrder({
         botId: bot.id,
         symbol: bot.symbol,
         side: "SELL",
@@ -591,14 +724,18 @@ function BotLiveEngine({
     feed.candles,
     bot,
     accountState,
+    freeCollateral,
+    symbolRules,
     managedPosition,
     pendingOrder,
+    onInsufficientBalance,
   ]);
 
   if (pendingOrder) {
     return (
       <OrderSubmitter
         pending={pendingOrder}
+        onInsufficientBalance={onInsufficientBalance}
         onDone={(result) => {
           if (result.success) {
             const quantity = parseFloat(pendingOrder.qty);
@@ -801,7 +938,9 @@ function BotPaperEngine({
 // ── Main Bot Page ─────────────────────────────────────────────────────────────
 export default function BotPage() {
   const { state: accountState } = useAccount();
-  const { freeCollateral } = useCollateral() as { freeCollateral: number };
+  const { freeCollateral } = useCollateral();
+  const navigate = useNavigate();
+  const [balanceMessage, setBalanceMessage] = useState("");
 
   const [bots, setBots] = useState<BotConfig[]>(() => {
     try {
@@ -823,6 +962,8 @@ export default function BotPage() {
   const [allSymbols, setAllSymbols] = useState<string[]>(POPULAR_SYMBOLS);
   const [strategy, setStrategy] = useState<BotStrategy>("grid");
   const [symbol, setSymbol] = useState("PERP_BTC_USDC");
+  const selectedSymbolInfo = useSymbolInfo(symbol);
+  const symbolsInfo = useSymbolsInfo();
   const [investment, setInvestment] = useState("500");
   const [botName, setBotName] = useState("");
   const [liveMode, setLiveMode] = useState(false);
@@ -841,6 +982,27 @@ export default function BotPage() {
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = !!accountState?.accountId;
+  const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
+  const quoteAsset =
+    selectedSymbolInfo?.("quote") ??
+    symbol.match(/_(USDC|USDT)(?:_|$)/)?.[1] ??
+    "USD";
+
+  const handleInsufficientBalance = useCallback((message?: string) => {
+    setBalanceMessage(
+      message ??
+        "Your available Orderly collateral is too low for this live order. Deposit supported collateral to continue.",
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!liveMode || !isConnected || availableBalance <= 0) return;
+    setInvestment((current) =>
+      Number(current) > availableBalance
+        ? availableBalance.toFixed(2)
+        : current,
+    );
+  }, [liveMode, isConnected, availableBalance]);
 
   const saveBots = useCallback((updated: BotConfig[]) => {
     setBots(updated);
@@ -855,30 +1017,48 @@ export default function BotPage() {
   // Fetch all available Orderly perp markets
   useEffect(() => {
     fetch("https://api.orderly.org/v1/public/futures")
-      .then((r) => r.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(
+            `Unable to load Orderly markets (${response.status})`,
+          );
+        }
+        return response.json();
+      })
       .then((data) => {
         const syms: string[] = (data?.data?.rows ?? [])
-          .map((r: any) => r.symbol as string)
-          .filter(Boolean)
-          .sort((a: string, b: string) => {
-            const priority = [
-              "PERP_BTC_USDC",
-              "PERP_ETH_USDC",
-              "PERP_SOL_USDC",
-              "PERP_ARB_USDC",
-              "PERP_BNB_USDC",
-            ];
-            const ai = priority.indexOf(a),
-              bi = priority.indexOf(b);
-            if (ai !== -1 && bi !== -1) return ai - bi;
-            if (ai !== -1) return -1;
-            if (bi !== -1) return 1;
-            return a.localeCompare(b);
-          });
-        if (syms.length > 0) setAllSymbols(syms);
+          .map((market: { symbol?: string }) => market.symbol)
+          .filter(
+            (marketSymbol: string | undefined): marketSymbol is string =>
+              !!marketSymbol &&
+              /^PERP_.+_(USDC|USDT)(?:_|$)/.test(marketSymbol),
+          );
+        if (syms.length > 0) {
+          setAllSymbols((current) => sortMarketSymbols([...current, ...syms]));
+        }
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        console.error("Failed to load Orderly USDC/USDT markets:", error);
+      });
   }, []);
+
+  useEffect(() => {
+    const supportedSymbols = Object.keys(symbolsInfo).filter((marketSymbol) =>
+      /^PERP_.+_(USDC|USDT)(?:_|$)/.test(marketSymbol),
+    );
+
+    if (supportedSymbols.length > 0) {
+      setAllSymbols((current) => {
+        const mergedSymbols = sortMarketSymbols([
+          ...current,
+          ...supportedSymbols,
+        ]);
+        return current.join(",") === mergedSymbols.join(",")
+          ? current
+          : mergedSymbols;
+      });
+    }
+  }, [symbolsInfo]);
 
   // Simulate PnL for non-live running bots
   useEffect(() => {
@@ -1011,6 +1191,20 @@ export default function BotPage() {
   };
 
   const handleCreate = () => {
+    if (
+      liveMode &&
+      isConnected &&
+      (availableBalance <= 0 || Number(investment) > availableBalance)
+    ) {
+      setBalanceMessage(
+        availableBalance <= 0
+          ? "Your Orderly account has no available collateral. Deposit supported collateral before starting a live bot."
+          : "Your investment is greater than your available collateral. Lower the investment or deposit more collateral.",
+      );
+      return;
+    }
+
+    setBalanceMessage("");
     setCreating(true);
     const willUseLive = liveMode && isConnected;
     setTimeout(() => {
@@ -1083,10 +1277,7 @@ export default function BotPage() {
 
   const investmentNum = Number(investment);
   const balanceWarning =
-    isConnected &&
-    freeCollateral != null &&
-    investmentNum > 0 &&
-    investmentNum > (freeCollateral ?? 0);
+    isConnected && investmentNum > 0 && investmentNum > availableBalance;
 
   return (
     <div
@@ -1108,6 +1299,7 @@ export default function BotPage() {
             onTradeExecuted={handleTradeExecuted}
             onPnlUpdate={handlePnlUpdate}
             onMarketDataStatus={handleMarketDataStatus}
+            onInsufficientBalance={handleInsufficientBalance}
           />
         ))}
       {bots
@@ -1279,6 +1471,61 @@ export default function BotPage() {
         </div>
       </div>
 
+      {balanceMessage && (
+        <div
+          role="alert"
+          style={{
+            margin: "0 16px 20px",
+            padding: "12px 16px",
+            border: "1px solid rgba(246,70,93,0.3)",
+            borderRadius: 8,
+            background: "rgba(246,70,93,0.08)",
+            color: "#f6a0a9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            fontSize: 13,
+          }}
+        >
+          <span>{balanceMessage}</span>
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: 12 }}
+          >
+            <button
+              onClick={() => {
+                setBalanceMessage("");
+                navigate("/portfolio/assets");
+              }}
+              style={{
+                border: 0,
+                padding: 0,
+                background: "none",
+                color: "#38e0f8",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Deposit collateral
+            </button>
+            <button
+              onClick={() => setBalanceMessage("")}
+              aria-label="Dismiss balance warning"
+              style={{
+                border: 0,
+                padding: 0,
+                background: "none",
+                color: "rgba(180,190,210,0.7)",
+                cursor: "pointer",
+              }}
+            >
+              Dismiss
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* Stats Row */}
       <div
         style={{
@@ -1320,7 +1567,7 @@ export default function BotPage() {
           {
             label: "Free Collateral",
             value: isConnected
-              ? (freeCollateral ?? 0).toLocaleString("en-US", {
+              ? availableBalance.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })
@@ -1813,7 +2060,7 @@ export default function BotPage() {
                   }}
                 >
                   $
-                  {(freeCollateral ?? 0).toLocaleString("en-US", {
+                  {availableBalance.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}{" "}
@@ -1824,14 +2071,16 @@ export default function BotPage() {
                       color: "rgba(56,224,248,0.6)",
                     }}
                   >
-                    USDC
+                    USD equivalent
                   </span>
                 </div>
               </div>
               <button
                 onClick={() => {
-                  if (freeCollateral && freeCollateral > 0) {
-                    setInvestment(Math.floor(freeCollateral * 0.8).toString());
+                  if (availableBalance > 0) {
+                    setInvestment(
+                      Math.floor(availableBalance * 0.8).toString(),
+                    );
                   }
                 }}
                 style={{
@@ -1847,6 +2096,44 @@ export default function BotPage() {
                 }}
               >
                 Use 80%
+              </button>
+            </div>
+          )}
+          {liveMode && isConnected && availableBalance <= 0 && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 20,
+                padding: "12px 16px",
+                border: "1px solid rgba(246,70,93,0.3)",
+                borderRadius: 8,
+                background: "rgba(246,70,93,0.08)",
+                color: "#f6a0a9",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                fontSize: 12,
+              }}
+            >
+              <span>
+                No eligible collateral is available for live trading. Deposit
+                USDC, USDT, or another supported asset into your Orderly
+                account.
+              </span>
+              <button
+                onClick={() => navigate("/portfolio/assets")}
+                style={{
+                  border: 0,
+                  padding: 0,
+                  background: "none",
+                  color: "#38e0f8",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Deposit collateral
               </button>
             </div>
           )}
@@ -1885,8 +2172,8 @@ export default function BotPage() {
             </div>
             <div>
               <label style={labelStyle}>
-                Investment (USDC)
-                {isConnected && freeCollateral != null && (
+                Investment ({quoteAsset})
+                {isConnected && (
                   <span
                     style={{
                       marginLeft: 6,
@@ -1896,7 +2183,7 @@ export default function BotPage() {
                       letterSpacing: 0,
                     }}
                   >
-                    max ${(freeCollateral ?? 0).toFixed(2)}
+                    max ${availableBalance.toFixed(2)}
                   </span>
                 )}
               </label>
@@ -1905,7 +2192,7 @@ export default function BotPage() {
                 value={investment}
                 onChange={(e) => setInvestment(e.target.value)}
                 placeholder="500"
-                min="10"
+                min="0.01"
                 style={{
                   ...inputStyle,
                   borderColor: balanceWarning
@@ -1913,7 +2200,7 @@ export default function BotPage() {
                     : "rgba(30,36,50,1)",
                 }}
               />
-              {balanceWarning && (
+              {balanceWarning && availableBalance > 0 && (
                 <div
                   style={{
                     fontSize: 11,
@@ -1921,8 +2208,9 @@ export default function BotPage() {
                     marginTop: 4,
                   }}
                 >
-                  ⚠ Exceeds available balance ($
-                  {(freeCollateral ?? 0).toFixed(2)} free)
+                  ⚠ Investment exceeds available balance ($
+                  {availableBalance.toFixed(2)} free). Lower the investment or
+                  deposit more collateral.
                 </div>
               )}
             </div>
@@ -2018,12 +2306,14 @@ export default function BotPage() {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Amount per Buy (USDC)</label>
+                  <label style={labelStyle}>
+                    Amount per Buy ({quoteAsset})
+                  </label>
                   <input
                     type="number"
                     value={dcaAmount}
                     onChange={(e) => setDcaAmount(e.target.value)}
-                    min="1"
+                    min="0.01"
                     style={inputStyle}
                   />
                 </div>
@@ -2252,13 +2542,16 @@ export default function BotPage() {
               creating ||
               !investment ||
               Number(investment) <= 0 ||
-              (liveMode && !isConnected)
+              (liveMode &&
+                (!isConnected || availableBalance <= 0 || balanceWarning))
             }
             style={{
               width: "100%",
               padding: "14px",
               background:
-                creating || (liveMode && !isConnected)
+                creating ||
+                (liveMode &&
+                  (!isConnected || availableBalance <= 0 || balanceWarning))
                   ? "rgba(56,224,248,0.3)"
                   : "linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%)",
               border: "none",
@@ -2267,7 +2560,9 @@ export default function BotPage() {
               fontSize: 15,
               fontWeight: 700,
               cursor:
-                creating || (liveMode && !isConnected)
+                creating ||
+                (liveMode &&
+                  (!isConnected || availableBalance <= 0 || balanceWarning))
                   ? "not-allowed"
                   : "pointer",
               fontFamily: "Manrope, sans-serif",
@@ -2279,9 +2574,13 @@ export default function BotPage() {
               ? "Creating Bot..."
               : liveMode && !isConnected
                 ? "Connect Wallet to Use Live Mode"
-                : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
-                    liveMode ? " (Live)" : " (Simulation)"
-                  }`}
+                : liveMode && availableBalance <= 0
+                  ? "Deposit Collateral to Use Live Mode"
+                  : liveMode && balanceWarning
+                    ? "Investment Exceeds Available Balance"
+                    : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
+                        liveMode ? " (Live)" : " (Simulation)"
+                      }`}
           </button>
         </div>
       )}
