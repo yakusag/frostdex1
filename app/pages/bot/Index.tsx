@@ -6,10 +6,14 @@ import {
   lazy,
   Suspense,
 } from "react";
-import { useAccount, useCollateral, useOrderEntry } from "@orderly.network/hooks";
+import {
+  useAccount,
+  useCollateral,
+  useOrderEntry,
+} from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
-import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 import type { Candle } from "@/components/BotChart";
+import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
@@ -29,6 +33,21 @@ interface BotConfig {
   createdAt: number;
   params: Record<string, string | number>;
   liveMode: boolean;
+  realizedPnl?: number;
+  position?: BotPosition | null;
+  markPrice?: number;
+}
+
+interface BotPosition {
+  entryPrice: number;
+  quantity: number;
+}
+
+interface BotPerformance {
+  pnl: number;
+  realizedPnl: number;
+  position: BotPosition | null;
+  markPrice: number;
 }
 
 interface TradeLog {
@@ -72,17 +91,17 @@ const POPULAR_SYMBOLS = [
 ];
 
 const SYMBOL_DISPLAY_MAP: Record<string, string> = {
-  "PERP_XAU_USDC":           "XAU/USDC",
-  "PERP_XAG_USDC":           "XAG/USDC",
-  "PERP_CL_USDC":            "OIL/USDC",
-  "PERP_NATGAS_USDC_arthur": "GAS/USDC",
+  PERP_XAU_USDC: "XAU/USDC",
+  PERP_XAG_USDC: "XAG/USDC",
+  PERP_CL_USDC: "OIL/USDC",
+  PERP_NATGAS_USDC_arthur: "GAS/USDC",
 };
 
 const BASE_SYMBOL_MAP: Record<string, string> = {
-  "PERP_XAU_USDC":           "XAU",
-  "PERP_XAG_USDC":           "XAG",
-  "PERP_CL_USDC":            "CL",
-  "PERP_NATGAS_USDC_arthur": "NATGAS",
+  PERP_XAU_USDC: "XAU",
+  PERP_XAG_USDC: "XAG",
+  PERP_CL_USDC: "CL",
+  PERP_NATGAS_USDC_arthur: "NATGAS",
 };
 
 function symbolDisplay(s: string) {
@@ -99,6 +118,30 @@ function getBaseSymbol(s: string) {
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
+}
+
+function getHistoricalPerformance(trades: TradeLog[]) {
+  let realizedPnl = 0;
+  let position: BotPosition | null = null;
+
+  for (const trade of [...trades]
+    .filter((item) => item.live)
+    .sort((a, b) => a.ts - b.ts)) {
+    if (trade.side === "BUY") {
+      position = { entryPrice: trade.price, quantity: trade.qty };
+      continue;
+    }
+
+    if (!position) continue;
+
+    const closedQty = Math.min(position.quantity, trade.qty);
+    realizedPnl += (trade.price - position.entryPrice) * closedQty;
+    const remainingQty: number = position.quantity - closedQty;
+    position =
+      remainingQty > 0 ? { ...position, quantity: remainingQty } : null;
+  }
+
+  return { realizedPnl, position };
 }
 
 function computeRSI(candles: Candle[], period = 14): number[] {
@@ -166,17 +209,14 @@ function OrderSubmitter({
   pending: PendingOrder;
   onDone: (result: { success: boolean; orderId?: string }) => void;
 }) {
-  const { submit } = useOrderEntry(
-    pending.symbol,
-    {
-      initialOrder: {
-        side: pending.side === "BUY" ? OrderSide.BUY : OrderSide.SELL,
-        order_type: OrderType.MARKET,
-        order_quantity: pending.qty,
-      },
-      watchOrderbook: false,
-    } as any
-  );
+  const { submit } = useOrderEntry(pending.symbol, {
+    initialOrder: {
+      side: pending.side === "BUY" ? OrderSide.BUY : OrderSide.SELL,
+      order_type: OrderType.MARKET,
+      order_quantity: pending.qty,
+    },
+    watchOrderbook: false,
+  } as any);
 
   const submitted = useRef(false);
 
@@ -189,7 +229,10 @@ function OrderSubmitter({
         if (res instanceof Error) {
           onDone({ success: false });
         } else {
-          onDone({ success: true, orderId: res?.order_id || res?.data?.order_id });
+          onDone({
+            success: true,
+            orderId: res?.order_id || res?.data?.order_id,
+          });
         }
       })
       .catch(() => onDone({ success: false }));
@@ -202,20 +245,44 @@ function OrderSubmitter({
 // Headless component: monitors real price + places real orders when signals fire.
 function BotLiveEngine({
   bot,
+  tradeLogs,
   onTradeExecuted,
+  onPnlUpdate,
 }: {
   bot: BotConfig;
+  tradeLogs: TradeLog[];
   onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
+  onPnlUpdate: (botId: string, performance: BotPerformance) => void;
 }) {
   const { state: accountState } = useAccount();
-  const { freeCollateral } = useCollateral() as { freeCollateral: number };
   const feed = useBinanceFeed(getBaseSymbol(bot.symbol), "15m", true);
 
-  const inPositionRef = useRef(false);
-  const entryPriceRef = useRef(0);
+  const historicalPerformance = getHistoricalPerformance(tradeLogs);
+  const initialPosition =
+    bot.position !== undefined ? bot.position : historicalPerformance.position;
+  const initialRealizedPnl =
+    bot.realizedPnl ?? historicalPerformance.realizedPnl;
+  const positionRef = useRef<BotPosition | null>(initialPosition);
+  const realizedPnlRef = useRef(initialRealizedPnl);
   const lastEvalRef = useRef(0);
   const dcaCycleRef = useRef(0);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+
+  useEffect(() => {
+    if (!feed.latestPrice) return;
+
+    const position = positionRef.current;
+    onPnlUpdate(bot.id, {
+      pnl:
+        realizedPnlRef.current +
+        (position
+          ? (feed.latestPrice - position.entryPrice) * position.quantity
+          : 0),
+      realizedPnl: realizedPnlRef.current,
+      position,
+      markPrice: feed.latestPrice,
+    });
+  }, [bot.id, feed.latestPrice, onPnlUpdate]);
 
   useEffect(() => {
     if (bot.status !== "running") return;
@@ -245,12 +312,10 @@ function BotLiveEngine({
       const emaSlow = computeEMA(candles, emaPeriod);
       const last = candles.length - 1;
       shouldBuy =
-        rsi[last] < 35 &&
-        emaFast[last] > emaSlow[last] &&
-        !inPositionRef.current;
+        rsi[last] < 35 && emaFast[last] > emaSlow[last] && !positionRef.current;
       shouldSell =
         (rsi[last] > 68 || emaFast[last] < emaSlow[last]) &&
-        inPositionRef.current;
+        !!positionRef.current;
     } else if (bot.strategy === "grid") {
       const grids = Number(bot.params.grids) || 10;
       const prices = candles.map((c) => c.c);
@@ -260,30 +325,29 @@ function BotLiveEngine({
       const last = candles.length - 1;
       const curLevel = Math.floor((price - loP) / step);
       const prevLevel = Math.floor((candles[last - 1].c - loP) / step);
-      shouldBuy = curLevel < prevLevel && !inPositionRef.current;
-      shouldSell = curLevel > prevLevel && inPositionRef.current;
+      shouldBuy = curLevel < prevLevel && !positionRef.current;
+      shouldSell = curLevel > prevLevel && !!positionRef.current;
     } else if (bot.strategy === "dca") {
       const intervalMs =
-        ({
-          "15m": 15 * 60 * 1000,
-          "30m": 30 * 60 * 1000,
-          "1h": 60 * 60 * 1000,
-          "4h": 4 * 60 * 60 * 1000,
-          "8h": 8 * 60 * 60 * 1000,
-          "12h": 12 * 60 * 60 * 1000,
-          "1d": 24 * 60 * 60 * 1000,
-        } as Record<string, number>)[String(bot.params.interval)] ||
-        60 * 60 * 1000;
+        (
+          {
+            "15m": 15 * 60 * 1000,
+            "30m": 30 * 60 * 1000,
+            "1h": 60 * 60 * 1000,
+            "4h": 4 * 60 * 60 * 1000,
+            "8h": 8 * 60 * 60 * 1000,
+            "12h": 12 * 60 * 60 * 1000,
+            "1d": 24 * 60 * 60 * 1000,
+          } as Record<string, number>
+        )[String(bot.params.interval)] || 60 * 60 * 1000;
       dcaCycleRef.current += 1;
       const intervalsPerCycle = Math.max(1, Math.round(intervalMs / 20_000));
       shouldBuy = dcaCycleRef.current % intervalsPerCycle === 0;
       shouldSell =
-        inPositionRef.current && price > entryPriceRef.current * 1.05;
+        !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
     }
 
     if (shouldBuy && !pendingOrder) {
-      inPositionRef.current = true;
-      entryPriceRef.current = price;
       setPendingOrder({
         botId: bot.id,
         symbol: bot.symbol,
@@ -291,14 +355,13 @@ function BotLiveEngine({
         qty: qtyStr,
         triggerPrice: price,
       });
-    } else if (shouldSell && !pendingOrder) {
-      inPositionRef.current = false;
-      const sellQty = Math.max(minQty, (investment * 0.5) / price);
+    } else if (shouldSell && !pendingOrder && positionRef.current) {
+      const position = positionRef.current;
       setPendingOrder({
         botId: bot.id,
         symbol: bot.symbol,
         side: "SELL",
-        qty: sellQty.toFixed(6),
+        qty: position.quantity.toFixed(6),
         triggerPrice: price,
       });
     }
@@ -310,11 +373,41 @@ function BotLiveEngine({
         pending={pendingOrder}
         onDone={(result) => {
           if (result.success) {
+            const quantity = parseFloat(pendingOrder.qty);
+            if (pendingOrder.side === "BUY") {
+              positionRef.current = {
+                entryPrice: pendingOrder.triggerPrice,
+                quantity,
+              };
+            } else if (positionRef.current) {
+              const position = positionRef.current;
+              const closedQty = Math.min(position.quantity, quantity);
+              realizedPnlRef.current +=
+                (pendingOrder.triggerPrice - position.entryPrice) * closedQty;
+              const remainingQty: number = position.quantity - closedQty;
+              positionRef.current =
+                remainingQty > 0
+                  ? { ...position, quantity: remainingQty }
+                  : null;
+            }
+
+            const position = positionRef.current;
+            onPnlUpdate(bot.id, {
+              pnl:
+                realizedPnlRef.current +
+                (position
+                  ? (pendingOrder.triggerPrice - position.entryPrice) *
+                    position.quantity
+                  : 0),
+              realizedPnl: realizedPnlRef.current,
+              position,
+              markPrice: pendingOrder.triggerPrice,
+            });
             onTradeExecuted({
               botId: bot.id,
               side: pendingOrder.side,
               symbol: bot.symbol,
-              qty: parseFloat(pendingOrder.qty),
+              qty: quantity,
               price: pendingOrder.triggerPrice,
               ts: Date.now(),
               live: true,
@@ -350,7 +443,7 @@ export default function BotPage() {
     }
   });
   const [tab, setTab] = useState<"bots" | "create" | "logs" | "backtest">(
-    "bots"
+    "bots",
   );
   const [allSymbols, setAllSymbols] = useState<string[]>(POPULAR_SYMBOLS);
   const [strategy, setStrategy] = useState<BotStrategy>("grid");
@@ -391,8 +484,15 @@ export default function BotPage() {
           .map((r: any) => r.symbol as string)
           .filter(Boolean)
           .sort((a: string, b: string) => {
-            const priority = ["PERP_BTC_USDC","PERP_ETH_USDC","PERP_SOL_USDC","PERP_ARB_USDC","PERP_BNB_USDC"];
-            const ai = priority.indexOf(a), bi = priority.indexOf(b);
+            const priority = [
+              "PERP_BTC_USDC",
+              "PERP_ETH_USDC",
+              "PERP_SOL_USDC",
+              "PERP_ARB_USDC",
+              "PERP_BNB_USDC",
+            ];
+            const ai = priority.indexOf(a),
+              bi = priority.indexOf(b);
             if (ai !== -1 && bi !== -1) return ai - bi;
             if (ai !== -1) return -1;
             if (bi !== -1) return 1;
@@ -423,23 +523,52 @@ export default function BotPage() {
     };
   }, []);
 
-  const handleTradeExecuted = useCallback(
-    (log: Omit<TradeLog, "id">) => {
-      const entry: TradeLog = { ...log, id: generateId() };
-      setLogs((prev) => {
-        const updated = [entry, ...prev.slice(0, 199)];
-        localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
-        return updated;
-      });
+  const handleTradeExecuted = useCallback((log: Omit<TradeLog, "id">) => {
+    const entry: TradeLog = { ...log, id: generateId() };
+    setLogs((prev) => {
+      const updated = [entry, ...prev.slice(0, 199)];
+      localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+    setBots((prev) => {
+      const updated = prev.map((b) =>
+        b.id === log.botId ? { ...b, trades: b.trades + 1 } : b,
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const handlePnlUpdate = useCallback(
+    (botId: string, performance: BotPerformance) => {
       setBots((prev) => {
-        const updated = prev.map((b) =>
-          b.id === log.botId ? { ...b, trades: b.trades + 1 } : b
-        );
+        let changed = false;
+        const updated = prev.map((bot) => {
+          if (bot.id !== botId) return bot;
+          if (
+            Math.round(bot.pnl * 100) === Math.round(performance.pnl * 100) &&
+            bot.realizedPnl === performance.realizedPnl &&
+            bot.position?.entryPrice === performance.position?.entryPrice &&
+            bot.position?.quantity === performance.position?.quantity
+          ) {
+            return bot;
+          }
+          changed = true;
+          return {
+            ...bot,
+            pnl: performance.pnl,
+            pnlPct: (performance.pnl / bot.investment) * 100,
+            realizedPnl: performance.realizedPnl,
+            position: performance.position,
+            markPrice: performance.markPrice,
+          };
+        });
+        if (!changed) return prev;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
       });
     },
-    []
+    [],
   );
 
   const handleCreate = () => {
@@ -454,8 +583,8 @@ export default function BotPage() {
               grids: Number(gridCount),
             }
           : strategy === "dca"
-          ? { interval: dcaInterval, amount: Number(dcaAmount) }
-          : { rsi: Number(sigRsi), ema: Number(sigEma) };
+            ? { interval: dcaInterval, amount: Number(dcaAmount) }
+            : { rsi: Number(sigRsi), ema: Number(sigEma) };
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -472,6 +601,9 @@ export default function BotPage() {
         createdAt: Date.now(),
         params,
         liveMode: willUseLive,
+        realizedPnl: 0,
+        position: null,
+        markPrice: 0,
       };
       saveBots([newBot, ...bots]);
       setCreating(false);
@@ -489,8 +621,8 @@ export default function BotPage() {
               ...b,
               status: b.status === "running" ? "stopped" : "running",
             }
-          : b
-      )
+          : b,
+      ),
     );
   };
 
@@ -501,7 +633,9 @@ export default function BotPage() {
   const totalInvestment = bots.reduce((s, b) => s + b.investment, 0);
   const totalPnl = bots.reduce((s, b) => s + b.pnl, 0);
   const runningCount = bots.filter((b) => b.status === "running").length;
-  const liveCount = bots.filter((b) => b.status === "running" && b.liveMode).length;
+  const liveCount = bots.filter(
+    (b) => b.status === "running" && b.liveMode,
+  ).length;
 
   const investmentNum = Number(investment);
   const balanceWarning =
@@ -526,7 +660,9 @@ export default function BotPage() {
           <BotLiveEngine
             key={bot.id}
             bot={bot}
+            tradeLogs={logs.filter((log) => log.botId === bot.id)}
             onTradeExecuted={handleTradeExecuted}
+            onPnlUpdate={handlePnlUpdate}
           />
         ))}
 
@@ -578,7 +714,9 @@ export default function BotPage() {
         />
 
         {/* Content */}
-        <div style={{ position: "relative", zIndex: 1, padding: "28px 24px 24px" }}>
+        <div
+          style={{ position: "relative", zIndex: 1, padding: "28px 24px 24px" }}
+        >
           <div
             style={{
               display: "flex",
@@ -611,7 +749,8 @@ export default function BotPage() {
                 borderRadius: 8,
                 padding: "2px 8px",
                 background: "rgba(56,224,248,0.05)",
-                boxShadow: "0 0 14px rgba(56,224,248,0.22), 0 0 6px rgba(14,203,129,0.18)",
+                boxShadow:
+                  "0 0 14px rgba(56,224,248,0.22), 0 0 6px rgba(14,203,129,0.18)",
               }}
             >
               <img
@@ -650,36 +789,36 @@ export default function BotPage() {
             >
               ❄ Powered by FrostDex
             </span>
-          {liveCount > 0 && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#0ecb81",
-                background: "rgba(14,203,129,0.1)",
-                border: "1px solid rgba(14,203,129,0.25)",
-                borderRadius: 4,
-                padding: "2px 8px",
-              }}
-            >
+            {liveCount > 0 && (
               <span
                 style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: "#0ecb81",
-                  boxShadow: "0 0 6px #0ecb81",
-                  animation: "dot-pulse 1.5s ease infinite",
-                  display: "inline-block",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#0ecb81",
+                  background: "rgba(14,203,129,0.1)",
+                  border: "1px solid rgba(14,203,129,0.25)",
+                  borderRadius: 4,
+                  padding: "2px 8px",
                 }}
-              />
-              {liveCount} bot{liveCount > 1 ? "s" : ""} trading live
-            </span>
-          )}
-        </div>
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#0ecb81",
+                    boxShadow: "0 0 6px #0ecb81",
+                    animation: "dot-pulse 1.5s ease infinite",
+                    display: "inline-block",
+                  }}
+                />
+                {liveCount} bot{liveCount > 1 ? "s" : ""} trading live
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -717,8 +856,7 @@ export default function BotPage() {
           },
           {
             label: "Total P&L",
-            value:
-              (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2),
+            value: (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2),
             prefix: "$",
             color: totalPnl >= 0 ? "#0ecb81" : "#f6465d",
           },
@@ -734,7 +872,11 @@ export default function BotPage() {
             color: "#eaecef",
           },
         ].map((stat) => (
-          <div key={stat.label} className="bot-card" style={{ padding: "16px 20px" }}>
+          <div
+            key={stat.label}
+            className="bot-card"
+            style={{ padding: "16px 20px" }}
+          >
             <div
               style={{
                 fontSize: 11,
@@ -746,10 +888,10 @@ export default function BotPage() {
             >
               {stat.label}
             </div>
-            <div
-              style={{ fontSize: 20, fontWeight: 700, color: stat.color }}
-            >
-              {(stat as any).prefix}{stat.value}{(stat as any).suffix}
+            <div style={{ fontSize: 20, fontWeight: 700, color: stat.color }}>
+              {(stat as any).prefix}
+              {stat.value}
+              {(stat as any).suffix}
             </div>
           </div>
         ))}
@@ -779,12 +921,9 @@ export default function BotPage() {
               fontSize: 13,
               fontWeight: 600,
               fontFamily: "Manrope, sans-serif",
-              color:
-                tab === t ? "#38e0f8" : "rgba(180,190,210,0.5)",
+              color: tab === t ? "#38e0f8" : "rgba(180,190,210,0.5)",
               borderBottom:
-                tab === t
-                  ? "2px solid #38e0f8"
-                  : "2px solid transparent",
+                tab === t ? "2px solid #38e0f8" : "2px solid transparent",
               marginBottom: -1,
               whiteSpace: "nowrap",
               transition: "color 0.15s ease",
@@ -793,10 +932,10 @@ export default function BotPage() {
             {t === "bots"
               ? `My Bots (${bots.length})`
               : t === "create"
-              ? "+ Create Bot"
-              : t === "backtest"
-              ? "📊 Backtest"
-              : `Trade History (${logs.length})`}
+                ? "+ Create Bot"
+                : t === "backtest"
+                  ? "📊 Backtest"
+                  : `Trade History (${logs.length})`}
           </button>
         ))}
       </div>
@@ -874,8 +1013,8 @@ export default function BotPage() {
                               info.color === "#38e0f8"
                                 ? "56,224,248"
                                 : info.color === "#0ecb81"
-                                ? "14,203,129"
-                                : "240,185,11"
+                                  ? "14,203,129"
+                                  : "240,185,11"
                             },0.12)`,
                             display: "flex",
                             alignItems: "center",
@@ -960,7 +1099,8 @@ export default function BotPage() {
                             }}
                           >
                             {info.label} · {symbolDisplay(bot.symbol)} · $
-                            {bot.investment.toLocaleString()} · {botLogs.length} trades
+                            {bot.investment.toLocaleString()} · {botLogs.length}{" "}
+                            trades
                           </div>
                         </div>
                       </div>
@@ -978,8 +1118,7 @@ export default function BotPage() {
                             style={{
                               fontSize: 16,
                               fontWeight: 700,
-                              color:
-                                bot.pnl >= 0 ? "#0ecb81" : "#f6465d",
+                              color: bot.pnl >= 0 ? "#0ecb81" : "#f6465d",
                             }}
                           >
                             {bot.pnl >= 0 ? "+" : ""}${bot.pnl.toFixed(2)}
@@ -987,8 +1126,7 @@ export default function BotPage() {
                           <div
                             style={{
                               fontSize: 11,
-                              color:
-                                bot.pnlPct >= 0 ? "#0ecb81" : "#f6465d",
+                              color: bot.pnlPct >= 0 ? "#0ecb81" : "#f6465d",
                               fontWeight: 600,
                             }}
                           >
@@ -1058,9 +1196,7 @@ export default function BotPage() {
                           >
                             {k}:{" "}
                           </span>
-                          <span
-                            style={{ color: "#eaecef", fontWeight: 600 }}
-                          >
+                          <span style={{ color: "#eaecef", fontWeight: 600 }}>
                             {String(v)}
                           </span>
                         </div>
@@ -1075,9 +1211,7 @@ export default function BotPage() {
                         >
                           created:{" "}
                         </span>
-                        <span
-                          style={{ color: "#eaecef", fontWeight: 600 }}
-                        >
+                        <span style={{ color: "#eaecef", fontWeight: 600 }}>
                           {new Date(bot.createdAt).toLocaleDateString()}
                         </span>
                       </div>
@@ -1116,8 +1250,8 @@ export default function BotPage() {
                             info.color === "#38e0f8"
                               ? "56,224,248"
                               : info.color === "#0ecb81"
-                              ? "14,203,129"
-                              : "240,185,11"
+                                ? "14,203,129"
+                                : "240,185,11"
                           },0.1)`
                         : "rgb(20,24,30)",
                       border: `1px solid ${
@@ -1214,9 +1348,7 @@ export default function BotPage() {
               <button
                 onClick={() => {
                   if (freeCollateral && freeCollateral > 0) {
-                    setInvestment(
-                      Math.floor(freeCollateral * 0.8).toString()
-                    );
+                    setInvestment(Math.floor(freeCollateral * 0.8).toString());
                   }
                 }}
                 style={{
@@ -1306,7 +1438,8 @@ export default function BotPage() {
                     marginTop: 4,
                   }}
                 >
-                  ⚠ Exceeds available balance (${(freeCollateral ?? 0).toFixed(2)} free)
+                  ⚠ Exceeds available balance ($
+                  {(freeCollateral ?? 0).toFixed(2)} free)
                 </div>
               )}
             </div>
@@ -1384,13 +1517,21 @@ export default function BotPage() {
                     onChange={(e) => setDcaInterval(e.target.value)}
                     style={inputStyle}
                   >
-                    {["15m", "30m", "1h", "4h", "8h", "12h", "1d", "3d", "1w"].map(
-                      (v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      )
-                    )}
+                    {[
+                      "15m",
+                      "30m",
+                      "1h",
+                      "4h",
+                      "8h",
+                      "12h",
+                      "1d",
+                      "3d",
+                      "1w",
+                    ].map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1459,8 +1600,8 @@ export default function BotPage() {
                   lineHeight: 1.5,
                 }}
               >
-                💡 Buys when RSI &lt; 35 + EMA crossover confirmed, sells
-                when RSI &gt; 68.
+                💡 Buys when RSI &lt; 35 + EMA crossover confirmed, sells when
+                RSI &gt; 68.
               </div>
             </div>
           )}
@@ -1472,9 +1613,7 @@ export default function BotPage() {
                 ? "rgba(14,203,129,0.06)"
                 : "rgba(20,24,30,1)",
               border: `1px solid ${
-                liveMode
-                  ? "rgba(14,203,129,0.25)"
-                  : "rgba(30,36,50,1)"
+                liveMode ? "rgba(14,203,129,0.25)" : "rgba(30,36,50,1)"
               }`,
               borderRadius: 8,
               padding: "14px 16px",
@@ -1533,9 +1672,7 @@ export default function BotPage() {
                 height: 24,
                 borderRadius: 12,
                 border: "none",
-                background: liveMode
-                  ? "#0ecb81"
-                  : "rgba(30,36,50,1)",
+                background: liveMode ? "#0ecb81" : "rgba(30,36,50,1)",
                 cursor: "pointer",
                 position: "relative",
                 transition: "background 0.2s ease",
@@ -1586,8 +1723,7 @@ export default function BotPage() {
               width: "100%",
               padding: "14px",
               background:
-                creating ||
-                (liveMode && !isConnected)
+                creating || (liveMode && !isConnected)
                   ? "rgba(56,224,248,0.3)"
                   : "linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%)",
               border: "none",
@@ -1607,10 +1743,10 @@ export default function BotPage() {
             {creating
               ? "Creating Bot..."
               : liveMode && !isConnected
-              ? "Connect Wallet to Use Live Mode"
-              : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
-                  liveMode ? " (Live)" : " (Simulation)"
-                }`}
+                ? "Connect Wallet to Use Live Mode"
+                : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
+                    liveMode ? " (Live)" : " (Simulation)"
+                  }`}
           </button>
         </div>
       )}
@@ -1632,7 +1768,9 @@ export default function BotPage() {
             <div style={{ fontSize: 13, color: "rgba(180,190,210,0.5)" }}>
               Bot trade history · {logs.length} executions
               {logs.filter((l) => l.live).length > 0 && (
-                <span style={{ marginLeft: 8, color: "#0ecb81", fontWeight: 600 }}>
+                <span
+                  style={{ marginLeft: 8, color: "#0ecb81", fontWeight: 600 }}
+                >
                   ({logs.filter((l) => l.live).length} live)
                 </span>
               )}
@@ -1701,7 +1839,8 @@ export default function BotPage() {
                     key={log.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 80px 130px 100px 110px 90px 120px",
+                      gridTemplateColumns:
+                        "1fr 80px 130px 100px 110px 90px 120px",
                       gap: 8,
                       padding: "10px 16px",
                       fontSize: 13,
@@ -1709,9 +1848,7 @@ export default function BotPage() {
                       alignItems: "center",
                     }}
                   >
-                    <div
-                      style={{ color: "#eaecef", fontWeight: 600 }}
-                    >
+                    <div style={{ color: "#eaecef", fontWeight: 600 }}>
                       {bot?.name || log.botId}
                     </div>
                     <div>
@@ -1725,8 +1862,7 @@ export default function BotPage() {
                             log.side === "BUY"
                               ? "rgba(14,203,129,0.12)"
                               : "rgba(246,70,93,0.12)",
-                          color:
-                            log.side === "BUY" ? "#0ecb81" : "#f6465d",
+                          color: log.side === "BUY" ? "#0ecb81" : "#f6465d",
                         }}
                       >
                         {log.side}
@@ -1738,9 +1874,7 @@ export default function BotPage() {
                     <div style={{ textAlign: "right", color: "#eaecef" }}>
                       {log.qty}
                     </div>
-                    <div
-                      style={{ textAlign: "right", color: "#eaecef" }}
-                    >
+                    <div style={{ textAlign: "right", color: "#eaecef" }}>
                       ${log.price.toFixed(2)}
                     </div>
                     <div>
