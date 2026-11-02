@@ -1,5 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useBinanceFeed } from "@/hooks/useBinanceFeed";
+import {
+  isTrendPullbackEntry,
+  normalizeTrendParameter,
+} from "@/utils/trend-strategy";
 import BotChart, { Candle, Signal } from "./BotChart";
 
 type Strategy = "grid" | "dca" | "signal" | "trend";
@@ -108,6 +112,8 @@ function runBacktest(
   const emaFast = computeEMA(candles, params.emaFast || 9);
   const emaSlow = computeEMA(candles, params.emaSlow || 21);
   const atr = computeATR(candles, 14);
+  const trendStopAtr = normalizeTrendParameter(params.stopAtr, 2);
+  const trendRewardRisk = normalizeTrendParameter(params.rewardRisk, 2.5);
 
   for (let i = 20; i < candles.length; i++) {
     const c = candles[i];
@@ -142,15 +148,15 @@ function runBacktest(
         i % interval === 0 && cash >= (params.amountPerBuy || investment * 0.1);
       shouldSell = position > 0 && c.c > entryPrice * 1.05;
     } else if (strategy === "trend") {
-      const stopAtr = params.stopAtr || 2;
-      const rewardRisk = params.rewardRisk || 2.5;
       if (position === 0) {
-        shouldBuy =
-          emaFast[i] > emaSlow[i] &&
-          emaFast[i - 1] <= emaSlow[i - 1] &&
-          rsi[i] >= 45 &&
-          rsi[i] < 70 &&
-          atr[i] > 0;
+        shouldBuy = isTrendPullbackEntry(
+          candles,
+          emaFast,
+          emaSlow,
+          rsi,
+          atr,
+          i,
+        );
       } else if (c.l <= stopPrice) {
         shouldSell = true;
         exitPrice = stopPrice;
@@ -164,7 +170,7 @@ function runBacktest(
 
     if (shouldBuy && cash > c.c * 0.05) {
       if (strategy === "trend") {
-        const stopDistance = atr[i] * (params.stopAtr || 2);
+        const stopDistance = atr[i] * trendStopAtr;
         const quantity = Math.min(
           (cash * 0.01) / stopDistance,
           (cash * 0.25) / c.c,
@@ -174,7 +180,7 @@ function runBacktest(
           entryPrice = c.c;
           cash -= position * c.c;
           stopPrice = c.c - stopDistance;
-          targetPrice = c.c + stopDistance * (params.rewardRisk || 2.5);
+          targetPrice = c.c + stopDistance * trendRewardRisk;
           trades++;
           signals.push({ t: c.t, price: c.c, side: "BUY" });
         }
@@ -350,6 +356,8 @@ export default function BotBacktest({
     grids,
     dcaInterval,
     dcaAmount,
+    trendStopAtr,
+    trendRewardRisk,
     investment,
   ]);
 

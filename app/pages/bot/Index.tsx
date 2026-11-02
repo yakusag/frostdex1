@@ -16,6 +16,11 @@ import {
 } from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
 import type { Candle } from "@/components/BotChart";
+import {
+  getLastClosedTrendCandleIndex,
+  isTrendPullbackEntry,
+  normalizeTrendParameter,
+} from "@/utils/trend-strategy";
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
@@ -375,7 +380,7 @@ const STRATEGY_INFO: Record<
   },
   trend: {
     label: "Risk-Managed Trend",
-    desc: "Trend-confirmed entries, 1% risk sizing, ATR stop and 2.5R target. Risk is limited, not eliminated.",
+    desc: "Trend pullback entries, 1% risk sizing, ATR stop and a 2.5R target. Risk is limited, not eliminated.",
     icon: "↗",
     color: "#ff8a65",
   },
@@ -640,30 +645,27 @@ function BotLiveEngine({
       shouldSell =
         !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
     } else if (bot.strategy === "trend") {
-      const last = candles.length - 1;
+      const last = getLastClosedTrendCandleIndex(candles);
+      if (last < 21) return;
       const emaFast = computeEMA(candles, 9);
       const emaSlow = computeEMA(candles, 21);
       const rsi = computeRSI(candles, 14);
-      const atr = computeATR(candles, 14)[last];
-      const stopAtr = Number(bot.params.stopAtr) || 2;
-      const rewardRisk = Number(bot.params.rewardRisk) || 2.5;
+      const atr = computeATR(candles, 14);
+      const stopAtr = normalizeTrendParameter(bot.params.stopAtr, 2);
+      const rewardRisk = normalizeTrendParameter(bot.params.rewardRisk, 2.5);
       const position = managedPosition;
 
       shouldBuy =
         !position &&
-        emaFast[last] > emaSlow[last] &&
-        emaFast[last - 1] <= emaSlow[last - 1] &&
-        rsi[last] >= 45 &&
-        rsi[last] < 70 &&
-        atr > 0;
+        isTrendPullbackEntry(candles, emaFast, emaSlow, rsi, atr, last);
       shouldSell =
         !!position &&
         (price <= position.stopPrice ||
           price >= position.targetPrice ||
           emaFast[last] < emaSlow[last]);
 
-      if (!pendingOrder && shouldBuy && atr > 0) {
-        const stopDistance = atr * stopAtr;
+      if (!pendingOrder && shouldBuy) {
+        const stopDistance = atr[last] * stopAtr;
         const riskBudget = investment * 0.01;
         const maxNotional = availableBudget * 0.25;
         const qty =
@@ -826,18 +828,32 @@ function BotPaperEngine({
 
     const price = feed.latestPrice;
     const candles = feed.candles;
-    const last = candles.length - 1;
+    const last = getLastClosedTrendCandleIndex(candles);
+    if (last < 21) {
+      onPaperUpdate(bot.id, { marketDataStatus: "ready" });
+      return;
+    }
     const candleTime = candles[last].t;
+    const closedCandle = candles[last];
+    const newClosedCandle = candleTime !== bot.paperLastCandle;
     let position = bot.paperPosition ?? null;
     let realizedPnl = bot.paperRealizedPnl ?? 0;
     let trade: Omit<TradeLog, "id"> | undefined;
 
     if (position) {
       let exitPrice: number | null = null;
-      if (price <= position.stopPrice) exitPrice = position.stopPrice;
-      else if (price >= position.targetPrice) exitPrice = position.targetPrice;
-      else if (
-        candleTime !== bot.paperLastCandle &&
+      if (
+        price <= position.stopPrice ||
+        (newClosedCandle && closedCandle.l <= position.stopPrice)
+      ) {
+        exitPrice = position.stopPrice;
+      } else if (
+        price >= position.targetPrice ||
+        (newClosedCandle && closedCandle.h >= position.targetPrice)
+      ) {
+        exitPrice = position.targetPrice;
+      } else if (
+        newClosedCandle &&
         computeEMA(candles, 9)[last] < computeEMA(candles, 21)[last]
       ) {
         exitPrice = price;
@@ -856,20 +872,23 @@ function BotPaperEngine({
         };
         position = null;
       }
-    } else if (candleTime !== bot.paperLastCandle) {
+    } else if (newClosedCandle) {
       const emaFast = computeEMA(candles, 9);
       const emaSlow = computeEMA(candles, 21);
       const rsi = computeRSI(candles, 14);
-      const atr = computeATR(candles, 14)[last];
-      const shouldBuy =
-        emaFast[last] > emaSlow[last] &&
-        emaFast[last - 1] <= emaSlow[last - 1] &&
-        rsi[last] >= 45 &&
-        rsi[last] < 70 &&
-        atr > 0;
+      const atr = computeATR(candles, 14);
+      const shouldBuy = isTrendPullbackEntry(
+        candles,
+        emaFast,
+        emaSlow,
+        rsi,
+        atr,
+        last,
+      );
 
       if (shouldBuy) {
-        const stopDistance = atr * (Number(bot.params.stopAtr) || 2);
+        const stopDistance =
+          atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
         const riskBudget = bot.investment * 0.01;
         const maxNotional = bot.investment * 0.25;
         const qty =
@@ -884,7 +903,9 @@ function BotPaperEngine({
             entryPrice: price,
             stopPrice: price - stopDistance,
             targetPrice:
-              price + stopDistance * (Number(bot.params.rewardRisk) || 2.5),
+              price +
+              stopDistance *
+                normalizeTrendParameter(bot.params.rewardRisk, 2.5),
           };
           trade = {
             botId: bot.id,
@@ -1184,8 +1205,10 @@ export default function BotPage() {
     setSymbol(bot.symbol);
     setInvestment(String(bot.investment));
     setBotName(bot.name);
-    setTrendStopAtr(String(bot.params.stopAtr ?? 2));
-    setTrendRewardRisk(String(bot.params.rewardRisk ?? 2.5));
+    setTrendStopAtr(String(normalizeTrendParameter(bot.params.stopAtr, 2)));
+    setTrendRewardRisk(
+      String(normalizeTrendParameter(bot.params.rewardRisk, 2.5)),
+    );
     setLiveMode(true);
     setTab("create");
   };
@@ -1220,8 +1243,8 @@ export default function BotPage() {
             : strategy === "signal"
               ? { rsi: Number(sigRsi), ema: Number(sigEma) }
               : {
-                  stopAtr: Number(trendStopAtr),
-                  rewardRisk: Number(trendRewardRisk),
+                  stopAtr: normalizeTrendParameter(trendStopAtr, 2),
+                  rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
                 };
 
       const newBot: BotConfig = {
@@ -1810,6 +1833,26 @@ export default function BotPage() {
                             {bot.investment.toLocaleString()} · {botLogs.length}{" "}
                             trades
                           </div>
+                          {isRunning && !isLive && bot.strategy === "trend" && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color:
+                                  bot.marketDataStatus === "unavailable"
+                                    ? "#f6465d"
+                                    : "rgba(180,190,210,0.55)",
+                                marginTop: 4,
+                              }}
+                            >
+                              {bot.marketDataStatus === "unavailable"
+                                ? "Market data unavailable — paper trading is paused."
+                                : bot.marketDataStatus === "ready"
+                                  ? bot.paperPosition
+                                    ? `Paper position open · stop $${bot.paperPosition.stopPrice.toLocaleString()} · target $${bot.paperPosition.targetPrice.toLocaleString()}`
+                                    : "Waiting for a confirmed 15m pullback setup. Keep this page open."
+                                  : "Connecting to live market data..."}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1923,7 +1966,13 @@ export default function BotPage() {
                             {k}:{" "}
                           </span>
                           <span style={{ color: "#eaecef", fontWeight: 600 }}>
-                            {String(v)}
+                            {String(
+                              bot.strategy === "trend" && k === "stopAtr"
+                                ? normalizeTrendParameter(v, 2)
+                                : bot.strategy === "trend" && k === "rewardRisk"
+                                  ? normalizeTrendParameter(v, 2.5)
+                                  : v,
+                            )}
                           </span>
                         </div>
                       ))}
@@ -2395,6 +2444,11 @@ export default function BotPage() {
                     type="number"
                     value={trendStopAtr}
                     onChange={(e) => setTrendStopAtr(e.target.value)}
+                    onBlur={() =>
+                      setTrendStopAtr(
+                        String(normalizeTrendParameter(trendStopAtr, 2)),
+                      )
+                    }
                     min="1"
                     max="5"
                     step="0.5"
@@ -2407,6 +2461,11 @@ export default function BotPage() {
                     type="number"
                     value={trendRewardRisk}
                     onChange={(e) => setTrendRewardRisk(e.target.value)}
+                    onBlur={() =>
+                      setTrendRewardRisk(
+                        String(normalizeTrendParameter(trendRewardRisk, 2.5)),
+                      )
+                    }
                     min="1"
                     max="5"
                     step="0.5"
@@ -2422,9 +2481,11 @@ export default function BotPage() {
                   lineHeight: 1.5,
                 }}
               >
+                Enters after a pullback in an EMA 9/21 uptrend (RSI 45–70).
                 Position size risks up to 1% of the bot allocation, capped at
-                25% notional. Live stops are monitored by this app and can slip
-                or fail during outages.
+                25% notional; targets are capped at 5R and are not guaranteed.
+                Live stops are monitored by this app and can slip or fail during
+                outages.
               </div>
             </div>
           )}

@@ -223,6 +223,13 @@ body {
   }
 }
 
+/* Dropdown lists scroll independently of the page ticker. */
+.oui-markets-dropdown-menu-content .oui-table-thead {
+  top: 0 !important;
+  z-index: 20;
+  background-color: var(--oui-table-background-color, #14181e) !important;
+}
+
 /* Orderly symbol info bar on mobile — stays below the mobile header */
 @media (max-width: 767px) {
   .oui-trading-symbolInfoBar-container {
