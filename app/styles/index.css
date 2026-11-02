@@ -223,10 +223,25 @@ body {
   }
 }
 
-/* Dropdown lists scroll independently of the page ticker. */
-.oui-markets-dropdown-menu-content .oui-table-thead {
+/* Keep each market column header attached to the dropdown's scrolling table. */
+.oui-markets-dropdown-menu-content
+  .oui-dropDownMarkets-list
+  .oui-table-scroll
+  > table
+  > .oui-table-thead {
+  position: static !important;
+}
+
+.oui-markets-dropdown-menu-content
+  .oui-dropDownMarkets-list
+  .oui-table-scroll
+  > table
+  > .oui-table-thead
+  > tr
+  > .oui-table-thead-th {
+  position: sticky !important;
   top: 0 !important;
-  z-index: 20;
+  z-index: 20 !important;
   background-color: var(--oui-table-background-color, #14181e) !important;
 }
 
