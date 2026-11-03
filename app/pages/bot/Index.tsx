@@ -1816,9 +1816,7 @@ export default function BotPage() {
                                   letterSpacing: 0.5,
                                 }}
                               >
-                                {bot.strategy === "trend"
-                                  ? "PAPER · LIVE PRICES"
-                                  : "SIMULATION"}
+                                SIMULATION
                               </span>
                             )}
                           </div>
