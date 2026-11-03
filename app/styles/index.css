@@ -245,6 +245,27 @@ body {
   background-color: var(--oui-table-background-color, #14181e) !important;
 }
 
+@media (max-width: 767px) {
+  .oui-markets-dropdown-menu-content
+    .oui-dropDownMarkets-list
+    .oui-table-scroll
+    > table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+  }
+
+  .oui-markets-dropdown-menu-content
+    .oui-dropDownMarkets-list
+    .oui-table-scroll
+    > table
+    > .oui-table-thead
+    > tr
+    > .oui-table-thead-th {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+  }
+}
+
 /* Orderly symbol info bar on mobile — stays below the mobile header */
 @media (max-width: 767px) {
   .oui-trading-symbolInfoBar-container {
