@@ -956,6 +956,147 @@ function BotPaperEngine({
   return null;
 }
 
+function BotSimulationEngine({
+  bot,
+  onTradeExecuted,
+  onPnlUpdate,
+}: {
+  bot: BotConfig;
+  onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
+  onPnlUpdate: (botId: string, performance: BotPerformance) => void;
+}) {
+  const feed = useOrderlyFeed(bot.symbol);
+  const positionRef = useRef<BotPosition | null>(bot.position ?? null);
+  const realizedPnlRef = useRef(bot.realizedPnl ?? 0);
+  const lastEvaluationRef = useRef<{
+    price: number;
+    candleTime: number;
+  } | null>(null);
+  const lastDcaBuyRef = useRef(bot.createdAt);
+
+  useEffect(() => {
+    if (bot.status !== "running" || feed.loading || !feed.latestPrice) return;
+
+    const candles = feed.candles;
+    const price = feed.latestPrice;
+    const candleTime = candles.at(-1)?.t ?? 0;
+    const lastEvaluation = lastEvaluationRef.current;
+    if (
+      lastEvaluation?.price === price &&
+      lastEvaluation.candleTime === candleTime
+    ) {
+      return;
+    }
+    lastEvaluationRef.current = { price, candleTime };
+
+    const position = positionRef.current;
+    let shouldBuy = false;
+    let shouldSell = false;
+    let buyNotional = Math.min(bot.investment * 0.5, bot.investment);
+
+    if (bot.strategy === "signal") {
+      const rsiPeriod = Number(bot.params.rsi) || 14;
+      const emaPeriod = Number(bot.params.ema) || 20;
+      if (candles.length < Math.max(rsiPeriod + 1, emaPeriod, 22)) return;
+      const rsi = computeRSI(candles, rsiPeriod);
+      const emaFast = computeEMA(candles, 9);
+      const emaSlow = computeEMA(candles, emaPeriod);
+      const last = candles.length - 1;
+      shouldBuy = rsi[last] < 35 && emaFast[last] > emaSlow[last] && !position;
+      shouldSell =
+        (rsi[last] > 68 || emaFast[last] < emaSlow[last]) && !!position;
+    } else if (bot.strategy === "grid") {
+      if (candles.length < 2) return;
+      const grids = Math.max(1, Number(bot.params.grids) || 10);
+      const prices = candles.map((candle) => candle.c);
+      const lowPrice = Math.min(...prices);
+      const highPrice = Math.max(...prices);
+      const step = (highPrice - lowPrice) / grids;
+      if (!Number.isFinite(step) || step <= 0) return;
+      const currentLevel = Math.floor((price - lowPrice) / step);
+      const previousLevel = Math.floor(
+        (candles[candles.length - 2].c - lowPrice) / step,
+      );
+      shouldBuy = currentLevel < previousLevel && !position;
+      shouldSell = currentLevel > previousLevel && !!position;
+    } else if (bot.strategy === "dca") {
+      const intervalMs =
+        (
+          {
+            "15m": 15 * 60 * 1000,
+            "30m": 30 * 60 * 1000,
+            "1h": 60 * 60 * 1000,
+            "4h": 4 * 60 * 60 * 1000,
+            "8h": 8 * 60 * 60 * 1000,
+            "12h": 12 * 60 * 60 * 1000,
+            "1d": 24 * 60 * 60 * 1000,
+            "3d": 3 * 24 * 60 * 60 * 1000,
+            "1w": 7 * 24 * 60 * 60 * 1000,
+          } as Record<string, number>
+        )[String(bot.params.interval)] ?? 60 * 60 * 1000;
+      buyNotional = Math.min(
+        Number(bot.params.amount) || bot.investment * 0.5,
+        bot.investment,
+      );
+      shouldBuy = !position && Date.now() - lastDcaBuyRef.current >= intervalMs;
+      shouldSell = !!position && price > position.entryPrice * 1.05;
+    } else {
+      return;
+    }
+
+    let nextPosition = position;
+    if (shouldBuy && !position && buyNotional > 0) {
+      const quantity = buyNotional / price;
+      nextPosition = { entryPrice: price, quantity };
+      positionRef.current = nextPosition;
+      if (bot.strategy === "dca") lastDcaBuyRef.current = Date.now();
+      onTradeExecuted({
+        botId: bot.id,
+        side: "BUY",
+        symbol: bot.symbol,
+        qty: quantity,
+        price,
+        ts: Date.now(),
+        live: false,
+      });
+    } else if (shouldSell && position) {
+      realizedPnlRef.current +=
+        (price - position.entryPrice) * position.quantity;
+      nextPosition = null;
+      positionRef.current = null;
+      onTradeExecuted({
+        botId: bot.id,
+        side: "SELL",
+        symbol: bot.symbol,
+        qty: position.quantity,
+        price,
+        ts: Date.now(),
+        live: false,
+      });
+    }
+
+    onPnlUpdate(bot.id, {
+      pnl:
+        realizedPnlRef.current +
+        (nextPosition
+          ? (price - nextPosition.entryPrice) * nextPosition.quantity
+          : 0),
+      realizedPnl: realizedPnlRef.current,
+      position: nextPosition,
+      markPrice: price,
+    });
+  }, [
+    bot,
+    feed.candles,
+    feed.latestPrice,
+    feed.loading,
+    onPnlUpdate,
+    onTradeExecuted,
+  ]);
+
+  return null;
+}
+
 // ── Main Bot Page ─────────────────────────────────────────────────────────────
 export default function BotPage() {
   const { state: accountState } = useAccount();
@@ -999,8 +1140,6 @@ export default function BotPage() {
   const [sigEma, setSigEma] = useState("20");
   const [trendStopAtr, setTrendStopAtr] = useState("2");
   const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
-
-  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
@@ -1080,31 +1219,6 @@ export default function BotPage() {
       });
     }
   }, [symbolsInfo]);
-
-  // Simulate PnL for non-live running bots
-  useEffect(() => {
-    tickerRef.current = setInterval(() => {
-      setBots((prev) => {
-        const updated = prev.map((bot) => {
-          if (
-            bot.status !== "running" ||
-            bot.liveMode ||
-            bot.strategy === "trend"
-          )
-            return bot;
-          const delta = (Math.random() - 0.47) * (bot.investment * 0.002);
-          const newPnl = bot.pnl + delta;
-          const newPct = (newPnl / bot.investment) * 100;
-          return { ...bot, pnl: newPnl, pnlPct: newPct };
-        });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    }, 3000);
-    return () => {
-      if (tickerRef.current) clearInterval(tickerRef.current);
-    };
-  }, []);
 
   const handleTradeExecuted = useCallback((log: Omit<TradeLog, "id">) => {
     const entry: TradeLog = { ...log, id: generateId() };
@@ -1346,6 +1460,19 @@ export default function BotPage() {
             key={bot.id}
             bot={bot}
             onPaperUpdate={handlePaperUpdate}
+          />
+        ))}
+      {bots
+        .filter(
+          (b) =>
+            b.status === "running" && !b.liveMode && b.strategy !== "trend",
+        )
+        .map((bot) => (
+          <BotSimulationEngine
+            key={bot.id}
+            bot={bot}
+            onTradeExecuted={handleTradeExecuted}
+            onPnlUpdate={handlePnlUpdate}
           />
         ))}
 
@@ -2692,7 +2819,7 @@ export default function BotPage() {
                 padding: "5px 12px",
               }}
             >
-              Full Trade History →
+              Orderly Account History →
             </a>
           </div>
 
@@ -2709,7 +2836,7 @@ export default function BotPage() {
                 No trade history yet
               </div>
               <div style={{ fontSize: 13, marginTop: 4 }}>
-                Start a bot in Live Mode to see real executed trades here
+                Run a bot to see its simulated or live executions here
               </div>
             </div>
           ) : (
