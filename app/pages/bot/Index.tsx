@@ -404,8 +404,7 @@ function OrderSubmitter({
       order_type: OrderType.MARKET,
       order_quantity: pending.qty,
     },
-    watchOrderbook: false,
-  } as any);
+  });
 
   const submitted = useRef(false);
 
@@ -424,17 +423,29 @@ function OrderSubmitter({
       return;
     }
 
-    Promise.resolve()
-      .then(() => (submit as () => Promise<any>)())
-      .then((res: any) => {
-        if (res instanceof Error) {
+    submit()
+      .then((result) => {
+        if (!result.success) {
           onDone({ success: false });
-        } else {
-          onDone({
-            success: true,
-            orderId: res?.order_id || res?.data?.order_id,
-          });
+          return;
         }
+        const data: unknown = result.data;
+        const response =
+          data && typeof data === "object"
+            ? (data as Record<string, unknown>)
+            : null;
+        const nestedData = response?.data;
+        const nestedResponse =
+          nestedData && typeof nestedData === "object"
+            ? (nestedData as Record<string, unknown>)
+            : null;
+        const orderId =
+          typeof response?.order_id === "string"
+            ? response.order_id
+            : typeof nestedResponse?.order_id === "string"
+              ? nestedResponse.order_id
+              : undefined;
+        onDone({ success: true, orderId });
       })
       .catch(() => onDone({ success: false }));
   }, [
@@ -1169,11 +1180,6 @@ export default function BotPage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   }, []);
 
-  const saveLogs = useCallback((updated: TradeLog[]) => {
-    setLogs(updated);
-    localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
-  }, []);
-
   // Fetch all available Orderly perp markets
   useEffect(() => {
     fetch("https://api.orderly.org/v1/public/futures")
@@ -1426,6 +1432,53 @@ export default function BotPage() {
   const investmentNum = Number(investment);
   const balanceWarning =
     isConnected && investmentNum > 0 && investmentNum > availableBalance;
+
+  const stats: {
+    label: string;
+    value: string | number;
+    color: string;
+    prefix?: string;
+    suffix?: string;
+  }[] = [
+    {
+      label: "Active Bots",
+      value: runningCount,
+      suffix: "",
+      color: "#0ecb81",
+    },
+    {
+      label: "Live Bots",
+      value: liveCount,
+      suffix: "",
+      color: "#38e0f8",
+    },
+    {
+      label: "Total Invested",
+      value: totalInvestment.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      prefix: "$",
+      color: "#eaecef",
+    },
+    {
+      label: "Total P&L",
+      value: (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2),
+      prefix: "$",
+      color: totalPnl >= 0 ? "#0ecb81" : "#f6465d",
+    },
+    {
+      label: "Free Collateral",
+      value: isConnected
+        ? availableBalance.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        : "—",
+      prefix: isConnected ? "$" : "",
+      color: "#eaecef",
+    },
+  ];
 
   return (
     <div
@@ -1697,46 +1750,7 @@ export default function BotPage() {
           padding: "0 16px",
         }}
       >
-        {[
-          {
-            label: "Active Bots",
-            value: runningCount,
-            suffix: "",
-            color: "#0ecb81",
-          },
-          {
-            label: "Live Bots",
-            value: liveCount,
-            suffix: "",
-            color: "#38e0f8",
-          },
-          {
-            label: "Total Invested",
-            value: totalInvestment.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }),
-            prefix: "$",
-            color: "#eaecef",
-          },
-          {
-            label: "Total P&L",
-            value: (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2),
-            prefix: "$",
-            color: totalPnl >= 0 ? "#0ecb81" : "#f6465d",
-          },
-          {
-            label: "Free Collateral",
-            value: isConnected
-              ? availableBalance.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })
-              : "—",
-            prefix: isConnected ? "$" : "",
-            color: "#eaecef",
-          },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div
             key={stat.label}
             className="bot-card"
@@ -1754,9 +1768,9 @@ export default function BotPage() {
               {stat.label}
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: stat.color }}>
-              {(stat as any).prefix}
+              {stat.prefix ?? ""}
               {stat.value}
-              {(stat as any).suffix}
+              {stat.suffix ?? ""}
             </div>
           </div>
         ))}
@@ -2140,7 +2154,7 @@ export default function BotPage() {
         <div style={{ maxWidth: 600 }}>
           {/* Strategy Picker */}
           <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>Strategy</label>
+            <div style={labelStyle}>Strategy</div>
             <div
               style={{
                 display: "grid",
@@ -2333,8 +2347,11 @@ export default function BotPage() {
             }}
           >
             <div>
-              <label style={labelStyle}>Bot Name (optional)</label>
+              <label htmlFor="bot-name" style={labelStyle}>
+                Bot Name (optional)
+              </label>
               <input
+                id="bot-name"
                 value={botName}
                 onChange={(e) => setBotName(e.target.value)}
                 placeholder={`My ${STRATEGY_INFO[strategy].label}`}
@@ -2342,8 +2359,11 @@ export default function BotPage() {
               />
             </div>
             <div>
-              <label style={labelStyle}>Symbol</label>
+              <label htmlFor="bot-symbol" style={labelStyle}>
+                Symbol
+              </label>
               <select
+                id="bot-symbol"
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
                 style={inputStyle}
@@ -2356,7 +2376,7 @@ export default function BotPage() {
               </select>
             </div>
             <div>
-              <label style={labelStyle}>
+              <label htmlFor="bot-investment" style={labelStyle}>
                 Investment ({quoteAsset})
                 {isConnected && (
                   <span
@@ -2373,6 +2393,7 @@ export default function BotPage() {
                 )}
               </label>
               <input
+                id="bot-investment"
                 type="number"
                 value={investment}
                 onChange={(e) => setInvestment(e.target.value)}
@@ -2413,8 +2434,11 @@ export default function BotPage() {
                 }}
               >
                 <div>
-                  <label style={labelStyle}>Upper Price</label>
+                  <label htmlFor="grid-upper" style={labelStyle}>
+                    Upper Price
+                  </label>
                   <input
+                    id="grid-upper"
                     value={gridUpper}
                     onChange={(e) => setGridUpper(e.target.value)}
                     placeholder="Auto"
@@ -2422,8 +2446,11 @@ export default function BotPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Lower Price</label>
+                  <label htmlFor="grid-lower" style={labelStyle}>
+                    Lower Price
+                  </label>
                   <input
+                    id="grid-lower"
                     value={gridLower}
                     onChange={(e) => setGridLower(e.target.value)}
                     placeholder="Auto"
@@ -2431,8 +2458,11 @@ export default function BotPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Grid Count</label>
+                  <label htmlFor="grid-count" style={labelStyle}>
+                    Grid Count
+                  </label>
                   <input
+                    id="grid-count"
                     type="number"
                     value={gridCount}
                     onChange={(e) => setGridCount(e.target.value)}
@@ -2467,8 +2497,11 @@ export default function BotPage() {
                 }}
               >
                 <div>
-                  <label style={labelStyle}>Buy Interval</label>
+                  <label htmlFor="dca-interval" style={labelStyle}>
+                    Buy Interval
+                  </label>
                   <select
+                    id="dca-interval"
                     value={dcaInterval}
                     onChange={(e) => setDcaInterval(e.target.value)}
                     style={inputStyle}
@@ -2528,8 +2561,11 @@ export default function BotPage() {
                 }}
               >
                 <div>
-                  <label style={labelStyle}>RSI Period</label>
+                  <label htmlFor="signal-rsi" style={labelStyle}>
+                    RSI Period
+                  </label>
                   <input
+                    id="signal-rsi"
                     type="number"
                     value={sigRsi}
                     onChange={(e) => setSigRsi(e.target.value)}
@@ -2539,8 +2575,11 @@ export default function BotPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>EMA Period</label>
+                  <label htmlFor="signal-ema" style={labelStyle}>
+                    EMA Period
+                  </label>
                   <input
+                    id="signal-ema"
                     type="number"
                     value={sigEma}
                     onChange={(e) => setSigEma(e.target.value)}
@@ -2575,8 +2614,11 @@ export default function BotPage() {
                 }}
               >
                 <div>
-                  <label style={labelStyle}>Stop Distance (ATR)</label>
+                  <label htmlFor="trend-stop-atr" style={labelStyle}>
+                    Stop Distance (ATR)
+                  </label>
                   <input
+                    id="trend-stop-atr"
                     type="number"
                     value={trendStopAtr}
                     onChange={(e) => setTrendStopAtr(e.target.value)}
@@ -2592,8 +2634,11 @@ export default function BotPage() {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Target (R multiple)</label>
+                  <label htmlFor="trend-reward-risk" style={labelStyle}>
+                    Target (R multiple)
+                  </label>
                   <input
+                    id="trend-reward-risk"
                     type="number"
                     value={trendRewardRisk}
                     onChange={(e) => setTrendRewardRisk(e.target.value)}
