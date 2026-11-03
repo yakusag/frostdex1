@@ -308,6 +308,12 @@ loadRuntimeConfig().then(() => {
     passive: true,
   });
   document.addEventListener("focusin", prefetchOnNavigationIntent);
+
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(() => prefetchRoute("/markets"), {
+      timeout: 5000,
+    });
+  }
 });
 
 if ("serviceWorker" in navigator) {
