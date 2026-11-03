@@ -1201,10 +1201,21 @@ export default function BotPage() {
   );
 
   const configureLiveBot = (bot: BotConfig) => {
-    setStrategy("trend");
+    setStrategy(bot.strategy);
     setSymbol(bot.symbol);
     setInvestment(String(bot.investment));
     setBotName(bot.name);
+    setGridUpper(
+      bot.params.upper === "auto" ? "" : String(bot.params.upper ?? ""),
+    );
+    setGridLower(
+      bot.params.lower === "auto" ? "" : String(bot.params.lower ?? ""),
+    );
+    setGridCount(String(bot.params.grids ?? 10));
+    setDcaInterval(String(bot.params.interval ?? "1h"));
+    setDcaAmount(String(bot.params.amount ?? 50));
+    setSigRsi(String(bot.params.rsi ?? 14));
+    setSigEma(String(bot.params.ema ?? 20));
     setTrendStopAtr(String(normalizeTrendParameter(bot.params.stopAtr, 2)));
     setTrendRewardRisk(
       String(normalizeTrendParameter(bot.params.rewardRisk, 2.5)),
@@ -1885,7 +1896,7 @@ export default function BotPage() {
                         </div>
 
                         <div style={{ display: "flex", gap: 8 }}>
-                          {!isLive && bot.strategy === "trend" && (
+                          {!isLive && (
                             <button
                               onClick={() => configureLiveBot(bot)}
                               style={{
