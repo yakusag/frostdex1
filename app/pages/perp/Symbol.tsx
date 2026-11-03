@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { API } from "@orderly.network/types";
-import { TradingPage } from "@orderly.network/trading";
 import { useTickerStream } from "@orderly.network/hooks";
-import { updateSymbol } from "@/utils/storage";
-import { formatSymbol, generatePageTitle } from "@/utils/utils";
+import { TradingPage } from "@orderly.network/trading";
+import { API } from "@orderly.network/types";
+import RiskCopilot from "@/components/RiskCopilot";
 import { useOrderlyConfig } from "@/utils/config";
+import { getRuntimeConfig } from "@/utils/runtime-config";
 import { getPageMeta } from "@/utils/seo";
 import { renderSEOTags } from "@/utils/seo-tags";
-import { getRuntimeConfig } from "@/utils/runtime-config";
+import { updateSymbol } from "@/utils/storage";
+import { formatSymbol, generatePageTitle } from "@/utils/utils";
 
-function LiveTitle({ symbol }: { symbol: string }) {
-  const ticker = useTickerStream(symbol);
+function LiveTitle({
+  symbol,
+  ticker,
+}: {
+  symbol: string;
+  ticker: ReturnType<typeof useTickerStream>;
+}) {
   const brokerName = getRuntimeConfig("VITE_ORDERLY_BROKER_NAME") || "FrostDex";
 
   useEffect(() => {
@@ -35,6 +41,7 @@ export default function PerpSymbol() {
   const config = useOrderlyConfig();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const ticker = useTickerStream(symbol);
 
   useEffect(() => {
     updateSymbol(symbol);
@@ -51,7 +58,7 @@ export default function PerpSymbol() {
 
       navigate(`/perp/${newSymbol}${queryString}`);
     },
-    [navigate, searchParams, symbol]
+    [navigate, searchParams, symbol],
   );
 
   const pageMeta = getPageMeta();
@@ -60,7 +67,12 @@ export default function PerpSymbol() {
   return (
     <div className="h-full">
       {renderSEOTags(pageMeta, pageTitle)}
-      <LiveTitle symbol={symbol} />
+      <LiveTitle symbol={symbol} ticker={ticker} />
+      <RiskCopilot
+        symbol={symbol}
+        markPrice={ticker?.mark_price}
+        estimatedFundingRate={ticker?.est_funding_rate}
+      />
       <TradingPage
         symbol={symbol}
         onSymbolChange={onSymbolChange}
