@@ -7,27 +7,11 @@ interface MarketItem {
   price: number;
   change: number;
   isFrost?: boolean;
+  volume?: number;
 }
 
-const SYMBOLS = [
-  "PERP_BTC_USDC",
-  "PERP_ETH_USDC",
-  "PERP_SOL_USDC",
-  "PERP_ARB_USDC",
-  "PERP_BNB_USDC",
-  "PERP_AVAX_USDC",
-  "PERP_DOGE_USDC",
-  "PERP_WIF_USDC",
-  "PERP_PEPE_USDC",
-  "PERP_OP_USDC",
-  "PERP_TIA_USDC",
-  "PERP_SUI_USDC",
-  "PERP_LINK_USDC",
-  "PERP_NEAR_USDC",
-];
-
 function fmt(price: number, base: string): string {
-  if (["PEPE", "BONK", "SHIB"].includes(base)) {
+  if (["1000PEPE", "1000BONK", "1000SHIB"].includes(base)) {
     return price.toFixed(8);
   }
   if (price < 0.000001) return price.toFixed(10);
@@ -48,23 +32,43 @@ async function fetchMarkets(): Promise<MarketItem[]> {
     });
     if (!res.ok) return [];
     const json = (await res.json()) as { data?: { rows?: unknown[] } };
-    const rows: MarketItem[] = [];
-    for (const sym of SYMBOLS) {
-      const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
-      const d = rows.find(
-        (row): row is Record<string, unknown> =>
-          !!row &&
-          typeof row === "object" &&
-          (row as Record<string, unknown>).symbol === sym,
-      );
-      if (!d) continue;
-      const price = Number(d["24h_close"] ?? d.last_price ?? 0);
-      const open = Number(d["24h_open"] ?? 0);
-      const change = open > 0 ? ((price - open) / open) * 100 : 0;
-      const base = sym.split("_")[1];
-      rows.push({ symbol: sym, base, price, change });
+    const marketRows = Array.isArray(json.data?.rows) ? json.data.rows : [];
+    const markets: MarketItem[] = [];
+
+    for (const candidate of marketRows) {
+      if (!candidate || typeof candidate !== "object") continue;
+      const row = candidate as Record<string, unknown>;
+      const symbol = row.symbol;
+      if (
+        typeof symbol !== "string" ||
+        !/^PERP_[A-Z0-9]+_USDC$/.test(symbol) ||
+        row.status === "DELISTING"
+      ) {
+        continue;
+      }
+
+      const price = Number(row["24h_close"] ?? row.mark_price ?? 0);
+      if (!Number.isFinite(price) || price <= 0) continue;
+
+      const open = Number(row["24h_open"] ?? 0);
+      const change =
+        Number.isFinite(open) && open > 0 ? ((price - open) / open) * 100 : 0;
+      const volume = Number(row["24h_volume"] ?? 0);
+      const base =
+        typeof row.display_symbol_name === "string"
+          ? row.display_symbol_name
+          : symbol.split("_")[1];
+
+      markets.push({
+        symbol,
+        base,
+        price,
+        change,
+        volume: Number.isFinite(volume) ? volume : 0,
+      });
     }
-    return rows;
+
+    return markets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
   } catch {
     return [];
   }
@@ -118,10 +122,14 @@ export default function MarketTickerBar() {
   if (items.length === 0) return null;
 
   const doubled = [...items, ...items];
+  const tickerDuration = Math.max(60, items.length * 4.3);
 
   return (
     <div className="market-ticker-bar" aria-label="Live market prices">
-      <div className="ticker-track">
+      <div
+        className="ticker-track"
+        style={{ animationDuration: `${tickerDuration}s` }}
+      >
         {doubled.map((item, i) => (
           <div
             key={`${item.symbol}-${i}`}

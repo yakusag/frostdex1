@@ -201,17 +201,21 @@ main,
 .ticker-change.down { color: #f6465d; }
 
 .ticker-item--frost {
-  background: rgba(56, 224, 248, 0.06);
-  border-right-color: rgba(56, 224, 248, 0.2);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--oui-gradient-brand-start) / 0.08),
+    rgb(var(--oui-gradient-brand-end) / 0.08)
+  );
+  border-right-color: rgb(var(--oui-gradient-brand-end) / 0.25);
 }
 .ticker-item--frost .ticker-base {
-  color: rgb(56, 224, 248);
+  color: rgb(var(--oui-gradient-brand-end));
   font-weight: 700;
 }
 .ticker-frost-badge {
   font-size: 10px;
-  color: rgb(56, 224, 248);
-  filter: drop-shadow(0 0 4px rgba(56, 224, 248, 0.6));
+  color: rgb(var(--oui-gradient-brand-start));
+  filter: drop-shadow(0 0 4px rgb(var(--oui-gradient-brand-start) / 0.5));
 }
 
 /* ─── push all page content below the 28px ticker bar ───────────────── */
@@ -363,7 +367,11 @@ body {
   font-family: 'Manrope', sans-serif;
   font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--oui-gradient-brand-start)),
+    rgb(var(--oui-gradient-brand-end))
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -435,7 +443,11 @@ body {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  background: linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--oui-gradient-brand-start)),
+    rgb(var(--oui-gradient-brand-end))
+  );
   color: #0b0e11;
   transition: opacity 0.15s ease;
 }
@@ -653,7 +665,11 @@ select,
 .frost-trade-widget__btn:hover { opacity: 0.82; }
 
 .frost-trade-widget__btn--primary {
-  background: linear-gradient(135deg, rgb(56,224,248) 0%, rgb(14,203,129) 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--oui-gradient-brand-start)),
+    rgb(var(--oui-gradient-brand-end))
+  );
   color: rgb(11, 14, 17) !important;
 }
 

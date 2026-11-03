@@ -63,6 +63,13 @@ export default defineConfig(() => {
           "app/stubs/privy-wallet.tsx",
         ),
       };
+  const aliases = {
+    ...privyAlias,
+    "@solana/wallet-adapter-wallets": path.resolve(
+      __dirname,
+      "app/stubs/solana-wallets.ts",
+    ),
+  };
 
   return {
     server: {
@@ -73,7 +80,7 @@ export default defineConfig(() => {
     },
     base: basePath,
     resolve: {
-      alias: privyAlias,
+      alias: aliases,
     },
     plugins: [
       react(),
@@ -121,7 +128,9 @@ export default defineConfig(() => {
             "vendor-web3": ["wagmi"],
             "vendor-solana": [
               "@solana/wallet-adapter-base",
-              "@solana/wallet-adapter-wallets",
+              "@solana/wallet-adapter-ledger",
+              "@solana/wallet-adapter-phantom",
+              "@solana/wallet-adapter-solflare",
             ],
           },
           compact: true,
