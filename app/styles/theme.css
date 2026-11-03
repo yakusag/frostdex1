@@ -2,18 +2,18 @@
   --oui-font-family: 'Manrope', sans-serif;
   --oui-font-size-base: 16px;
 
-  /* Primary action color matches the FrostDex logo's icy blue. */
-  --oui-color-primary: 0 177 255;
-  --oui-color-primary-light: 112 218 255;
-  --oui-color-primary-darken: 0 132 210;
-  --oui-color-primary-contrast: 8 12 22;
+  /* Muted ice blue keeps the logo accent readable without a neon cast. */
+  --oui-color-primary: 102 171 210;
+  --oui-color-primary-light: 162 208 234;
+  --oui-color-primary-darken: 75 136 177;
+  --oui-color-primary-contrast: 7 11 19;
 
-  --oui-color-link: 0 177 255;
-  --oui-color-link-light: 0 145 220;
+  --oui-color-link: 125 185 219;
+  --oui-color-link-light: 162 208 234;
 
   --oui-color-secondary: 220 240 255;
-  --oui-color-tertiary: 0 177 255;
-  --oui-color-quaternary: 0 145 220;
+  --oui-color-tertiary: 102 171 210;
+  --oui-color-quaternary: 98 255 0;
 
   --oui-color-danger: 246 70 93;
   --oui-color-danger-light: 255 120 140;
@@ -30,23 +30,23 @@
   --oui-color-warning-darken: 190 140 0;
   --oui-color-warning-contrast: 11 14 17;
 
-  --oui-color-fill: 17 26 40;
-  --oui-color-fill-active: 26 39 59;
+  --oui-color-fill: 16 25 39;
+  --oui-color-fill-active: 25 38 56;
 
-  /* Deep navy surfaces keep the trading interface calm and clearly layered. */
+  /* Dark navy surfaces reduce glare and keep panels distinct. */
   --oui-color-base-1: 7 11 19;
-  --oui-color-base-2: 10 15 25;
+  --oui-color-base-2: 10 17 28;
   --oui-color-base-3: 13 20 32;
-  --oui-color-base-4: 17 26 40;
-  --oui-color-base-5: 21 32 49;
-  --oui-color-base-6: 26 39 59;
-  --oui-color-base-7: 31 47 69;
+  --oui-color-base-4: 16 25 39;
+  --oui-color-base-5: 19 30 46;
+  --oui-color-base-6: 25 38 56;
+  --oui-color-base-7: 32 46 67;
   --oui-color-base-8: 13 20 32;
-  --oui-color-base-9: 9 14 23;
-  --oui-color-base-10: 6 10 18;
+  --oui-color-base-9: 9 15 25;
+  --oui-color-base-10: 7 11 19;
 
-  --oui-color-base-foreground: 239 243 250;
-  --oui-color-line: 35 49 67;
+  --oui-color-base-foreground: 230 237 247;
+  --oui-color-line: 41 56 77;
 
   --oui-color-trading-loss: 246 70 93;
   --oui-color-trading-loss-contrast: 255 255 255;
@@ -54,11 +54,11 @@
   --oui-color-trading-profit-contrast: 11 14 17;
 
   /* gradients */
-  --oui-gradient-primary-start: 0 132 210;
-  --oui-gradient-primary-end: 0 177 255;
+  --oui-gradient-primary-start: 75 136 177;
+  --oui-gradient-primary-end: 102 171 210;
 
   --oui-gradient-secondary-start: 13 20 32;
-  --oui-gradient-secondary-end: 31 47 69;
+  --oui-gradient-secondary-end: 32 46 67;
 
   --oui-gradient-success-start: 0 170 100;
   --oui-gradient-success-end: 14 203 129;
@@ -66,8 +66,8 @@
   --oui-gradient-danger-start: 200 40 65;
   --oui-gradient-danger-end: 246 70 93;
 
-  --oui-gradient-brand-start: 98 255 0;
-  --oui-gradient-brand-end: 0 177 255;
+  --oui-gradient-brand-start: 75 136 177;
+  --oui-gradient-brand-end: 102 171 210;
   --oui-gradient-brand-stop-start: 6.62%;
   --oui-gradient-brand-stop-end: 86.5%;
   --oui-gradient-brand-angle: 90deg;
@@ -75,8 +75,8 @@
   --oui-gradient-warning-start: 190 140 0;
   --oui-gradient-warning-end: 240 185 11;
 
-  --oui-gradient-neutral-start: 6 10 18;
-  --oui-gradient-neutral-end: 21 32 49;
+  --oui-gradient-neutral-start: 7 11 19;
+  --oui-gradient-neutral-end: 19 30 46;
 
   /* rounded */
   --oui-rounded-sm: 2px;
