@@ -35,7 +35,10 @@ function fmt(price: number, base: string): string {
   if (price < 0.01) return price.toFixed(6);
   if (price < 1) return price.toFixed(4);
   if (price < 100) return price.toFixed(3);
-  return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return price.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 async function fetchMarkets(): Promise<MarketItem[]> {
@@ -44,10 +47,16 @@ async function fetchMarkets(): Promise<MarketItem[]> {
       cache: "no-store",
     });
     if (!res.ok) return [];
-    const json = await res.json();
+    const json = (await res.json()) as { data?: { rows?: unknown[] } };
     const rows: MarketItem[] = [];
     for (const sym of SYMBOLS) {
-      const d = json?.data?.rows?.find((r: any) => r.symbol === sym);
+      const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
+      const d = rows.find(
+        (row): row is Record<string, unknown> =>
+          !!row &&
+          typeof row === "object" &&
+          (row as Record<string, unknown>).symbol === sym,
+      );
       if (!d) continue;
       const price = Number(d["24h_close"] ?? d.last_price ?? 0);
       const open = Number(d["24h_open"] ?? 0);
@@ -65,7 +74,7 @@ async function fetchFrostPrice(): Promise<MarketItem | null> {
   try {
     const res = await fetch(
       `https://api.geckoterminal.com/api/v2/networks/arbitrum/pools/${FROST_TOKEN.poolAddress}`,
-      { cache: "no-store" }
+      { cache: "no-store" },
     );
     if (!res.ok) return null;
     const json = await res.json();
@@ -92,7 +101,10 @@ export default function MarketTickerBar() {
 
   useEffect(() => {
     async function load() {
-      const [markets, frost] = await Promise.all([fetchMarkets(), fetchFrostPrice()]);
+      const [markets, frost] = await Promise.all([
+        fetchMarkets(),
+        fetchFrostPrice(),
+      ]);
       const all = frost ? [frost, ...markets] : markets;
       setItems(all);
     }
@@ -111,13 +123,16 @@ export default function MarketTickerBar() {
     <div className="market-ticker-bar" aria-label="Live market prices">
       <div className="ticker-track">
         {doubled.map((item, i) => (
-          <div key={`${item.symbol}-${i}`} className={`ticker-item${item.isFrost ? " ticker-item--frost" : ""}`}>
-            {item.isFrost && (
-              <span className="ticker-frost-badge">❄</span>
-            )}
+          <div
+            key={`${item.symbol}-${i}`}
+            className={`ticker-item${item.isFrost ? " ticker-item--frost" : ""}`}
+          >
+            {item.isFrost && <span className="ticker-frost-badge">❄</span>}
             <span className="ticker-base">{item.base}</span>
             <span className="ticker-price">${fmt(item.price, item.base)}</span>
-            <span className={`ticker-change ${item.change >= 0 ? "up" : "down"}`}>
+            <span
+              className={`ticker-change ${item.change >= 0 ? "up" : "down"}`}
+            >
               {item.change >= 0 ? "▲" : "▼"} {Math.abs(item.change).toFixed(2)}%
             </span>
           </div>

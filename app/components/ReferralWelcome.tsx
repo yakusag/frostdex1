@@ -32,20 +32,23 @@ export default function ReferralWelcome() {
   return (
     <div
       className={`referral-welcome-overlay${closing ? " rw-closing" : ""}`}
-      onClick={close}
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
     >
       <div
         className="referral-welcome-card"
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Referral welcome"
       >
         <div className="rw-glow" />
 
         <div className="rw-icon">❄️</div>
 
         <div className="rw-title">Welcome to FrostDex</div>
-        <div className="rw-sub">
-          You were invited via a referral link
-        </div>
+        <div className="rw-sub">You were invited via a referral link</div>
 
         <div className="rw-code-box">
           <span className="rw-code-label">Referral Code</span>

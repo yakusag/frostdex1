@@ -29,19 +29,6 @@ const SYMBOLS = [
 ];
 
 const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d"];
-const TF_MS: Record<Timeframe, number> = {
-  "15m": 15 * 60 * 1000,
-  "1h": 60 * 60 * 1000,
-  "4h": 4 * 60 * 60 * 1000,
-  "1d": 24 * 60 * 60 * 1000,
-};
-const TF_CANDLES: Record<Timeframe, number> = {
-  "15m": 96,
-  "1h": 120,
-  "4h": 90,
-  "1d": 180,
-};
-
 function computeRSI(candles: Candle[], period = 14): number[] {
   const rsi: number[] = Array(candles.length).fill(50);
   if (candles.length < period + 1) return rsi;
@@ -390,8 +377,11 @@ export default function BotBacktest({
         }}
       >
         <div>
-          <label style={labelSt}>Symbol</label>
+          <label htmlFor="backtest-symbol" style={labelSt}>
+            Symbol
+          </label>
           <select
+            id="backtest-symbol"
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
             style={selectSt}
@@ -404,7 +394,7 @@ export default function BotBacktest({
           </select>
         </div>
         <div>
-          <label style={labelSt}>Timeframe</label>
+          <div style={labelSt}>Timeframe</div>
           <div style={{ display: "flex", gap: 4 }}>
             {TIMEFRAMES.map((t) => (
               <button
@@ -424,7 +414,7 @@ export default function BotBacktest({
           </div>
         </div>
         <div>
-          <label style={labelSt}>Strategy</label>
+          <div style={labelSt}>Strategy</div>
           <div style={{ display: "flex", gap: 4 }}>
             {(["grid", "dca", "signal", "trend"] as Strategy[]).map((s) => (
               <button
@@ -445,8 +435,11 @@ export default function BotBacktest({
           </div>
         </div>
         <div>
-          <label style={labelSt}>Investment ($)</label>
+          <label htmlFor="backtest-investment" style={labelSt}>
+            Investment ($)
+          </label>
           <input
+            id="backtest-investment"
             type="number"
             value={investment}
             onChange={(e) => setInvestment(Number(e.target.value))}

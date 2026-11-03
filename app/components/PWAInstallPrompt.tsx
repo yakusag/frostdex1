@@ -1,21 +1,27 @@
 import { useEffect, useState } from "react";
 import { X, Download } from "lucide-react";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 function isAndroid() {
   return /android/i.test(navigator.userAgent);
 }
 
-function isIOS() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !(window as any).MSStream;
-}
-
 function isInStandaloneMode() {
-  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-    (window.navigator as any).standalone === true;
+  return (
+    (window.matchMedia &&
+      window.matchMedia("(display-mode: standalone)").matches) ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+      true
+  );
 }
 
 export default function PWAInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [show, setShow] = useState(false);
   const [installed, setInstalled] = useState(false);
 
@@ -26,16 +32,18 @@ export default function PWAInstallPrompt() {
     if (isAndroid()) {
       const handler = (e: Event) => {
         e.preventDefault();
-        setDeferredPrompt(e);
+        setDeferredPrompt(e as BeforeInstallPromptEvent);
         setShow(true);
       };
-      window.addEventListener("beforeinstallprompt", handler as any);
-      return () => window.removeEventListener("beforeinstallprompt", handler as any);
+      window.addEventListener("beforeinstallprompt", handler);
+      return () => window.removeEventListener("beforeinstallprompt", handler);
     }
   }, []);
 
   useEffect(() => {
-    window.addEventListener("appinstalled", () => setInstalled(true));
+    const handler = () => setInstalled(true);
+    window.addEventListener("appinstalled", handler);
+    return () => window.removeEventListener("appinstalled", handler);
   }, []);
 
   const handleInstall = async () => {
@@ -74,7 +82,8 @@ export default function PWAInstallPrompt() {
           right: 0,
           zIndex: 99999,
           padding: "12px 16px 20px",
-          background: "linear-gradient(180deg, rgba(10,13,20,0.0) 0%, rgba(10,13,20,0.98) 18%)",
+          background:
+            "linear-gradient(180deg, rgba(10,13,20,0.0) 0%, rgba(10,13,20,0.98) 18%)",
           animation: "pwa-rise 0.45s cubic-bezier(0.34,1.56,0.64,1) both",
           pointerEvents: "none",
         }}
@@ -91,20 +100,40 @@ export default function PWAInstallPrompt() {
             display: "flex",
             alignItems: "center",
             gap: "12px",
-            boxShadow: "0 -4px 40px rgba(56,224,248,0.08), 0 8px 32px rgba(0,0,0,0.7)",
+            boxShadow:
+              "0 -4px 40px rgba(56,224,248,0.08), 0 8px 32px rgba(0,0,0,0.7)",
           }}
         >
           <img
             src="/favicon.webp"
             alt="FrostDex"
-            style={{ width: "48px", height: "48px", borderRadius: "12px", flexShrink: 0 }}
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              flexShrink: 0,
+            }}
           />
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ color: "#fff", fontWeight: 700, fontSize: "14px", margin: 0, lineHeight: 1.3 }}>
+            <p
+              style={{
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: "14px",
+                margin: 0,
+                lineHeight: 1.3,
+              }}
+            >
               Install FrostDex App
             </p>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "11px", margin: "3px 0 0" }}>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.4)",
+                fontSize: "11px",
+                margin: "3px 0 0",
+              }}
+            >
               Trade faster from your home screen
             </p>
           </div>
@@ -116,7 +145,8 @@ export default function PWAInstallPrompt() {
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              background: "linear-gradient(135deg, rgba(56,224,248,0.22) 0%, rgba(14,203,129,0.16) 100%)",
+              background:
+                "linear-gradient(135deg, rgba(56,224,248,0.22) 0%, rgba(14,203,129,0.16) 100%)",
               color: "rgba(56,224,248,1)",
               border: "1px solid rgba(56,224,248,0.4)",
               borderRadius: "12px",

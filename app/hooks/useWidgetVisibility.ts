@@ -16,36 +16,87 @@ interface Visibility {
 function load(): Visibility {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true, ...JSON.parse(saved) };
-  } catch {}
-  return { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true };
+    if (saved)
+      return {
+        ai: true,
+        whale: true,
+        sentiment: true,
+        frost: true,
+        smartmoney: true,
+        liq: true,
+        mac: true,
+        palert: true,
+        ...JSON.parse(saved),
+      };
+  } catch (error) {
+    console.warn("Failed to restore widget visibility:", error);
+  }
+  return {
+    ai: true,
+    whale: true,
+    sentiment: true,
+    frost: true,
+    smartmoney: true,
+    liq: true,
+    mac: true,
+    palert: true,
+  };
 }
 
 export function useWidgetVisibility() {
   const [visibility, setVisibility] = useState<Visibility>(load);
 
   const toggle = useCallback((key: keyof Visibility) => {
-    setVisibility(prev => {
+    setVisibility((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.warn("Failed to save widget visibility:", error);
+      }
       return next;
     });
   }, []);
 
   const showAll = useCallback(() => {
-    const next = { ai: true, whale: true, sentiment: true, frost: true, smartmoney: true, liq: true, mac: true, palert: true };
+    const next = {
+      ai: true,
+      whale: true,
+      sentiment: true,
+      frost: true,
+      smartmoney: true,
+      liq: true,
+      mac: true,
+      palert: true,
+    };
     setVisibility(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.warn("Failed to save widget visibility:", error);
+    }
   }, []);
 
   const hideAll = useCallback(() => {
-    const next = { ai: false, whale: false, sentiment: false, frost: false, smartmoney: false, liq: false, mac: false, palert: false };
+    const next = {
+      ai: false,
+      whale: false,
+      sentiment: false,
+      frost: false,
+      smartmoney: false,
+      liq: false,
+      mac: false,
+      palert: false,
+    };
     setVisibility(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.warn("Failed to save widget visibility:", error);
+    }
   }, []);
 
-  const anyHidden = Object.values(visibility).some(v => !v);
-  const allVisible = Object.values(visibility).every(v => v);
+  const allVisible = Object.values(visibility).every((v) => v);
 
-  return { visibility, toggle, showAll, hideAll, anyHidden, allVisible };
+  return { visibility, toggle, showAll, hideAll, allVisible };
 }

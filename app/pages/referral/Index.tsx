@@ -8,17 +8,11 @@ import {
   DollarSign,
   TrendingUp,
   Gift,
-  ArrowRight,
-  Zap,
   Link2,
   ExternalLink,
 } from "lucide-react";
-import {
-  ReferralProvider,
-  useReferralContext,
-} from "@orderly.network/affiliate";
-import { useReferralInfo } from "@orderly.network/hooks";
-import { useAccount } from "@orderly.network/hooks";
+import { ReferralProvider } from "@orderly.network/affiliate";
+import { useAccount, useReferralInfo } from "@orderly.network/hooks";
 import { AccountStatusEnum } from "@orderly.network/types";
 import { getRuntimeConfig } from "@/utils/runtime-config";
 import { generatePageTitle } from "@/utils/utils";
@@ -26,11 +20,8 @@ import { generatePageTitle } from "@/utils/utils";
 function ReferralDashboardInner() {
   const { state } = useAccount();
   const { data, isLoading, getFirstRefCode } = useReferralInfo();
-  const { generateCode } = useReferralContext();
-
   const [copied, setCopied] = useState(false);
 
-  const brokerName = getRuntimeConfig("VITE_ORDERLY_BROKER_NAME") || "FrostDex";
   const siteUrl =
     typeof window !== "undefined"
       ? window.location.origin
@@ -97,7 +88,8 @@ function ReferralDashboardInner() {
               <span className="oui-text-primary oui-font-semibold">
                 {commissionRate}%
               </span>{" "}
-              commission on your friends' trading fees. Your friends also get{" "}
+              commission on your friends&apos; trading fees. Your friends also
+              get{" "}
               <span className="oui-text-primary oui-font-semibold">
                 {rebateRate}%
               </span>{" "}

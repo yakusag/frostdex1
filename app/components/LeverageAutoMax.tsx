@@ -5,11 +5,7 @@ const STORAGE_KEY = "frostdex_leverage_set";
 
 export default function LeverageAutoMax() {
   const { state } = useAccount();
-  const { curLeverage, maxLeverage, update } = useLeverage() as {
-    curLeverage: number;
-    maxLeverage: number;
-    update: (params: { leverage: number }) => Promise<any>;
-  };
+  const { curLeverage, maxLeverage, update } = useLeverage();
   const didSet = useRef(false);
 
   useEffect(() => {
@@ -27,7 +23,9 @@ export default function LeverageAutoMax() {
         .then(() => {
           localStorage.setItem(key, "1");
         })
-        .catch(() => { didSet.current = false; });
+        .catch(() => {
+          didSet.current = false;
+        });
     } else {
       localStorage.setItem(key, "1");
     }

@@ -5,7 +5,6 @@ import {
   custom,
   http,
   parseEther,
-  formatEther,
   parseUnits,
   formatUnits,
   encodeFunctionData,
@@ -171,7 +170,9 @@ export default function FrostSwapWidget() {
         setEthBalance(eth);
         setFrostBalance(frost as bigint);
         setAllowance(allow as bigint);
-      } catch {}
+      } catch (error) {
+        console.error("Failed to load FROST swap balances:", error);
+      }
     })();
   }, [address, txStatus]);
 
@@ -315,9 +316,18 @@ export default function FrostSwapWidget() {
       setTxStatus("success");
       setInputVal("");
       setQuote(null);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setTxStatus("error");
-      const msg = e?.shortMessage || e?.message || "Transaction failed";
+      const shortMessage =
+        error && typeof error === "object" && "shortMessage" in error
+          ? error.shortMessage
+          : undefined;
+      const msg =
+        typeof shortMessage === "string"
+          ? shortMessage
+          : error instanceof Error
+            ? error.message
+            : "Transaction failed";
       setErrMsg(msg.length > 100 ? msg.slice(0, 100) + "…" : msg);
     }
   }, [address, quote, dir, inputVal, allowance, isArbitrum, getWalletClient]);
@@ -342,8 +352,6 @@ export default function FrostSwapWidget() {
     !inputVal ||
     parseFloat(inputVal) <= 0 ||
     quoteLoading;
-
-  const s = (c: string) => ({ style: c });
 
   return (
     <div

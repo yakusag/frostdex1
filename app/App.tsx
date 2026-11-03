@@ -29,13 +29,11 @@ import { getSEOConfig, getUserLanguage } from "./utils/seo";
 export default function App() {
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const { visibility, toggle, showAll, hideAll, anyHidden, allVisible } =
+  const { visibility, toggle, showAll, hideAll, allVisible } =
     useWidgetVisibility();
 
   useEffect(() => {
-    if (typeof (window as any).__hideSplash === "function") {
-      (window as any).__hideSplash();
-    }
+    window.__hideSplash?.();
     startFaviconAnimation(withBasePath("/favicon.webp"));
 
     // One-time reset of widget positions to new left-side layout
@@ -83,7 +81,6 @@ export default function App() {
       )}
       <WidgetManager
         visibility={visibility}
-        anyHidden={anyHidden}
         allVisible={allVisible}
         onToggle={toggle}
         onShowAll={showAll}

@@ -168,8 +168,10 @@ export default function AIAssistant({ onHide }: Props) {
     try {
       const reply = await askGroq(newMessages, apiKey, model);
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    } catch (e: any) {
-      setError(e.message || "Error. Check API key.");
+    } catch (error: unknown) {
+      setError(
+        error instanceof Error ? error.message : "Error. Check API key.",
+      );
     } finally {
       setLoading(false);
     }
@@ -292,6 +294,7 @@ export default function AIAssistant({ onHide }: Props) {
           {showSettings && (
             <div
               className="ai-key-box"
+              role="presentation"
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
             >
@@ -441,6 +444,7 @@ export default function AIAssistant({ onHide }: Props) {
 
           <div
             className="ai-messages"
+            role="presentation"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
@@ -496,6 +500,7 @@ export default function AIAssistant({ onHide }: Props) {
 
           <div
             className="ai-input-row"
+            role="presentation"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >

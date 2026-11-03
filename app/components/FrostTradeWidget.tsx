@@ -48,7 +48,6 @@ export default function FrostTradeWidget({ onHide }: Props) {
     isDragging,
     isSnapping,
     elementRef,
-    isBottomHalf,
     wasDragged,
     dragHandleProps,
   } = useDraggable("frost-widget", getDefaultPos());
@@ -70,7 +69,9 @@ export default function FrostTradeWidget({ onHide }: Props) {
         prevPrice.current = newPrice;
         setData(pair);
       }
-    } catch {}
+    } catch (error) {
+      console.error("Failed to load FROST price:", error);
+    }
   };
 
   useEffect(() => {
@@ -116,26 +117,46 @@ export default function FrostTradeWidget({ onHide }: Props) {
         {...dragHandleProps}
         style={{ cursor: isDragging ? "grabbing" : "grab" }}
       >
-        <div
+        <button
+          type="button"
           className="frost-trade-widget__title"
           onClick={() => {
             if (wasDragged()) return;
             setCollapsed((v) => !v);
           }}
-          style={{ flex: 1, cursor: isDragging ? "grabbing" : "grab" }}
+          style={{
+            flex: 1,
+            cursor: isDragging ? "grabbing" : "grab",
+            border: 0,
+            padding: 0,
+            background: "transparent",
+            color: "inherit",
+            font: "inherit",
+            textAlign: "left",
+          }}
         >
           <span className="frost-trade-widget__icon">❄</span>
           <span>FROST</span>
-        </div>
-        <div
+        </button>
+        <button
+          type="button"
           className="frost-trade-widget__toggle"
           onClick={() => {
             if (wasDragged()) return;
             setCollapsed((v) => !v);
           }}
+          aria-label={
+            collapsed ? "Expand FROST widget" : "Collapse FROST widget"
+          }
+          style={{
+            border: 0,
+            padding: 0,
+            background: "transparent",
+            cursor: "pointer",
+          }}
         >
           {collapsed ? "▲" : "▼"}
-        </div>
+        </button>
         {onHide && (
           <button
             className="frost-trade-widget__close"

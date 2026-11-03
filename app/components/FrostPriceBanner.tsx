@@ -19,7 +19,13 @@ function fmt(n: number, compact = false): string {
     if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
     return "$" + n.toFixed(2);
   }
-  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 8 });
+  return (
+    "$" +
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 6,
+      maximumFractionDigits: 8,
+    })
+  );
 }
 
 export default function FrostPriceBanner() {
@@ -31,12 +37,14 @@ export default function FrostPriceBanner() {
     try {
       const res = await fetch(
         `https://api.dexscreener.com/latest/dex/pairs/arbitrum/${FROST_TOKEN.poolAddress}`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
       const json = await res.json();
       const pair = json?.pair ?? json?.pairs?.[0];
       if (pair) setData(pair);
-    } catch {}
+    } catch (error) {
+      console.error("Failed to load FROST market data:", error);
+    }
     setLoading(false);
   };
 
@@ -89,33 +97,53 @@ export default function FrostPriceBanner() {
         </div>
 
         {loading ? (
-          <div className="text-xs" style={{ color: statColor }}>Loading…</div>
+          <div className="text-xs" style={{ color: statColor }}>
+            Loading…
+          </div>
         ) : (
           <div className="flex items-center gap-4 flex-wrap">
             <div className="text-center">
-              <div className="text-xs" style={{ color: statColor }}>Price</div>
-              <div className="text-sm font-bold" style={{ color: "rgb(var(--oui-color-primary))" }}>
+              <div className="text-xs" style={{ color: statColor }}>
+                Price
+              </div>
+              <div
+                className="text-sm font-bold"
+                style={{ color: "rgb(var(--oui-color-primary))" }}
+              >
                 {fmt(price)}
               </div>
             </div>
 
             <div className="text-center">
-              <div className="text-xs" style={{ color: statColor }}>24h Change</div>
+              <div className="text-xs" style={{ color: statColor }}>
+                24h Change
+              </div>
               <div className="text-sm font-bold" style={{ color: changeColor }}>
-                {up ? "+" : ""}{change.toFixed(2)}%
+                {up ? "+" : ""}
+                {change.toFixed(2)}%
               </div>
             </div>
 
             <div className="text-center">
-              <div className="text-xs" style={{ color: statColor }}>24h Volume</div>
-              <div className="text-sm font-semibold" style={{ color: valColor }}>
+              <div className="text-xs" style={{ color: statColor }}>
+                24h Volume
+              </div>
+              <div
+                className="text-sm font-semibold"
+                style={{ color: valColor }}
+              >
                 {fmt(vol, true)}
               </div>
             </div>
 
             <div className="text-center">
-              <div className="text-xs" style={{ color: statColor }}>Market Cap</div>
-              <div className="text-sm font-semibold" style={{ color: valColor }}>
+              <div className="text-xs" style={{ color: statColor }}>
+                Market Cap
+              </div>
+              <div
+                className="text-sm font-semibold"
+                style={{ color: valColor }}
+              >
                 {fmt(mc, true)}
               </div>
             </div>
