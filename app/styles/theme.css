@@ -30,23 +30,23 @@
   --oui-color-warning-darken: 190 140 0;
   --oui-color-warning-contrast: 11 14 17;
 
-  --oui-color-fill: 24 27 35;
-  --oui-color-fill-active: 30 32 42;
+  --oui-color-fill: 20 30 47;
+  --oui-color-fill-active: 30 44 66;
 
-  /* backgrounds — Binance-style near-black */
-  --oui-color-base-1: 11 14 17;
-  --oui-color-base-2: 14 17 22;
-  --oui-color-base-3: 20 24 30;
-  --oui-color-base-4: 24 27 35;
-  --oui-color-base-5: 28 32 42;
-  --oui-color-base-6: 32 36 48;
-  --oui-color-base-7: 36 41 55;
-  --oui-color-base-8: 16 19 25;
-  --oui-color-base-9: 12 15 20;
-  --oui-color-base-10: 11 14 17;
+  /* Deep navy surfaces keep the trading interface calm and clearly layered. */
+  --oui-color-base-1: 9 14 25;
+  --oui-color-base-2: 13 20 34;
+  --oui-color-base-3: 17 26 42;
+  --oui-color-base-4: 20 30 47;
+  --oui-color-base-5: 24 36 56;
+  --oui-color-base-6: 30 44 66;
+  --oui-color-base-7: 37 53 77;
+  --oui-color-base-8: 15 22 36;
+  --oui-color-base-9: 10 16 28;
+  --oui-color-base-10: 8 12 22;
 
-  --oui-color-base-foreground: 234 236 239;
-  --oui-color-line: 30 36 50;
+  --oui-color-base-foreground: 239 243 250;
+  --oui-color-line: 42 57 75;
 
   --oui-color-trading-loss: 246 70 93;
   --oui-color-trading-loss-contrast: 255 255 255;
@@ -57,8 +57,8 @@
   --oui-gradient-primary-start: 0 180 220;
   --oui-gradient-primary-end: 56 224 248;
 
-  --oui-gradient-secondary-start: 20 24 30;
-  --oui-gradient-secondary-end: 36 41 55;
+  --oui-gradient-secondary-start: 17 26 42;
+  --oui-gradient-secondary-end: 37 53 77;
 
   --oui-gradient-success-start: 0 170 100;
   --oui-gradient-success-end: 14 203 129;
@@ -75,8 +75,8 @@
   --oui-gradient-warning-start: 190 140 0;
   --oui-gradient-warning-end: 240 185 11;
 
-  --oui-gradient-neutral-start: 11 14 17;
-  --oui-gradient-neutral-end: 28 32 42;
+  --oui-gradient-neutral-start: 8 12 22;
+  --oui-gradient-neutral-end: 24 36 56;
 
   /* rounded */
   --oui-rounded-sm: 2px;
