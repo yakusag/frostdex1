@@ -10,10 +10,17 @@ export const BINANCE_SYMBOLS: Record<string, string> = {
 };
 
 const TF_LIMIT: Record<string, number> = {
-  "15m": 96,
-  "1h": 120,
-  "4h": 90,
-  "1d": 180,
+  "15m": 1000,
+  "1h": 1000,
+  "4h": 1000,
+  "1d": 1000,
+};
+
+const TF_MILLISECONDS: Record<string, number> = {
+  "15m": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "4h": 4 * 60 * 60 * 1000,
+  "1d": 24 * 60 * 60 * 1000,
 };
 
 function mapKline(k: (string | number)[]): Candle {
@@ -75,9 +82,13 @@ export function useBinanceFeed(
       })
       .then((data: (string | number)[][]) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map(mapKline);
+          const now = Date.now();
+          const intervalMs = TF_MILLISECONDS[timeframe] ?? 60 * 60 * 1000;
+          const mapped = data
+            .map(mapKline)
+            .filter((candle) => candle.t + intervalMs <= now);
           setCandles(mapped);
-          setLatestPrice(mapped[mapped.length - 1].c);
+          setLatestPrice(mapped.at(-1)?.c ?? null);
         } else {
           setError("Empty response");
         }

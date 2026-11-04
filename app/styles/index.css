@@ -87,6 +87,11 @@ tr:hover td {
   color: #eaecef;
 }
 
+/* Keep the native blinking text caret visible and theme-colored everywhere. */
+:where(input, textarea, [contenteditable="true"]) {
+  caret-color: rgb(var(--oui-color-primary));
+}
+
 /* ─── modals & dialogs ─────────────────────────────────────────────── */
 [role="dialog"],
 [data-radix-popper-content-wrapper],

@@ -18,6 +18,15 @@ import {
 import { OrderSide, OrderType } from "@orderly.network/types";
 import type { Candle } from "@/components/BotChart";
 import {
+  BOT_TAKER_FEE_RATE,
+  computeATR,
+  computeEMA,
+  computeRSI,
+  getDcaIntervalMs,
+  getGridDecision,
+  getSignalDecision,
+} from "@/utils/bot-strategy";
+import {
   getLastClosedTrendCandleIndex,
   isTrendPullbackEntry,
   normalizeTrendParameter,
@@ -43,6 +52,7 @@ interface BotConfig {
   liveMode: boolean;
   realizedPnl?: number;
   position?: BotPosition | null;
+  dcaLastBuyAt?: number;
   markPrice?: number;
   paperPosition?: ManagedPosition | null;
   paperRealizedPnl?: number;
@@ -169,6 +179,12 @@ function generateId() {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
 }
 
+function getConfiguredGridBound(value: string | number | undefined) {
+  if (value === undefined || value === "" || value === "auto") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function getOrderQuantity(
   targetNotional: number,
   price: number,
@@ -196,74 +212,38 @@ function getOrderQuantity(
 
 function getHistoricalPerformance(trades: TradeLog[]) {
   let realizedPnl = 0;
-  let position: BotPosition | null = null;
+  let positionEntryPrice = 0;
+  let positionQuantity = 0;
 
   for (const trade of [...trades]
     .filter((item) => item.live)
     .sort((a, b) => a.ts - b.ts)) {
     if (trade.side === "BUY") {
-      position = { entryPrice: trade.price, quantity: trade.qty };
+      const quantity = positionQuantity + trade.qty;
+      positionEntryPrice =
+        (positionEntryPrice * positionQuantity + trade.price * trade.qty) /
+        quantity;
+      positionQuantity = quantity;
+      realizedPnl -= trade.price * trade.qty * BOT_TAKER_FEE_RATE;
       continue;
     }
 
-    if (!position) continue;
+    if (positionQuantity <= 0) continue;
 
-    const closedQty = Math.min(position.quantity, trade.qty);
-    realizedPnl += (trade.price - position.entryPrice) * closedQty;
-    const remainingQty: number = position.quantity - closedQty;
-    position =
-      remainingQty > 0 ? { ...position, quantity: remainingQty } : null;
+    const closedQty = Math.min(positionQuantity, trade.qty);
+    realizedPnl +=
+      (trade.price - positionEntryPrice) * closedQty -
+      trade.price * closedQty * BOT_TAKER_FEE_RATE;
+    positionQuantity -= closedQty;
   }
 
-  return { realizedPnl, position };
-}
-
-function computeRSI(candles: Candle[], period = 14): number[] {
-  const rsi: number[] = Array(candles.length).fill(50);
-  if (candles.length < period + 1) return rsi;
-  let gainSum = 0,
-    lossSum = 0;
-  for (let i = 1; i <= period; i++) {
-    const d = candles[i].c - candles[i - 1].c;
-    if (d > 0) gainSum += d;
-    else lossSum -= d;
-  }
-  let avgGain = gainSum / period,
-    avgLoss = lossSum / period;
-  for (let i = period; i < candles.length; i++) {
-    const d = candles[i].c - candles[i - 1].c;
-    const gain = d > 0 ? d : 0,
-      loss = d < 0 ? -d : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-  }
-  return rsi;
-}
-
-function computeEMA(candles: Candle[], period: number): number[] {
-  const k = 2 / (period + 1);
-  const ema: number[] = [];
-  candles.forEach((c, i) => {
-    ema.push(i === 0 ? c.c : c.c * k + ema[i - 1] * (1 - k));
-  });
-  return ema;
-}
-
-function computeATR(candles: Candle[], period = 14): number[] {
-  const atr: number[] = Array(candles.length).fill(0);
-  for (let i = 1; i < candles.length; i++) {
-    const trueRange = Math.max(
-      candles[i].h - candles[i].l,
-      Math.abs(candles[i].h - candles[i - 1].c),
-      Math.abs(candles[i].l - candles[i - 1].c),
-    );
-    atr[i] =
-      i < period
-        ? (atr[i - 1] * (i - 1) + trueRange) / i
-        : (atr[i - 1] * (period - 1) + trueRange) / period;
-  }
-  return atr;
+  return {
+    realizedPnl,
+    position:
+      positionQuantity > 0
+        ? { entryPrice: positionEntryPrice, quantity: positionQuantity }
+        : null,
+  };
 }
 
 interface OrderlyHistory {
@@ -290,7 +270,7 @@ function useOrderlyFeed(symbol: string) {
       if (fetching) return;
       fetching = true;
       const to = Math.floor(Date.now() / 1000);
-      const from = to - 24 * 60 * 60;
+      const from = to - 30 * 60 * 60;
 
       try {
         const response = await fetch(
@@ -413,11 +393,12 @@ function OrderSubmitter({
     if (submitted.current || !submit) return;
     submitted.current = true;
     const orderNotional = Number(pending.qty) * pending.triggerPrice;
+    const orderCost = orderNotional * (1 + BOT_TAKER_FEE_RATE);
     if (
       pending.side === "BUY" &&
       (!Number.isFinite(freeCollateral) ||
         freeCollateral <= 0 ||
-        orderNotional > freeCollateral)
+        orderCost > freeCollateral)
     ) {
       onInsufficientBalance();
       onDone({ success: false });
@@ -527,9 +508,9 @@ function BotLiveEngine({
   const positionRef = useRef<BotPosition | null>(initialPosition);
   const realizedPnlRef = useRef(initialRealizedPnl);
   const lastEvalRef = useRef(0);
-  const dcaCycleRef = useRef(0);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const balanceAlertedRef = useRef(false);
+  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
 
   useEffect(() => {
     if (!feed.latestPrice) return;
@@ -564,11 +545,28 @@ function BotLiveEngine({
 
     const price = feed.latestPrice;
     const candles = feed.candles;
+    const lastClosed = getLastClosedTrendCandleIndex(candles);
+    if (lastClosed < 21) return;
     const investment = bot.investment;
 
     if (!symbolRules) return;
 
     const availableBudget = Math.min(investment, freeCollateral || 0);
+    const currentPosition = positionRef.current;
+    const dcaRemainingBudget =
+      bot.strategy === "dca"
+        ? Math.max(
+            0,
+            investment -
+              (currentPosition
+                ? currentPosition.entryPrice *
+                  currentPosition.quantity *
+                  (1 + BOT_TAKER_FEE_RATE)
+                : 0),
+          )
+        : availableBudget;
+    const strategyBudget = Math.min(availableBudget, dcaRemainingBudget);
+    const orderBudget = strategyBudget / (1 + BOT_TAKER_FEE_RATE);
     const minimumOrderNotional = Math.max(
       symbolRules.min_notional,
       symbolRules.base_min * price,
@@ -577,11 +575,11 @@ function BotLiveEngine({
       bot.strategy === "dca"
         ? Math.min(
             Number(bot.params.amount) || investment * 0.5,
-            availableBudget,
+            orderBudget,
           )
-        : Math.min(investment * 0.5, availableBudget);
+        : Math.min(investment * 0.5, orderBudget);
     const buyNotional = Math.min(
-      availableBudget,
+      orderBudget,
       Math.max(minimumOrderNotional, requestedBuyNotional),
     );
 
@@ -597,11 +595,12 @@ function BotLiveEngine({
         );
         if (quantity === null) return;
         const orderNotional = quantity * order.triggerPrice;
+        const orderCost = orderNotional * (1 + BOT_TAKER_FEE_RATE);
         if (
           !Number.isFinite(freeCollateral) ||
           freeCollateral <= 0 ||
-          orderNotional > freeCollateral ||
-          orderNotional > maxOrderBudget
+          orderCost > freeCollateral ||
+          orderCost > maxOrderBudget
         ) {
           if (!balanceAlertedRef.current) {
             balanceAlertedRef.current = true;
@@ -625,43 +624,37 @@ function BotLiveEngine({
 
     if (bot.strategy === "signal") {
       const rsiPeriod = Number(bot.params.rsi) || 14;
-      const emaPeriod = Number(bot.params.ema) || 20;
-      const rsi = computeRSI(candles, rsiPeriod);
-      const emaFast = computeEMA(candles, 9);
-      const emaSlow = computeEMA(candles, emaPeriod);
-      const last = candles.length - 1;
-      shouldBuy =
-        rsi[last] < 35 && emaFast[last] > emaSlow[last] && !positionRef.current;
-      shouldSell =
-        (rsi[last] > 68 || emaFast[last] < emaSlow[last]) &&
-        !!positionRef.current;
+      const decision = getSignalDecision(
+        candles,
+        lastClosed,
+        {
+          rsiPeriod,
+          rsiOversold: Number(bot.params.rsiOversold) || 35,
+          rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+          emaFast: Number(bot.params.emaFast) || 9,
+          emaSlow: Number(bot.params.ema) || 21,
+        },
+        !!positionRef.current,
+      );
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
     } else if (bot.strategy === "grid") {
       const grids = Number(bot.params.grids) || 10;
-      const prices = candles.map((c) => c.c);
-      const loP = Math.min(...prices);
-      const hiP = Math.max(...prices);
-      const step = (hiP - loP) / grids;
-      const last = candles.length - 1;
-      const curLevel = Math.floor((price - loP) / step);
-      const prevLevel = Math.floor((candles[last - 1].c - loP) / step);
-      shouldBuy = curLevel < prevLevel && !positionRef.current;
-      shouldSell = curLevel > prevLevel && !!positionRef.current;
+      const decision = getGridDecision(
+        candles,
+        lastClosed,
+        grids,
+        !!positionRef.current,
+        getConfiguredGridBound(bot.params.lower),
+        getConfiguredGridBound(bot.params.upper),
+      );
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
-      const intervalMs =
-        (
-          {
-            "15m": 15 * 60 * 1000,
-            "30m": 30 * 60 * 1000,
-            "1h": 60 * 60 * 1000,
-            "4h": 4 * 60 * 60 * 1000,
-            "8h": 8 * 60 * 60 * 1000,
-            "12h": 12 * 60 * 60 * 1000,
-            "1d": 24 * 60 * 60 * 1000,
-          } as Record<string, number>
-        )[String(bot.params.interval)] || 60 * 60 * 1000;
-      dcaCycleRef.current += 1;
-      const intervalsPerCycle = Math.max(1, Math.round(intervalMs / 20_000));
-      shouldBuy = dcaCycleRef.current % intervalsPerCycle === 0;
+      shouldBuy =
+        strategyBudget >= minimumOrderNotional &&
+        Date.now() - lastDcaBuyRef.current >=
+          getDcaIntervalMs(bot.params.interval);
       shouldSell =
         !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
     } else if (bot.strategy === "trend") {
@@ -690,8 +683,10 @@ function BotLiveEngine({
         const maxNotional = availableBudget * 0.25;
         const qty =
           Math.floor(
-            Math.min(riskBudget / stopDistance, maxNotional / price) *
-              1_000_000,
+            Math.min(
+              riskBudget / stopDistance,
+              maxNotional / (price * (1 + BOT_TAKER_FEE_RATE)),
+            ) * 1_000_000,
           ) / 1_000_000;
         if (qty > 0) {
           queueOrder(
@@ -762,10 +757,24 @@ function BotLiveEngine({
           if (result.success) {
             const quantity = parseFloat(pendingOrder.qty);
             if (pendingOrder.side === "BUY") {
+              const previous = positionRef.current;
               positionRef.current = {
-                entryPrice: pendingOrder.triggerPrice,
-                quantity,
+                entryPrice:
+                  bot.strategy === "dca" && previous
+                    ? (previous.entryPrice * previous.quantity +
+                        pendingOrder.triggerPrice * quantity) /
+                      (previous.quantity + quantity)
+                    : pendingOrder.triggerPrice,
+                quantity:
+                  bot.strategy === "dca" && previous
+                    ? previous.quantity + quantity
+                    : quantity,
               };
+              realizedPnlRef.current -=
+                pendingOrder.triggerPrice * quantity * BOT_TAKER_FEE_RATE;
+              if (bot.strategy === "dca") {
+                lastDcaBuyRef.current = Date.now();
+              }
               if (bot.strategy === "trend") {
                 const nextPosition = pendingOrder.position ?? null;
                 setManagedPosition(nextPosition);
@@ -780,7 +789,8 @@ function BotLiveEngine({
               const position = positionRef.current;
               const closedQty = Math.min(position.quantity, quantity);
               realizedPnlRef.current +=
-                (pendingOrder.triggerPrice - position.entryPrice) * closedQty;
+                (pendingOrder.triggerPrice - position.entryPrice) * closedQty -
+                pendingOrder.triggerPrice * closedQty * BOT_TAKER_FEE_RATE;
               const remainingQty: number = position.quantity - closedQty;
               positionRef.current =
                 remainingQty > 0
@@ -880,7 +890,9 @@ function BotPaperEngine({
       }
 
       if (exitPrice !== null) {
-        realizedPnl += position.qty * (exitPrice - position.entryPrice);
+        realizedPnl +=
+          position.qty * (exitPrice - position.entryPrice) -
+          position.qty * exitPrice * BOT_TAKER_FEE_RATE;
         trade = {
           botId: bot.id,
           side: "SELL",
@@ -911,28 +923,30 @@ function BotPaperEngine({
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
         const riskBudget = bot.investment * 0.01;
         const maxNotional = bot.investment * 0.25;
+        const entryPrice = closedCandle.c;
         const qty =
           Math.floor(
-            Math.min(riskBudget / stopDistance, maxNotional / price) *
+            Math.min(riskBudget / stopDistance, maxNotional / entryPrice) *
               1_000_000,
           ) / 1_000_000;
 
         if (qty >= 0.001) {
           position = {
             qty,
-            entryPrice: price,
-            stopPrice: price - stopDistance,
+            entryPrice,
+            stopPrice: entryPrice - stopDistance,
             targetPrice:
-              price +
+              entryPrice +
               stopDistance *
                 normalizeTrendParameter(bot.params.rewardRisk, 2.5),
           };
+          realizedPnl -= entryPrice * qty * BOT_TAKER_FEE_RATE;
           trade = {
             botId: bot.id,
             side: "BUY",
             symbol: bot.symbol,
             qty,
-            price,
+            price: entryPrice,
             ts: Date.now(),
             live: false,
           };
@@ -992,14 +1006,16 @@ function BotSimulationEngine({
     price: number;
     candleTime: number;
   } | null>(null);
-  const lastDcaBuyRef = useRef(bot.createdAt);
+  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
 
   useEffect(() => {
     if (bot.status !== "running" || feed.loading || !feed.latestPrice) return;
 
     const candles = feed.candles;
-    const price = feed.latestPrice;
-    const candleTime = candles.at(-1)?.t ?? 0;
+    const lastClosed = getLastClosedTrendCandleIndex(candles);
+    if (lastClosed < 21) return;
+    const candleTime = candles[lastClosed].t;
+    const price = candles[lastClosed].c;
     const lastEvaluation = lastEvaluationRef.current;
     if (
       lastEvaluation?.price === price &&
@@ -1016,59 +1032,64 @@ function BotSimulationEngine({
 
     if (bot.strategy === "signal") {
       const rsiPeriod = Number(bot.params.rsi) || 14;
-      const emaPeriod = Number(bot.params.ema) || 20;
-      if (candles.length < Math.max(rsiPeriod + 1, emaPeriod, 22)) return;
-      const rsi = computeRSI(candles, rsiPeriod);
-      const emaFast = computeEMA(candles, 9);
-      const emaSlow = computeEMA(candles, emaPeriod);
-      const last = candles.length - 1;
-      shouldBuy = rsi[last] < 35 && emaFast[last] > emaSlow[last] && !position;
-      shouldSell =
-        (rsi[last] > 68 || emaFast[last] < emaSlow[last]) && !!position;
-    } else if (bot.strategy === "grid") {
-      if (candles.length < 2) return;
-      const grids = Math.max(1, Number(bot.params.grids) || 10);
-      const prices = candles.map((candle) => candle.c);
-      const lowPrice = Math.min(...prices);
-      const highPrice = Math.max(...prices);
-      const step = (highPrice - lowPrice) / grids;
-      if (!Number.isFinite(step) || step <= 0) return;
-      const currentLevel = Math.floor((price - lowPrice) / step);
-      const previousLevel = Math.floor(
-        (candles[candles.length - 2].c - lowPrice) / step,
+      const decision = getSignalDecision(
+        candles,
+        lastClosed,
+        {
+          rsiPeriod,
+          rsiOversold: Number(bot.params.rsiOversold) || 35,
+          rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+          emaFast: Number(bot.params.emaFast) || 9,
+          emaSlow: Number(bot.params.ema) || 21,
+        },
+        !!position,
       );
-      shouldBuy = currentLevel < previousLevel && !position;
-      shouldSell = currentLevel > previousLevel && !!position;
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
+    } else if (bot.strategy === "grid") {
+      const decision = getGridDecision(
+        candles,
+        lastClosed,
+        Math.max(1, Number(bot.params.grids) || 10),
+        !!position,
+        getConfiguredGridBound(bot.params.lower),
+        getConfiguredGridBound(bot.params.upper),
+      );
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
-      const intervalMs =
-        (
-          {
-            "15m": 15 * 60 * 1000,
-            "30m": 30 * 60 * 1000,
-            "1h": 60 * 60 * 1000,
-            "4h": 4 * 60 * 60 * 1000,
-            "8h": 8 * 60 * 60 * 1000,
-            "12h": 12 * 60 * 60 * 1000,
-            "1d": 24 * 60 * 60 * 1000,
-            "3d": 3 * 24 * 60 * 60 * 1000,
-            "1w": 7 * 24 * 60 * 60 * 1000,
-          } as Record<string, number>
-        )[String(bot.params.interval)] ?? 60 * 60 * 1000;
+      const committedNotional = position
+        ? position.entryPrice *
+          position.quantity *
+          (1 + BOT_TAKER_FEE_RATE)
+        : 0;
       buyNotional = Math.min(
         Number(bot.params.amount) || bot.investment * 0.5,
-        bot.investment,
+        Math.max(0, bot.investment - committedNotional),
       );
-      shouldBuy = !position && Date.now() - lastDcaBuyRef.current >= intervalMs;
+      shouldBuy =
+        buyNotional > 0 &&
+        Date.now() - lastDcaBuyRef.current >=
+          getDcaIntervalMs(bot.params.interval);
       shouldSell = !!position && price > position.entryPrice * 1.05;
     } else {
       return;
     }
 
     let nextPosition = position;
-    if (shouldBuy && !position && buyNotional > 0) {
+    if (shouldBuy && buyNotional > 0) {
       const quantity = buyNotional / price;
-      nextPosition = { entryPrice: price, quantity };
+      nextPosition =
+        bot.strategy === "dca" && position
+          ? {
+              entryPrice:
+                (position.entryPrice * position.quantity + price * quantity) /
+                (position.quantity + quantity),
+              quantity: position.quantity + quantity,
+            }
+          : { entryPrice: price, quantity };
       positionRef.current = nextPosition;
+      realizedPnlRef.current -= buyNotional * BOT_TAKER_FEE_RATE;
       if (bot.strategy === "dca") lastDcaBuyRef.current = Date.now();
       onTradeExecuted({
         botId: bot.id,
@@ -1081,7 +1102,8 @@ function BotSimulationEngine({
       });
     } else if (shouldSell && position) {
       realizedPnlRef.current +=
-        (price - position.entryPrice) * position.quantity;
+        (price - position.entryPrice) * position.quantity -
+        price * position.quantity * BOT_TAKER_FEE_RATE;
       nextPosition = null;
       positionRef.current = null;
       onTradeExecuted({
@@ -1164,7 +1186,7 @@ export default function BotPage() {
   const [dcaInterval, setDcaInterval] = useState("1h");
   const [dcaAmount, setDcaAmount] = useState("50");
   const [sigRsi, setSigRsi] = useState("14");
-  const [sigEma, setSigEma] = useState("20");
+  const [sigEma, setSigEma] = useState("21");
   const [trendStopAtr, setTrendStopAtr] = useState("2");
   const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
 
@@ -1242,7 +1264,15 @@ export default function BotPage() {
     });
     setBots((prev) => {
       const updated = prev.map((b) =>
-        b.id === log.botId ? { ...b, trades: b.trades + 1 } : b,
+        b.id === log.botId
+          ? {
+              ...b,
+              trades: b.trades + 1,
+              ...(b.strategy === "dca" && log.side === "BUY"
+                ? { dcaLastBuyAt: log.ts }
+                : {}),
+            }
+          : b,
       );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
@@ -1342,7 +1372,7 @@ export default function BotPage() {
     setDcaInterval(String(bot.params.interval ?? "1h"));
     setDcaAmount(String(bot.params.amount ?? 50));
     setSigRsi(String(bot.params.rsi ?? 14));
-    setSigEma(String(bot.params.ema ?? 20));
+    setSigEma(String(bot.params.ema ?? 21));
     setTrendStopAtr(String(normalizeTrendParameter(bot.params.stopAtr, 2)));
     setTrendRewardRisk(
       String(normalizeTrendParameter(bot.params.rewardRisk, 2.5)),
@@ -1352,6 +1382,34 @@ export default function BotPage() {
   };
 
   const handleCreate = () => {
+    const lowerGrid = Number(gridLower);
+    const upperGrid = Number(gridUpper);
+    if (
+      strategy === "grid" &&
+      ((gridLower.trim() === "") !== (gridUpper.trim() === "") ||
+        (gridLower.trim() !== "" &&
+          (!Number.isFinite(lowerGrid) ||
+            !Number.isFinite(upperGrid) ||
+            lowerGrid >= upperGrid)))
+    ) {
+      setBalanceMessage(
+        "Enter both grid bounds and make sure the lower price is below the upper price, or leave both set to Auto.",
+      );
+      return;
+    }
+
+    if (!Number.isFinite(Number(investment)) || Number(investment) <= 0) {
+      setBalanceMessage("Investment must be a positive amount.");
+      return;
+    }
+    if (
+      strategy === "dca" &&
+      (!Number.isFinite(Number(dcaAmount)) || Number(dcaAmount) <= 0)
+    ) {
+      setBalanceMessage("DCA amount per buy must be a positive amount.");
+      return;
+    }
+
     if (
       liveMode &&
       isConnected &&
@@ -2026,6 +2084,11 @@ export default function BotPage() {
                       >
                         <div style={{ textAlign: "right" }}>
                           <div
+                            title={
+                              isLive
+                                ? "Estimated PnL uses 0.05% fees per side and requested prices; actual fills and fees may differ."
+                                : "Simulation PnL includes estimated 0.05% fees per side."
+                            }
                             style={{
                               fontSize: 16,
                               fontWeight: 700,

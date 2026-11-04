@@ -4,6 +4,15 @@ import {
   isTrendPullbackEntry,
   normalizeTrendParameter,
 } from "@/utils/trend-strategy";
+import {
+  BOT_TAKER_FEE_RATE,
+  computeATR,
+  computeEMA,
+  computeRSI,
+  getDcaIntervalMs,
+  getGridDecision,
+  getSignalDecisionFromIndicators,
+} from "@/utils/bot-strategy";
 import BotChart, { Candle, Signal } from "./BotChart";
 
 type Strategy = "grid" | "dca" | "signal" | "trend";
@@ -32,56 +41,13 @@ const SYMBOLS = [
 ];
 
 const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d"];
-const TAKER_FEE_RATE = 0.0005;
+const TIMEFRAME_MS: Record<Timeframe, number> = {
+  "15m": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "4h": 4 * 60 * 60 * 1000,
+  "1d": 24 * 60 * 60 * 1000,
+};
 const MAINTENANCE_MARGIN_RATE = 0.005;
-
-function computeRSI(candles: Candle[], period = 14): number[] {
-  const rsi: number[] = Array(candles.length).fill(50);
-  if (candles.length < period + 1) return rsi;
-  let gainSum = 0,
-    lossSum = 0;
-  for (let i = 1; i <= period; i++) {
-    const d = candles[i].c - candles[i - 1].c;
-    if (d > 0) gainSum += d;
-    else lossSum -= d;
-  }
-  let avgGain = gainSum / period,
-    avgLoss = lossSum / period;
-  for (let i = period; i < candles.length; i++) {
-    const d = candles[i].c - candles[i - 1].c;
-    const gain = d > 0 ? d : 0,
-      loss = d < 0 ? -d : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-  }
-  return rsi;
-}
-
-function computeEMA(candles: Candle[], period: number): number[] {
-  const k = 2 / (period + 1);
-  const ema: number[] = [];
-  candles.forEach((c, i) => {
-    ema.push(i === 0 ? c.c : c.c * k + ema[i - 1] * (1 - k));
-  });
-  return ema;
-}
-
-function computeATR(candles: Candle[], period = 14): number[] {
-  const atr: number[] = Array(candles.length).fill(0);
-  for (let i = 1; i < candles.length; i++) {
-    const trueRange = Math.max(
-      candles[i].h - candles[i].l,
-      Math.abs(candles[i].h - candles[i - 1].c),
-      Math.abs(candles[i].l - candles[i - 1].c),
-    );
-    atr[i] =
-      i < period
-        ? (atr[i - 1] * (i - 1) + trueRange) / i
-        : (atr[i - 1] * (period - 1) + trueRange) / period;
-  }
-  return atr;
-}
 
 export function runBacktest(
   candles: Candle[],
@@ -124,6 +90,8 @@ export function runBacktest(
   let entryPrice = 0;
   let stopPrice = 0;
   let targetPrice = 0;
+  let lastDcaBuyTime =
+    (candles[20]?.t ?? 0) - (params.intervalMs || getDcaIntervalMs("1h"));
   let peak = investment;
   let maxDD = 0;
 
@@ -139,7 +107,7 @@ export function runBacktest(
     if (!Number.isFinite(margin) || margin <= 0 || price <= 0) return false;
     const quantity = (margin * selectedLeverage) / price;
     const notional = quantity * price;
-    const fee = notional * TAKER_FEE_RATE;
+    const fee = notional * BOT_TAKER_FEE_RATE;
     if (margin + fee > cash) return false;
 
     entryPrice =
@@ -169,26 +137,38 @@ export function runBacktest(
     let wasLiquidated = false;
 
     if (strategy === "signal") {
-      const rsiBuy = params.rsiOversold || 35;
-      const rsiSell = params.rsiOverbought || 68;
-      shouldBuy = rsi[i] < rsiBuy && emaFast[i] > emaSlow[i] && position === 0;
-      shouldSell =
-        (rsi[i] > rsiSell || emaFast[i] < emaSlow[i]) && position > 0;
+      const decision = getSignalDecisionFromIndicators(
+        i,
+        {
+          rsiPeriod: params.rsiPeriod || 14,
+          rsiOversold: params.rsiOversold || 35,
+          rsiOverbought: params.rsiOverbought || 68,
+          emaFast: params.emaFast || 9,
+          emaSlow: params.emaSlow || 21,
+        },
+        position > 0,
+        rsi,
+        emaFast,
+        emaSlow,
+      );
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
     } else if (strategy === "grid") {
-      const history = candles.slice(Math.max(0, i - 100), i);
-      const loP = Math.min(...history.map((candle) => candle.l));
-      const hiP = Math.max(...history.map((candle) => candle.h));
-      const gridCount = params.grids || 10;
-      const step = (hiP - loP) / gridCount;
-      if (!Number.isFinite(step) || step <= 0) continue;
-      const gridLevel = Math.floor((c.c - loP) / step);
-      const prevLevel = Math.floor((candles[i - 1].c - loP) / step);
-      shouldBuy = gridLevel < prevLevel && position === 0 && cash > c.c * 0.1;
-      shouldSell = gridLevel > prevLevel && position > 0;
+      const decision = getGridDecision(
+        candles,
+        i,
+        params.grids || 10,
+        position > 0,
+        params.lower,
+        params.upper,
+      );
+      shouldBuy = decision.buy;
+      shouldSell = decision.sell;
     } else if (strategy === "dca") {
-      const interval = params.intervalCandles || 8;
       shouldBuy =
-        i % interval === 0 && cash >= (params.amountPerBuy || investment * 0.1);
+        c.t - lastDcaBuyTime >=
+          (params.intervalMs || getDcaIntervalMs("1h")) &&
+        cash > 0;
       shouldSell = position > 0 && c.c > entryPrice * 1.05;
     } else if (strategy === "trend") {
       if (position === 0) {
@@ -238,18 +218,22 @@ export function runBacktest(
           }
         }
       } else {
-        const margin = Math.min(
-          cash * 0.95,
-          params.amountPerBuy || cash * 0.5,
-        );
+        const margin =
+          strategy === "dca"
+            ? Math.min(
+                cash / (1 + BOT_TAKER_FEE_RATE),
+                params.amountPerBuy || investment * 0.1,
+              )
+            : Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
         if (openPosition(margin, c.c)) {
+          if (strategy === "dca") lastDcaBuyTime = c.t;
           signals.push({ t: c.t, price: c.c, side: "BUY" });
         }
       }
     } else if (shouldSell && position > 0) {
       const grossPnl = position * (exitPrice - entryPrice);
       const notional = position * exitPrice;
-      const exitFee = notional * TAKER_FEE_RATE;
+      const exitFee = notional * BOT_TAKER_FEE_RATE;
       const liquidationFee = wasLiquidated
         ? notional * MAINTENANCE_MARGIN_RATE
         : 0;
@@ -271,8 +255,14 @@ export function runBacktest(
   }
 
   const finalPrice = candles[candles.length - 1].c;
+  const estimatedCloseFee =
+    position > 0 ? position * finalPrice * BOT_TAKER_FEE_RATE : 0;
+  feesPaid += estimatedCloseFee;
   const finalValue =
-    cash + reservedMargin + position * (finalPrice - entryPrice);
+    cash +
+    reservedMargin +
+    position * (finalPrice - entryPrice) -
+    estimatedCloseFee;
   equity.push(finalValue);
   if (finalValue > peak) peak = finalValue;
   maxDD = Math.max(maxDD, peak > 0 ? (peak - finalValue) / peak : 0);
@@ -405,8 +395,10 @@ export default function BotBacktest({
   const [emaFast, setEmaFast] = useState(9);
   const [emaSlow, setEmaSlow] = useState(21);
   const [grids, setGrids] = useState(10);
-  const [dcaInterval, setDcaInterval] = useState(8);
-  const [dcaAmount, setDcaAmount] = useState(100);
+  const [gridLowerBound, setGridLowerBound] = useState("");
+  const [gridUpperBound, setGridUpperBound] = useState("");
+  const [dcaInterval, setDcaInterval] = useState("1h");
+  const [dcaAmount, setDcaAmount] = useState(50);
   const [trendStopAtr, setTrendStopAtr] = useState(2);
   const [trendRewardRisk, setTrendRewardRisk] = useState(2.5);
 
@@ -418,15 +410,38 @@ export default function BotBacktest({
   const handleBacktest = useCallback(() => {
     if (feed.candles.length < 20) return;
     setRunning(true);
-    const snapshot = [...feed.candles];
+    const snapshot = feed.candles.filter(
+      (candle) => candle.t + TIMEFRAME_MS[tf] <= Date.now(),
+    );
     setTimeout(() => {
       const params: Record<string, number> =
         strategy === "signal"
-          ? { rsiOversold, rsiOverbought, emaFast, emaSlow }
+          ? {
+              rsiOversold,
+              rsiOverbought,
+              emaFast,
+              emaSlow,
+              rsiPeriod: 14,
+            }
           : strategy === "grid"
-            ? { grids }
+            ? {
+                grids,
+                ...(gridLowerBound.trim() &&
+                gridUpperBound.trim() &&
+                Number.isFinite(Number(gridLowerBound)) &&
+                Number.isFinite(Number(gridUpperBound)) &&
+                Number(gridLowerBound) < Number(gridUpperBound)
+                  ? {
+                      lower: Number(gridLowerBound),
+                      upper: Number(gridUpperBound),
+                    }
+                  : {}),
+              }
             : strategy === "dca"
-              ? { intervalCandles: dcaInterval, amountPerBuy: dcaAmount }
+              ? {
+                  intervalMs: getDcaIntervalMs(dcaInterval),
+                  amountPerBuy: dcaAmount,
+                }
               : { stopAtr: trendStopAtr, rewardRisk: trendRewardRisk };
       const res = runBacktest(snapshot, strategy, params, investment, leverage, tf);
       setResult(res);
@@ -440,6 +455,8 @@ export default function BotBacktest({
     emaFast,
     emaSlow,
     grids,
+    gridLowerBound,
+    gridUpperBound,
     dcaInterval,
     dcaAmount,
     trendStopAtr,
@@ -566,7 +583,7 @@ export default function BotBacktest({
             ))}
           </select>
           <div style={{ ...labelSt, maxWidth: 170, marginTop: 4 }}>
-            0.05% taker fees · estimated liquidation; venue limits differ
+            Binance candles · 0.05% estimated taker fees · live fills differ
           </div>
         </div>
         <div
@@ -680,23 +697,69 @@ export default function BotBacktest({
           </>
         )}
         {strategy === "grid" && (
-          <ParamInput
-            label="Grid Count"
-            value={grids}
-            min={3}
-            max={50}
-            onChange={setGrids}
-          />
+          <>
+            <ParamInput
+              label="Grid Count"
+              value={grids}
+              min={3}
+              max={50}
+              onChange={setGrids}
+            />
+            <div>
+              <label htmlFor="backtest-grid-lower" style={labelSt}>
+                Lower bound (optional)
+              </label>
+              <input
+                id="backtest-grid-lower"
+                type="number"
+                value={gridLowerBound}
+                onChange={(event) => setGridLowerBound(event.target.value)}
+                style={{ ...selectSt, width: 130 }}
+              />
+            </div>
+            <div>
+              <label htmlFor="backtest-grid-upper" style={labelSt}>
+                Upper bound (optional)
+              </label>
+              <input
+                id="backtest-grid-upper"
+                type="number"
+                value={gridUpperBound}
+                onChange={(event) => setGridUpperBound(event.target.value)}
+                style={{ ...selectSt, width: 130 }}
+              />
+            </div>
+          </>
         )}
         {strategy === "dca" && (
           <>
-            <ParamInput
-              label="Buy every (candles)"
-              value={dcaInterval}
-              min={1}
-              max={100}
-              onChange={setDcaInterval}
-            />
+            <div>
+              <label htmlFor="backtest-dca-interval" style={labelSt}>
+                Buy interval
+              </label>
+              <select
+                id="backtest-dca-interval"
+                value={dcaInterval}
+                onChange={(event) => setDcaInterval(event.target.value)}
+                style={selectSt}
+              >
+                {[
+                  "15m",
+                  "30m",
+                  "1h",
+                  "4h",
+                  "8h",
+                  "12h",
+                  "1d",
+                  "3d",
+                  "1w",
+                ].map((interval) => (
+                  <option key={interval} value={interval}>
+                    {interval}
+                  </option>
+                ))}
+              </select>
+            </div>
             <ParamInput
               label="Amount per buy ($)"
               value={dcaAmount}
