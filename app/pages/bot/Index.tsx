@@ -2891,15 +2891,7 @@ export default function BotPage() {
             style={{
               width: "100%",
               padding: "14px",
-              background:
-                creating ||
-                (liveMode &&
-                  (!isConnected || availableBalance <= 0 || balanceWarning))
-                  ? "rgba(56,224,248,0.3)"
-                  : "linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%)",
-              border: "none",
               borderRadius: 8,
-              color: "#0b0e11",
               fontSize: 15,
               fontWeight: 700,
               cursor:
