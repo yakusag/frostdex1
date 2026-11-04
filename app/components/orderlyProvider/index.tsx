@@ -187,7 +187,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
         url.searchParams.set("lang", lang);
         localStorage.setItem("frostdex_lang", lang);
       }
-      window.history.replaceState({}, "", url.toString());
+      window.history.replaceState(window.history.state, "", url.toString());
 
       const isRtl = RTL_LOCALES.includes(lang);
       document.documentElement.setAttribute("dir", isRtl ? "rtl" : "ltr");

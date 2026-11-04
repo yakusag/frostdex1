@@ -1,9 +1,10 @@
-import React, { lazy } from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { LoadingSpinner } from "./components/LoadingSpinner";
 import { withBasePath } from "./utils/base-path";
 import { getRuntimeConfig } from "./utils/runtime-config";
 import "./styles/index.css";
@@ -299,7 +300,9 @@ loadRuntimeConfig().then(() => {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <HelmetProvider>
-        <RouterProvider router={router} />
+        <Suspense fallback={<LoadingSpinner />}>
+          <RouterProvider router={router} />
+        </Suspense>
       </HelmetProvider>
     </React.StrictMode>,
   );
