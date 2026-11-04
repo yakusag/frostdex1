@@ -155,14 +155,12 @@ tr:hover td {
   animation-name: frost-edge-sweep-reverse;
 }
 
-html,
-body {
+.oui-scaffold-root.oui-custom-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
+.oui-scaffold-root.oui-custom-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
