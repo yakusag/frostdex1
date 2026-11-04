@@ -116,6 +116,12 @@ tr:hover td {
   }
 }
 
+@keyframes frost-edge-sweep-reverse {
+  to {
+    transform: translateX(-350%);
+  }
+}
+
 .market-ticker-bar::before,
 .market-ticker-bar::after,
 .oui-scaffold-topNavbar::before,
@@ -143,8 +149,10 @@ tr:hover td {
 
 .market-ticker-bar::after,
 .oui-scaffold-topNavbar::after {
+  right: -40%;
+  left: auto;
   bottom: 0;
-  animation-delay: -1.6s;
+  animation-name: frost-edge-sweep-reverse;
 }
 
 /* ─── modals & dialogs ─────────────────────────────────────────────── */

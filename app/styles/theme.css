@@ -275,6 +275,20 @@ html[data-theme="extra"] [style*="linear-gradient(135deg, #38e0f8"] {
   background: linear-gradient(135deg, #f0b90b, #ffe58a) !important;
 }
 
+.bot-launch-button {
+  border: 1px solid rgb(var(--oui-color-primary-darken)) !important;
+  background: linear-gradient(
+    var(--oui-gradient-brand-angle, 90deg),
+    rgb(var(--oui-gradient-brand-start)),
+    rgb(var(--oui-gradient-brand-end))
+  ) !important;
+  color: rgb(var(--oui-color-primary-contrast)) !important;
+}
+
+.bot-launch-button:disabled {
+  opacity: 0.48;
+}
+
 html[data-theme="extra"] .bot-launch-button {
   border: 1px solid rgb(var(--oui-color-primary-darken)) !important;
   background-image: linear-gradient(
