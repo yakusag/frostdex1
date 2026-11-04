@@ -218,6 +218,26 @@ main,
   filter: drop-shadow(0 0 3px rgb(var(--oui-color-quaternary) / 0.3));
 }
 
+html[data-theme="standard"] .market-ticker-bar {
+  background: #ffffff;
+  border-bottom-color: #d7e0ea;
+}
+
+html[data-theme="standard"] .ticker-item {
+  border-right-color: #e2e8f0;
+}
+
+html[data-theme="standard"] .ticker-base,
+html[data-theme="standard"] .ticker-item--frost .ticker-base,
+html[data-theme="standard"] .ticker-price {
+  color: #111827;
+}
+
+html[data-theme="standard"] .ticker-item--frost {
+  background: linear-gradient(90deg, #f8fafc, #eff6ff);
+  border-right-color: #cbd5e1;
+}
+
 /* ─── push all page content below the 28px ticker bar ───────────────── */
 body {
   padding-top: 28px;

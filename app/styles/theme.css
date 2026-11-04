@@ -166,7 +166,8 @@ html, body {
 
 html[data-theme="standard"] body {
   background-color: #f6f8fb !important;
-  color: #1f2937;
+  color: #111827;
+  --oui-color-base-foreground: 17 24 39;
 }
 
 html[data-theme="extra"] img[src$="/logo.webp"] {
@@ -205,8 +206,18 @@ html[data-theme="standard"] .widget-drag-handle {
 html[data-theme="standard"] [style*="180,190,210"],
 html[data-theme="standard"] [style*="180, 190, 210"],
 html[data-theme="standard"] [style*="#eaecef"],
-html[data-theme="standard"] [style*="#e8ecf1"] {
-  color: #526174 !important;
+html[data-theme="standard"] [style*="#e8ecf1"],
+html[data-theme="standard"] [style*="color: white"],
+html[data-theme="standard"] [style*="color: #fff"],
+html[data-theme="standard"] [style*="color: rgba(255,255,255"],
+html[data-theme="standard"] [style*="color: rgba(255, 255, 255"],
+html[data-theme="standard"] [style*="color: rgb(255,255,255"],
+html[data-theme="standard"] [style*="color: rgb(255, 255, 255"] {
+  color: #111827 !important;
+}
+
+html[data-theme="standard"] [class*="oui-text-base-contrast-"] {
+  color: #111827 !important;
 }
 
 html[data-theme="standard"] [style*="#38e0f8"],
@@ -319,7 +330,7 @@ html[data-theme="standard"]
 html[data-theme="standard"]
   .whitepaper-page
   [style*="color: rgba(255, 255, 255"] {
-  color: #526174 !important;
+  color: #111827 !important;
 }
 
 html[data-theme="standard"] .whitepaper-page [style*="56,224,248"],
