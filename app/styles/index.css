@@ -110,51 +110,6 @@ tr:hover td {
   }
 }
 
-@keyframes frost-edge-sweep {
-  to {
-    transform: translateX(350%);
-  }
-}
-
-@keyframes frost-edge-sweep-reverse {
-  to {
-    transform: translateX(-350%);
-  }
-}
-
-.market-ticker-bar::before,
-.market-ticker-bar::after,
-.oui-scaffold-topNavbar::before,
-.oui-scaffold-topNavbar::after {
-  position: absolute;
-  z-index: 20;
-  left: -40%;
-  width: 40%;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(var(--oui-color-primary)),
-    transparent
-  );
-  content: "";
-  pointer-events: none;
-  animation: frost-edge-sweep 3.2s linear infinite;
-}
-
-.market-ticker-bar::before,
-.oui-scaffold-topNavbar::before {
-  top: 0;
-}
-
-.market-ticker-bar::after,
-.oui-scaffold-topNavbar::after {
-  right: -40%;
-  left: auto;
-  bottom: 0;
-  animation-name: frost-edge-sweep-reverse;
-}
-
 /* ─── modals & dialogs ─────────────────────────────────────────────── */
 [role="dialog"],
 [data-radix-popper-content-wrapper],
