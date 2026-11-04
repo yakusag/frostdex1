@@ -256,12 +256,12 @@ html[data-theme="extra"] [style*="linear-gradient(135deg, #38e0f8"] {
 }
 
 html[data-theme="extra"] .bot-launch-button {
-  background: linear-gradient(
-    135deg,
-    rgb(var(--oui-gradient-primary-start)),
-    rgb(var(--oui-gradient-primary-end))
+  background-image: linear-gradient(
+    var(--oui-gradient-brand-angle, 17.44deg),
+    rgb(var(--oui-gradient-brand-start)) var(--oui-gradient-brand-stop-start, 0%),
+    rgb(var(--oui-gradient-brand-end)) var(--oui-gradient-brand-stop-end, 100%)
   ) !important;
-  color: rgb(var(--oui-color-primary-contrast)) !important;
+  color: rgb(var(--oui-color-base-10)) !important;
 }
 
 html[data-theme="extra"] .bot-launch-button:disabled {
