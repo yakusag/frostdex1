@@ -87,30 +87,47 @@ tr:hover td {
   color: #eaecef;
 }
 
-/* Make the native text caret and the active field easy to spot in every theme. */
+/* Make the insertion cursor and active field visible in every theme. */
 :where(input, textarea, [contenteditable="true"]) {
   caret-color: rgb(var(--oui-color-primary));
 }
 
 :where(input, textarea, [contenteditable="true"]):focus {
-  outline: 2px solid rgb(var(--oui-color-primary) / 0.48) !important;
-  outline-offset: 2px;
+  caret-color: rgb(var(--oui-color-primary));
+  border-color: rgb(var(--oui-color-primary)) !important;
+  outline: 2px solid rgb(var(--oui-color-primary) / 0.8) !important;
+  outline-offset: 3px !important;
   box-shadow:
-    0 0 0 4px rgb(var(--oui-color-primary) / 0.12),
-    0 0 16px rgb(var(--oui-color-primary) / 0.28) !important;
-  animation: themed-caret-focus 1.4s ease-in-out infinite alternate;
+    0 0 0 4px rgb(var(--oui-color-primary) / 0.22),
+    0 0 18px rgb(var(--oui-color-primary) / 0.42);
+  animation:
+    themed-field-glow 1.1s ease-in-out infinite alternate,
+    themed-caret-blink 1s steps(1, end) infinite;
 }
 
-@keyframes themed-caret-focus {
+@keyframes themed-field-glow {
   from {
+    outline-color: rgb(var(--oui-color-primary) / 0.65);
     box-shadow:
-      0 0 0 3px rgb(var(--oui-color-primary) / 0.1),
-      0 0 10px rgb(var(--oui-color-primary) / 0.2);
+      0 0 0 3px rgb(var(--oui-color-primary) / 0.18),
+      0 0 12px rgb(var(--oui-color-primary) / 0.3);
   }
   to {
+    outline-color: rgb(var(--oui-color-primary));
     box-shadow:
-      0 0 0 5px rgb(var(--oui-color-primary) / 0.18),
-      0 0 20px rgb(var(--oui-color-primary) / 0.38);
+      0 0 0 5px rgb(var(--oui-color-primary) / 0.32),
+      0 0 24px rgb(var(--oui-color-primary) / 0.55);
+  }
+}
+
+@keyframes themed-caret-blink {
+  0%,
+  49% {
+    caret-color: rgb(var(--oui-color-primary));
+  }
+  50%,
+  100% {
+    caret-color: transparent;
   }
 }
 
