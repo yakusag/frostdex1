@@ -1909,14 +1909,11 @@ export default function BotPage() {
                 Create your first automated trading bot
               </div>
               <button
+                className="bot-launch-button"
                 onClick={() => setTab("create")}
                 style={{
-                  background:
-                    "linear-gradient(135deg, #38e0f8 0%, #0ecb81 100%)",
-                  border: "none",
                   borderRadius: 8,
                   padding: "10px 24px",
-                  color: "#0b0e11",
                   fontWeight: 700,
                   fontSize: 14,
                   cursor: "pointer",
