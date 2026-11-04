@@ -87,9 +87,31 @@ tr:hover td {
   color: #eaecef;
 }
 
-/* Keep the native blinking text caret visible and theme-colored everywhere. */
+/* Make the native text caret and the active field easy to spot in every theme. */
 :where(input, textarea, [contenteditable="true"]) {
   caret-color: rgb(var(--oui-color-primary));
+}
+
+:where(input, textarea, [contenteditable="true"]):focus {
+  outline: 2px solid rgb(var(--oui-color-primary) / 0.48) !important;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px rgb(var(--oui-color-primary) / 0.12),
+    0 0 16px rgb(var(--oui-color-primary) / 0.28) !important;
+  animation: themed-caret-focus 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes themed-caret-focus {
+  from {
+    box-shadow:
+      0 0 0 3px rgb(var(--oui-color-primary) / 0.1),
+      0 0 10px rgb(var(--oui-color-primary) / 0.2);
+  }
+  to {
+    box-shadow:
+      0 0 0 5px rgb(var(--oui-color-primary) / 0.18),
+      0 0 20px rgb(var(--oui-color-primary) / 0.38);
+  }
 }
 
 /* ─── modals & dialogs ─────────────────────────────────────────────── */
