@@ -1,11 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 import {
-  isTrendPullbackEntry,
-  normalizeTrendParameter,
-} from "@/utils/trend-strategy";
-import {
   BOT_TAKER_FEE_RATE,
+  combineStrategyDecisions,
   computeATR,
   computeEMA,
   computeRSI,
@@ -13,6 +10,7 @@ import {
   getGridDecision,
   getSignalDecisionFromIndicators,
 } from "@/utils/bot-strategy";
+import { normalizeTrendParameter } from "@/utils/trend-strategy";
 import BotChart, { Candle, Signal } from "./BotChart";
 
 type Strategy = "grid" | "dca" | "signal" | "trend";
@@ -166,28 +164,55 @@ export function runBacktest(
       shouldSell = decision.sell;
     } else if (strategy === "dca") {
       shouldBuy =
-        c.t - lastDcaBuyTime >=
-          (params.intervalMs || getDcaIntervalMs("1h")) &&
+        c.t - lastDcaBuyTime >= (params.intervalMs || getDcaIntervalMs("1h")) &&
         cash > 0;
       shouldSell = position > 0 && c.c > entryPrice * 1.05;
     } else if (strategy === "trend") {
+      const signalDecision = getSignalDecisionFromIndicators(
+        i,
+        {
+          rsiPeriod: params.rsiPeriod || 14,
+          rsiOversold: params.rsiOversold || 35,
+          rsiOverbought: params.rsiOverbought || 68,
+          emaFast: params.emaFast || 9,
+          emaSlow: params.emaSlow || 21,
+        },
+        position > 0,
+        rsi,
+        emaFast,
+        emaSlow,
+      );
+      const gridDecision = getGridDecision(
+        candles,
+        i,
+        params.grids || 10,
+        position > 0,
+        params.lower,
+        params.upper,
+      );
+      const dcaDecision = {
+        buy:
+          position === 0 &&
+          cash > 0 &&
+          c.t - lastDcaBuyTime >= (params.intervalMs || getDcaIntervalMs("1h")),
+        sell: position > 0 && c.c > entryPrice * 1.05,
+      };
+      const combinedDecision = combineStrategyDecisions([
+        dcaDecision,
+        gridDecision,
+        signalDecision,
+      ]);
+
       if (position === 0) {
-        shouldBuy = isTrendPullbackEntry(
-          candles,
-          emaFast,
-          emaSlow,
-          rsi,
-          atr,
-          i,
-        );
+        shouldBuy = combinedDecision.buy;
       } else if (c.l <= stopPrice) {
         shouldSell = true;
         exitPrice = stopPrice;
       } else if (c.h >= targetPrice) {
         shouldSell = true;
         exitPrice = targetPrice;
-      } else if (emaFast[i] < emaSlow[i]) {
-        shouldSell = true;
+      } else {
+        shouldSell = combinedDecision.sell;
       }
     }
 
@@ -205,15 +230,19 @@ export function runBacktest(
     if (shouldBuy && cash > 0) {
       if (strategy === "trend") {
         const stopDistance = atr[i] * trendStopAtr;
-        const quantity = Math.min(
-          ((Math.max(0, portfolioValue) * 0.01) / stopDistance),
-          ((cash * 0.25 * selectedLeverage) / c.c),
-        );
+        const quantity =
+          Number.isFinite(stopDistance) && stopDistance > 0
+            ? Math.min(
+                (Math.max(0, portfolioValue) * 0.01) / stopDistance,
+                (cash * 0.25 * selectedLeverage) / c.c,
+              )
+            : 0;
         if (quantity > 0) {
           const margin = (quantity * c.c) / selectedLeverage;
           if (openPosition(margin, c.c)) {
             stopPrice = c.c - stopDistance;
             targetPrice = c.c + stopDistance * trendRewardRisk;
+            lastDcaBuyTime = c.t;
             signals.push({ t: c.t, price: c.c, side: "BUY" });
           }
         }
@@ -237,12 +266,8 @@ export function runBacktest(
       const liquidationFee = wasLiquidated
         ? notional * MAINTENANCE_MARGIN_RATE
         : 0;
-      const tradePnl =
-        grossPnl - positionFees - exitFee - liquidationFee;
-      cash += Math.max(
-        0,
-        reservedMargin + grossPnl - exitFee - liquidationFee,
-      );
+      const tradePnl = grossPnl - positionFees - exitFee - liquidationFee;
+      cash += Math.max(0, reservedMargin + grossPnl - exitFee - liquidationFee);
       feesPaid += exitFee + liquidationFee;
       trades++;
       if (tradePnl > 0) wins++;
@@ -392,6 +417,7 @@ export default function BotBacktest({
   // Params
   const [rsiOversold, setRsiOversold] = useState(35);
   const [rsiOverbought, setRsiOverbought] = useState(68);
+  const [signalRsiPeriod, setSignalRsiPeriod] = useState(14);
   const [emaFast, setEmaFast] = useState(9);
   const [emaSlow, setEmaSlow] = useState(21);
   const [grids, setGrids] = useState(10);
@@ -421,7 +447,7 @@ export default function BotBacktest({
               rsiOverbought,
               emaFast,
               emaSlow,
-              rsiPeriod: 14,
+              rsiPeriod: signalRsiPeriod,
             }
           : strategy === "grid"
             ? {
@@ -442,14 +468,42 @@ export default function BotBacktest({
                   intervalMs: getDcaIntervalMs(dcaInterval),
                   amountPerBuy: dcaAmount,
                 }
-              : { stopAtr: trendStopAtr, rewardRisk: trendRewardRisk };
-      const res = runBacktest(snapshot, strategy, params, investment, leverage, tf);
+              : {
+                  stopAtr: trendStopAtr,
+                  rewardRisk: trendRewardRisk,
+                  intervalMs: getDcaIntervalMs(dcaInterval),
+                  grids,
+                  ...(gridLowerBound.trim() &&
+                  gridUpperBound.trim() &&
+                  Number.isFinite(Number(gridLowerBound)) &&
+                  Number.isFinite(Number(gridUpperBound)) &&
+                  Number(gridLowerBound) < Number(gridUpperBound)
+                    ? {
+                        lower: Number(gridLowerBound),
+                        upper: Number(gridUpperBound),
+                      }
+                    : {}),
+                  rsiPeriod: signalRsiPeriod,
+                  rsiOversold,
+                  rsiOverbought,
+                  emaFast,
+                  emaSlow,
+                };
+      const res = runBacktest(
+        snapshot,
+        strategy,
+        params,
+        investment,
+        leverage,
+        tf,
+      );
       setResult(res);
       setRunning(false);
     }, 400);
   }, [
     feed.candles,
     strategy,
+    signalRsiPeriod,
     rsiOversold,
     rsiOverbought,
     emaFast,
@@ -667,6 +721,13 @@ export default function BotBacktest({
         {strategy === "signal" && (
           <>
             <ParamInput
+              label="RSI Period"
+              value={signalRsiPeriod}
+              min={2}
+              max={50}
+              onChange={setSignalRsiPeriod}
+            />
+            <ParamInput
               label="RSI Oversold"
               value={rsiOversold}
               min={10}
@@ -743,21 +804,13 @@ export default function BotBacktest({
                 onChange={(event) => setDcaInterval(event.target.value)}
                 style={selectSt}
               >
-                {[
-                  "15m",
-                  "30m",
-                  "1h",
-                  "4h",
-                  "8h",
-                  "12h",
-                  "1d",
-                  "3d",
-                  "1w",
-                ].map((interval) => (
-                  <option key={interval} value={interval}>
-                    {interval}
-                  </option>
-                ))}
+                {["15m", "30m", "1h", "4h", "8h", "12h", "1d", "3d", "1w"].map(
+                  (interval) => (
+                    <option key={interval} value={interval}>
+                      {interval}
+                    </option>
+                  ),
+                )}
               </select>
             </div>
             <ParamInput
@@ -785,6 +838,92 @@ export default function BotBacktest({
               max={5}
               onChange={setTrendRewardRisk}
             />
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                fontSize: 11,
+                color: "rgba(180,190,210,0.5)",
+              }}
+            >
+              DCA Vote Interval
+              <select
+                value={dcaInterval}
+                onChange={(event) => setDcaInterval(event.target.value)}
+                style={selectSt}
+              >
+                {["15m", "30m", "1h", "4h", "8h", "12h", "1d", "3d", "1w"].map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <ParamInput
+              label="Grid Count"
+              value={grids}
+              min={3}
+              max={200}
+              onChange={setGrids}
+            />
+            <label style={labelSt}>
+              Grid Lower (optional)
+              <input
+                type="number"
+                value={gridLowerBound}
+                onChange={(event) => setGridLowerBound(event.target.value)}
+                placeholder="Auto"
+                style={selectSt}
+              />
+            </label>
+            <label style={labelSt}>
+              Grid Upper (optional)
+              <input
+                type="number"
+                value={gridUpperBound}
+                onChange={(event) => setGridUpperBound(event.target.value)}
+                placeholder="Auto"
+                style={selectSt}
+              />
+            </label>
+            <ParamInput
+              label="Signal RSI Period"
+              value={signalRsiPeriod}
+              min={2}
+              max={50}
+              onChange={setSignalRsiPeriod}
+            />
+            <ParamInput
+              label="Signal RSI Oversold"
+              value={rsiOversold}
+              min={10}
+              max={50}
+              onChange={setRsiOversold}
+            />
+            <ParamInput
+              label="Signal RSI Overbought"
+              value={rsiOverbought}
+              min={50}
+              max={90}
+              onChange={setRsiOverbought}
+            />
+            <ParamInput
+              label="Signal EMA Fast"
+              value={emaFast}
+              min={3}
+              max={50}
+              onChange={setEmaFast}
+            />
+            <ParamInput
+              label="Signal EMA Slow"
+              value={emaSlow}
+              min={5}
+              max={200}
+              onChange={setEmaSlow}
+            />
             <span
               style={{
                 alignSelf: "flex-end",
@@ -792,7 +931,7 @@ export default function BotBacktest({
                 color: "rgba(180,190,210,0.45)",
               }}
             >
-              1% risk per trade · max 25% exposure · excludes fees and slippage
+              2-of-3 DCA/Grid/Signal votes · 1% risk · max 25% exposure
             </span>
           </>
         )}

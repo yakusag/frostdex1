@@ -10,6 +10,20 @@ export interface SignalParameters {
   emaSlow?: number;
 }
 
+export interface StrategyDecision {
+  buy: boolean;
+  sell: boolean;
+}
+
+export function combineStrategyDecisions(
+  decisions: [StrategyDecision, StrategyDecision, StrategyDecision],
+): StrategyDecision {
+  return {
+    buy: decisions.filter((decision) => decision.buy).length >= 2,
+    sell: decisions.filter((decision) => decision.sell).length >= 2,
+  };
+}
+
 export function computeRSI(candles: Candle[], period = 14): number[] {
   const rsi: number[] = Array(candles.length).fill(50);
   if (candles.length < period + 1) return rsi;

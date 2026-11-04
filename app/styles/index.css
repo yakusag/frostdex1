@@ -181,6 +181,28 @@ tr:hover td {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
 }
 
+html[data-theme="standard"] .oui-scaffold-topNavbar {
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgb(15 23 42 / 0.04);
+}
+
+html[data-theme="standard"] [role="dialog"],
+html[data-theme="standard"] [data-radix-popper-content-wrapper],
+html[data-theme="standard"] .oui-dialog,
+html[data-theme="standard"] [class*="oui-modal"],
+html[data-theme="standard"] [class*="oui-popover"] {
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.12) !important;
+}
+
+html[data-theme="standard"] ::-webkit-scrollbar-track {
+  background: #eaf0f6;
+}
+
+html[data-theme="standard"] ::selection {
+  background: rgb(var(--oui-color-primary) / 0.2);
+  color: #1f2937;
+}
+
 /* ─── active tabs ─────────────────────────────────────────────────── */
 [aria-selected="true"],
 [data-state="active"] {

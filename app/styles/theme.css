@@ -165,7 +165,7 @@ html, body {
 }
 
 html[data-theme="standard"] body {
-  background-color: #f6f8fb !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) fixed !important;
   color: #111827;
   --oui-color-base-foreground: 17 24 39;
 }
@@ -193,6 +193,7 @@ html[data-theme="standard"] .frost-trade-widget {
   background: #ffffff !important;
   border-color: #d7e0ea !important;
   color: #1f2937 !important;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 0.04) !important;
 }
 
 html[data-theme="standard"] .wm-fab,

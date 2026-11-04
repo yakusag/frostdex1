@@ -20,15 +20,13 @@ import type { Candle } from "@/components/BotChart";
 import {
   BOT_TAKER_FEE_RATE,
   computeATR,
-  computeEMA,
-  computeRSI,
+  combineStrategyDecisions,
   getDcaIntervalMs,
   getGridDecision,
   getSignalDecision,
 } from "@/utils/bot-strategy";
 import {
   getLastClosedTrendCandleIndex,
-  isTrendPullbackEntry,
   normalizeTrendParameter,
 } from "@/utils/trend-strategy";
 
@@ -361,7 +359,7 @@ const STRATEGY_INFO: Record<
   },
   trend: {
     label: "Risk-Managed Trend",
-    desc: "Trend pullback entries, 1% risk sizing, ATR stop and a 2.5R target. Risk is limited, not eliminated.",
+    desc: "Combines DCA, Grid, and RSI/EMA signals with 1% risk sizing, an ATR stop, and a 2.5R target.",
     icon: "↗",
     color: "#ff8a65",
   },
@@ -573,10 +571,7 @@ function BotLiveEngine({
     );
     const requestedBuyNotional =
       bot.strategy === "dca"
-        ? Math.min(
-            Number(bot.params.amount) || investment * 0.5,
-            orderBudget,
-          )
+        ? Math.min(Number(bot.params.amount) || investment * 0.5, orderBudget)
         : Math.min(investment * 0.5, orderBudget);
     const buyNotional = Math.min(
       orderBudget,
@@ -658,36 +653,63 @@ function BotLiveEngine({
       shouldSell =
         !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
     } else if (bot.strategy === "trend") {
-      const last = getLastClosedTrendCandleIndex(candles);
-      if (last < 21) return;
-      const emaFast = computeEMA(candles, 9);
-      const emaSlow = computeEMA(candles, 21);
-      const rsi = computeRSI(candles, 14);
       const atr = computeATR(candles, 14);
+      const atrValue = atr[lastClosed];
       const stopAtr = normalizeTrendParameter(bot.params.stopAtr, 2);
       const rewardRisk = normalizeTrendParameter(bot.params.rewardRisk, 2.5);
       const position = managedPosition;
-
-      shouldBuy =
-        !position &&
-        isTrendPullbackEntry(candles, emaFast, emaSlow, rsi, atr, last);
-      shouldSell =
+      const signalDecision = getSignalDecision(
+        candles,
+        lastClosed,
+        {
+          rsiPeriod: Number(bot.params.rsi) || 14,
+          rsiOversold: Number(bot.params.rsiOversold) || 35,
+          rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+          emaFast: Number(bot.params.emaFast) || 9,
+          emaSlow: Number(bot.params.ema) || 21,
+        },
+        !!position,
+      );
+      const gridDecision = getGridDecision(
+        candles,
+        lastClosed,
+        Number(bot.params.grids) || 10,
+        !!position,
+        getConfiguredGridBound(bot.params.lower),
+        getConfiguredGridBound(bot.params.upper),
+      );
+      const dcaDue =
+        now - lastDcaBuyRef.current >=
+        getDcaIntervalMs(bot.params.interval ?? "1h");
+      const dcaDecision = {
+        buy: !position && dcaDue && strategyBudget >= minimumOrderNotional,
+        sell: !!position && price > position.entryPrice * 1.05,
+      };
+      const combinedDecision = combineStrategyDecisions([
+        dcaDecision,
+        gridDecision,
+        signalDecision,
+      ]);
+      const riskExit =
         !!position &&
-        (price <= position.stopPrice ||
-          price >= position.targetPrice ||
-          emaFast[last] < emaSlow[last]);
+        (price <= position.stopPrice || price >= position.targetPrice);
+      shouldBuy = combinedDecision.buy;
+      shouldSell = riskExit || combinedDecision.sell;
+
+      const stopDistance = atrValue * stopAtr;
 
       if (!pendingOrder && shouldBuy) {
-        const stopDistance = atr[last] * stopAtr;
         const riskBudget = investment * 0.01;
         const maxNotional = availableBudget * 0.25;
         const qty =
-          Math.floor(
-            Math.min(
-              riskBudget / stopDistance,
-              maxNotional / (price * (1 + BOT_TAKER_FEE_RATE)),
-            ) * 1_000_000,
-          ) / 1_000_000;
+          Number.isFinite(stopDistance) && stopDistance > 0
+            ? Math.floor(
+                Math.min(
+                  riskBudget / stopDistance,
+                  maxNotional / (price * (1 + BOT_TAKER_FEE_RATE)),
+                ) * 1_000_000,
+              ) / 1_000_000
+            : 0;
         if (qty > 0) {
           queueOrder(
             {
@@ -772,7 +794,7 @@ function BotLiveEngine({
               };
               realizedPnlRef.current -=
                 pendingOrder.triggerPrice * quantity * BOT_TAKER_FEE_RATE;
-              if (bot.strategy === "dca") {
+              if (bot.strategy === "dca" || bot.strategy === "trend") {
                 lastDcaBuyRef.current = Date.now();
               }
               if (bot.strategy === "trend") {
@@ -882,11 +904,37 @@ function BotPaperEngine({
         (newClosedCandle && closedCandle.h >= position.targetPrice)
       ) {
         exitPrice = position.targetPrice;
-      } else if (
-        newClosedCandle &&
-        computeEMA(candles, 9)[last] < computeEMA(candles, 21)[last]
-      ) {
-        exitPrice = price;
+      } else if (newClosedCandle) {
+        const signalDecision = getSignalDecision(
+          candles,
+          last,
+          {
+            rsiPeriod: Number(bot.params.rsi) || 14,
+            rsiOversold: Number(bot.params.rsiOversold) || 35,
+            rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+            emaFast: Number(bot.params.emaFast) || 9,
+            emaSlow: Number(bot.params.ema) || 21,
+          },
+          true,
+        );
+        const gridDecision = getGridDecision(
+          candles,
+          last,
+          Number(bot.params.grids) || 10,
+          true,
+          getConfiguredGridBound(bot.params.lower),
+          getConfiguredGridBound(bot.params.upper),
+        );
+        const dcaDecision = {
+          buy: false,
+          sell: price > position.entryPrice * 1.05,
+        };
+        if (
+          combineStrategyDecisions([dcaDecision, gridDecision, signalDecision])
+            .sell
+        ) {
+          exitPrice = price;
+        }
       }
 
       if (exitPrice !== null) {
@@ -905,18 +953,38 @@ function BotPaperEngine({
         position = null;
       }
     } else if (newClosedCandle) {
-      const emaFast = computeEMA(candles, 9);
-      const emaSlow = computeEMA(candles, 21);
-      const rsi = computeRSI(candles, 14);
       const atr = computeATR(candles, 14);
-      const shouldBuy = isTrendPullbackEntry(
+      const signalDecision = getSignalDecision(
         candles,
-        emaFast,
-        emaSlow,
-        rsi,
-        atr,
         last,
+        {
+          rsiPeriod: Number(bot.params.rsi) || 14,
+          rsiOversold: Number(bot.params.rsiOversold) || 35,
+          rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+          emaFast: Number(bot.params.emaFast) || 9,
+          emaSlow: Number(bot.params.ema) || 21,
+        },
+        false,
       );
+      const gridDecision = getGridDecision(
+        candles,
+        last,
+        Number(bot.params.grids) || 10,
+        false,
+        getConfiguredGridBound(bot.params.lower),
+        getConfiguredGridBound(bot.params.upper),
+      );
+      const dcaDecision = {
+        buy:
+          Date.now() - (bot.dcaLastBuyAt ?? bot.createdAt) >=
+          getDcaIntervalMs(bot.params.interval ?? "1h"),
+        sell: false,
+      };
+      const shouldBuy = combineStrategyDecisions([
+        dcaDecision,
+        gridDecision,
+        signalDecision,
+      ]).buy;
 
       if (shouldBuy) {
         const stopDistance =
@@ -925,10 +993,12 @@ function BotPaperEngine({
         const maxNotional = bot.investment * 0.25;
         const entryPrice = closedCandle.c;
         const qty =
-          Math.floor(
-            Math.min(riskBudget / stopDistance, maxNotional / entryPrice) *
-              1_000_000,
-          ) / 1_000_000;
+          Number.isFinite(stopDistance) && stopDistance > 0
+            ? Math.floor(
+                Math.min(riskBudget / stopDistance, maxNotional / entryPrice) *
+                  1_000_000,
+              ) / 1_000_000
+            : 0;
 
         if (qty >= 0.001) {
           position = {
@@ -976,6 +1046,16 @@ function BotPaperEngine({
     bot.symbol,
     bot.params.stopAtr,
     bot.params.rewardRisk,
+    bot.params.interval,
+    bot.params.grids,
+    bot.params.lower,
+    bot.params.upper,
+    bot.params.rsi,
+    bot.params.rsiOversold,
+    bot.params.rsiOverbought,
+    bot.params.emaFast,
+    bot.params.ema,
+    bot.dcaLastBuyAt,
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
@@ -1059,9 +1139,7 @@ function BotSimulationEngine({
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
       const committedNotional = position
-        ? position.entryPrice *
-          position.quantity *
-          (1 + BOT_TAKER_FEE_RATE)
+        ? position.entryPrice * position.quantity * (1 + BOT_TAKER_FEE_RATE)
         : 0;
       buyNotional = Math.min(
         Number(bot.params.amount) || bot.investment * 0.5,
@@ -1171,8 +1249,7 @@ export default function BotPage() {
   const { data: selectedMarkPrice } = useMarkPrice(symbol);
   const minimumOrderNotional = Math.max(
     Number(selectedSymbolRules?.min_notional ?? 0),
-    Number(selectedSymbolRules?.base_min ?? 0) *
-      Number(selectedMarkPrice ?? 0),
+    Number(selectedSymbolRules?.base_min ?? 0) * Number(selectedMarkPrice ?? 0),
   );
   const symbolsInfo = useSymbolsInfo();
   const [investment, setInvestment] = useState("500");
@@ -1268,7 +1345,8 @@ export default function BotPage() {
           ? {
               ...b,
               trades: b.trades + 1,
-              ...(b.strategy === "dca" && log.side === "BUY"
+              ...((b.strategy === "dca" || b.strategy === "trend") &&
+              log.side === "BUY"
                 ? { dcaLastBuyAt: log.ts }
                 : {}),
             }
@@ -1347,6 +1425,11 @@ export default function BotPage() {
                 ...current,
                 ...update,
                 trades: current.trades + (trade ? 1 : 0),
+                ...((current.strategy === "dca" ||
+                  current.strategy === "trend") &&
+                trade?.side === "BUY"
+                  ? { dcaLastBuyAt: trade.ts }
+                  : {}),
               }
             : current,
         );
@@ -1385,7 +1468,7 @@ export default function BotPage() {
     const lowerGrid = Number(gridLower);
     const upperGrid = Number(gridUpper);
     if (
-      strategy === "grid" &&
+      (strategy === "grid" || strategy === "trend") &&
       ((gridLower.trim() === "") !== (gridUpper.trim() === "") ||
         (gridLower.trim() !== "" &&
           (!Number.isFinite(lowerGrid) ||
@@ -1441,6 +1524,12 @@ export default function BotPage() {
               : {
                   stopAtr: normalizeTrendParameter(trendStopAtr, 2),
                   rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
+                  interval: dcaInterval,
+                  grids: Number(gridCount) || 10,
+                  lower: gridLower || "auto",
+                  upper: gridUpper || "auto",
+                  rsi: Number(sigRsi) || 14,
+                  ema: Number(sigEma) || 21,
                 };
 
       const newBot: BotConfig = {
@@ -2064,7 +2153,7 @@ export default function BotPage() {
                                 : bot.marketDataStatus === "ready"
                                   ? bot.paperPosition
                                     ? `Paper position open · stop $${bot.paperPosition.stopPrice.toLocaleString()} · target $${bot.paperPosition.targetPrice.toLocaleString()}`
-                                    : "Waiting for a confirmed 15m pullback setup. Keep this page open."
+                                    : "Waiting for at least 2 of 3 DCA, Grid, and Signal votes. Keep this page open."
                                   : "Connecting to live market data..."}
                             </div>
                           )}
@@ -2477,9 +2566,7 @@ export default function BotPage() {
                     : "rgba(30,36,50,1)",
                 }}
               />
-              {liveMode &&
-                strategy !== "dca" &&
-                minimumOrderNotional > 0 && (
+              {liveMode && strategy !== "dca" && minimumOrderNotional > 0 && (
                 <div
                   aria-live="polite"
                   style={{
@@ -2488,9 +2575,10 @@ export default function BotPage() {
                     marginTop: 4,
                   }}
                 >
-                  Minimum order for {symbolDisplay(symbol)}: {quoteAsset} {minimumOrderNotional.toFixed(2)}
+                  Minimum order for {symbolDisplay(symbol)}: {quoteAsset}{" "}
+                  {minimumOrderNotional.toFixed(2)}
                 </div>
-                )}
+              )}
               {balanceWarning && availableBalance > 0 && (
                 <div
                   style={{
@@ -2628,7 +2716,8 @@ export default function BotPage() {
                         marginTop: 4,
                       }}
                     >
-                      Minimum buy: {quoteAsset} {minimumOrderNotional.toFixed(2)}
+                      Minimum buy: {quoteAsset}{" "}
+                      {minimumOrderNotional.toFixed(2)}
                     </div>
                   )}
                 </div>
@@ -2753,17 +2842,129 @@ export default function BotPage() {
               </div>
               <div
                 style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <div>
+                  <label htmlFor="trend-dca-interval" style={labelStyle}>
+                    DCA Vote Interval
+                  </label>
+                  <select
+                    id="trend-dca-interval"
+                    value={dcaInterval}
+                    onChange={(e) => setDcaInterval(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {[
+                      "15m",
+                      "30m",
+                      "1h",
+                      "4h",
+                      "8h",
+                      "12h",
+                      "1d",
+                      "3d",
+                      "1w",
+                    ].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="trend-grid-count" style={labelStyle}>
+                    Grid Count
+                  </label>
+                  <input
+                    id="trend-grid-count"
+                    type="number"
+                    value={gridCount}
+                    onChange={(e) => setGridCount(e.target.value)}
+                    min="3"
+                    max="200"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="trend-signal-rsi" style={labelStyle}>
+                    Signal RSI Period
+                  </label>
+                  <input
+                    id="trend-signal-rsi"
+                    type="number"
+                    value={sigRsi}
+                    onChange={(e) => setSigRsi(e.target.value)}
+                    min="2"
+                    max="50"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="trend-signal-ema" style={labelStyle}>
+                    Signal EMA Period
+                  </label>
+                  <input
+                    id="trend-signal-ema"
+                    type="number"
+                    value={sigEma}
+                    onChange={(e) => setSigEma(e.target.value)}
+                    min="5"
+                    max="200"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <div>
+                  <label htmlFor="trend-grid-lower" style={labelStyle}>
+                    Grid Lower Price (optional)
+                  </label>
+                  <input
+                    id="trend-grid-lower"
+                    value={gridLower}
+                    onChange={(e) => setGridLower(e.target.value)}
+                    placeholder="Auto"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="trend-grid-upper" style={labelStyle}>
+                    Grid Upper Price (optional)
+                  </label>
+                  <input
+                    id="trend-grid-upper"
+                    value={gridUpper}
+                    onChange={(e) => setGridUpper(e.target.value)}
+                    placeholder="Auto"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div
+                style={{
                   marginTop: 10,
                   fontSize: 12,
                   color: "rgba(180,190,210,0.5)",
                   lineHeight: 1.5,
                 }}
               >
-                Enters after a pullback in an EMA 9/21 uptrend (RSI 45–70).
-                Position size risks up to 1% of the bot allocation, capped at
-                25% notional; targets are capped at 5R and are not guaranteed.
-                Live stops are monitored by this app and can slip or fail during
-                outages.
+                Opens only when at least two of DCA cadence, Grid crossing, and
+                RSI/EMA Signal agree. RSI thresholds are 35/68 and the fast EMA
+                is 9. Position size risks up to 1% of the bot allocation, capped
+                at 25% notional; targets are capped at 5R and are not
+                guaranteed. Live stops are monitored by this app and can slip or
+                fail during outages.
               </div>
             </div>
           )}

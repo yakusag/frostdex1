@@ -20,28 +20,3 @@ export function getLastClosedTrendCandleIndex(
     ? lastIndex
     : lastIndex - 1;
 }
-
-export function isTrendPullbackEntry(
-  candles: Candle[],
-  emaFast: number[],
-  emaSlow: number[],
-  rsi: number[],
-  atr: number[],
-  index: number,
-) {
-  if (index < 1 || index >= candles.length) return false;
-
-  const pullbackStart = Math.max(0, index - 3);
-  const hadRecentPullback = candles
-    .slice(pullbackStart, index)
-    .some((candle, offset) => candle.c <= emaFast[pullbackStart + offset]);
-
-  return (
-    emaFast[index] > emaSlow[index] &&
-    hadRecentPullback &&
-    candles[index].c > emaFast[index] &&
-    rsi[index] >= 45 &&
-    rsi[index] <= 70 &&
-    atr[index] > 0
-  );
-}
