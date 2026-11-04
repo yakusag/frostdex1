@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import {
   useAccount,
   useCollateral,
+  useMarkPrice,
   useOrderEntry,
   useSymbolInfo,
   useSymbolsInfo,
@@ -568,13 +569,21 @@ function BotLiveEngine({
     if (!symbolRules) return;
 
     const availableBudget = Math.min(investment, freeCollateral || 0);
-    const buyNotional =
+    const minimumOrderNotional = Math.max(
+      symbolRules.min_notional,
+      symbolRules.base_min * price,
+    );
+    const requestedBuyNotional =
       bot.strategy === "dca"
         ? Math.min(
             Number(bot.params.amount) || investment * 0.5,
             availableBudget,
           )
         : Math.min(investment * 0.5, availableBudget);
+    const buyNotional = Math.min(
+      availableBudget,
+      Math.max(minimumOrderNotional, requestedBuyNotional),
+    );
 
     const queueOrder = (
       order: PendingOrder,
@@ -1136,6 +1145,13 @@ export default function BotPage() {
   const [strategy, setStrategy] = useState<BotStrategy>("grid");
   const [symbol, setSymbol] = useState("PERP_BTC_USDC");
   const selectedSymbolInfo = useSymbolInfo(symbol);
+  const selectedSymbolRules = selectedSymbolInfo?.();
+  const { data: selectedMarkPrice } = useMarkPrice(symbol);
+  const minimumOrderNotional = Math.max(
+    Number(selectedSymbolRules?.min_notional ?? 0),
+    Number(selectedSymbolRules?.base_min ?? 0) *
+      Number(selectedMarkPrice ?? 0),
+  );
   const symbolsInfo = useSymbolsInfo();
   const [investment, setInvestment] = useState("500");
   const [botName, setBotName] = useState("");
@@ -1165,15 +1181,6 @@ export default function BotPage() {
         "Your available Orderly collateral is too low for this live order. Deposit supported collateral to continue.",
     );
   }, []);
-
-  useEffect(() => {
-    if (!liveMode || !isConnected || availableBalance <= 0) return;
-    setInvestment((current) =>
-      Number(current) > availableBalance
-        ? availableBalance.toFixed(2)
-        : current,
-    );
-  }, [liveMode, isConnected, availableBalance]);
 
   const saveBots = useCallback((updated: BotConfig[]) => {
     setBots(updated);
@@ -1531,6 +1538,7 @@ export default function BotPage() {
 
       {/* Hero Header with FrostDex background */}
       <div
+        className="bot-hero"
         style={{
           position: "relative",
           overflow: "hidden",
@@ -1543,6 +1551,7 @@ export default function BotPage() {
       >
         {/* Background image */}
         <div
+          className="bot-hero-overlay"
           style={{
             position: "absolute",
             inset: 0,
@@ -1590,6 +1599,7 @@ export default function BotPage() {
           >
             <span style={{ fontSize: 32 }}>🤖</span>
             <h1
+              className="bot-hero-title"
               style={{
                 fontSize: 26,
                 fontWeight: 800,
@@ -2388,7 +2398,7 @@ export default function BotPage() {
                       letterSpacing: 0,
                     }}
                   >
-                    max ${availableBalance.toFixed(2)}
+                    available {quoteAsset} {availableBalance.toFixed(2)}
                   </span>
                 )}
               </label>
@@ -2399,6 +2409,7 @@ export default function BotPage() {
                 onChange={(e) => setInvestment(e.target.value)}
                 placeholder="500"
                 min="0.01"
+                step="any"
                 style={{
                   ...inputStyle,
                   borderColor: balanceWarning
@@ -2406,6 +2417,20 @@ export default function BotPage() {
                     : "rgba(30,36,50,1)",
                 }}
               />
+              {liveMode &&
+                strategy !== "dca" &&
+                minimumOrderNotional > 0 && (
+                <div
+                  aria-live="polite"
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(240,185,11,0.75)",
+                    marginTop: 4,
+                  }}
+                >
+                  Minimum order for {symbolDisplay(symbol)}: {quoteAsset} {minimumOrderNotional.toFixed(2)}
+                </div>
+                )}
               {balanceWarning && availableBalance > 0 && (
                 <div
                   style={{
@@ -2534,6 +2559,18 @@ export default function BotPage() {
                     min="0.01"
                     style={inputStyle}
                   />
+                  {liveMode && minimumOrderNotional > 0 && (
+                    <div
+                      aria-live="polite"
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(240,185,11,0.75)",
+                        marginTop: 4,
+                      }}
+                    >
+                      Minimum buy: {quoteAsset} {minimumOrderNotional.toFixed(2)}
+                    </div>
+                  )}
                 </div>
               </div>
               <div

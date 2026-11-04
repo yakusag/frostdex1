@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("frostdex_theme");
+        document.documentElement.dataset.theme =
+          savedTheme === "standard" || savedTheme === "extra"
+            ? savedTheme
+            : "frost";
+      } catch {
+        document.documentElement.dataset.theme = "frost";
+      }
+    </script>
 
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#04061400" />

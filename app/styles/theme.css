@@ -99,3 +99,147 @@ html, body {
   font-family: 'Manrope', sans-serif !important;
   font-size: 16px !important;
 }
+
+:root[data-theme="standard"] {
+  color-scheme: light;
+  --oui-color-primary: 102 171 210;
+  --oui-color-primary-light: 75 136 177;
+  --oui-color-primary-darken: 57 112 151;
+  --oui-color-primary-contrast: 255 255 255;
+  --oui-color-link: 55 113 153;
+  --oui-color-link-light: 38 93 131;
+  --oui-color-secondary: 55 65 81;
+  --oui-color-tertiary: 102 171 210;
+  --oui-color-fill: 226 232 240;
+  --oui-color-fill-active: 203 213 225;
+  --oui-color-base-1: 246 248 251;
+  --oui-color-base-2: 255 255 255;
+  --oui-color-base-3: 241 245 249;
+  --oui-color-base-4: 226 232 240;
+  --oui-color-base-5: 219 226 234;
+  --oui-color-base-6: 203 213 225;
+  --oui-color-base-7: 191 202 216;
+  --oui-color-base-8: 255 255 255;
+  --oui-color-base-9: 248 250 252;
+  --oui-color-base-10: 241 245 249;
+  --oui-color-base-foreground: 31 41 55;
+  --oui-color-line: 203 213 225;
+  --oui-gradient-primary-start: 75 136 177;
+  --oui-gradient-primary-end: 102 171 210;
+  --oui-gradient-secondary-start: 241 245 249;
+  --oui-gradient-secondary-end: 219 226 234;
+  --oui-gradient-brand-start: 75 136 177;
+  --oui-gradient-brand-end: 102 171 210;
+  --oui-gradient-neutral-start: 241 245 249;
+  --oui-gradient-neutral-end: 226 232 240;
+}
+
+:root[data-theme="extra"] {
+  color-scheme: dark;
+  --oui-color-primary: 240 185 11;
+  --oui-color-primary-light: 255 218 91;
+  --oui-color-primary-darken: 190 139 0;
+  --oui-color-primary-contrast: 11 14 17;
+  --oui-color-link: 255 211 74;
+  --oui-color-link-light: 255 226 133;
+  --oui-color-secondary: 220 225 232;
+  --oui-color-tertiary: 240 185 11;
+  --oui-color-base-1: 11 14 17;
+  --oui-color-base-2: 17 20 24;
+  --oui-color-base-3: 22 26 31;
+  --oui-color-base-4: 27 32 38;
+  --oui-color-base-5: 33 39 46;
+  --oui-color-base-6: 42 48 56;
+  --oui-color-base-7: 52 59 68;
+  --oui-color-base-8: 17 20 24;
+  --oui-color-base-9: 13 16 19;
+  --oui-color-base-10: 11 14 17;
+  --oui-color-base-foreground: 234 236 239;
+  --oui-color-line: 55 61 68;
+  --oui-gradient-primary-start: 190 139 0;
+  --oui-gradient-primary-end: 240 185 11;
+  --oui-gradient-brand-start: 190 139 0;
+  --oui-gradient-brand-end: 240 185 11;
+  --oui-gradient-neutral-start: 11 14 17;
+  --oui-gradient-neutral-end: 33 39 46;
+}
+
+html[data-theme="standard"] body {
+  background-color: #f6f8fb !important;
+  color: #1f2937;
+}
+
+html[data-theme="extra"] img[alt*="FrostDex"],
+html[data-theme="extra"] img[src*="/logo.webp"],
+html[data-theme="extra"] img[src*="frostdex-logo"],
+html[data-theme="extra"] img[src*="frostdex-badge"] {
+  filter: brightness(0) saturate(100%) invert(75%) sepia(90%) saturate(1200%) hue-rotate(2deg) brightness(103%) contrast(103%);
+}
+
+html[data-theme="standard"] .bot-card,
+html[data-theme="standard"] .wm-panel,
+html[data-theme="standard"] .whale-panel,
+html[data-theme="standard"] .sm-panel,
+html[data-theme="standard"] .liq-panel,
+html[data-theme="standard"] .mac-panel,
+html[data-theme="standard"] .palert-panel,
+html[data-theme="standard"] .sentiment-panel,
+html[data-theme="standard"] .frost-trade-widget {
+  background: #ffffff !important;
+  border-color: #d7e0ea !important;
+  color: #1f2937 !important;
+}
+
+html[data-theme="standard"] .wm-fab,
+html[data-theme="standard"] .widget-hide-btn,
+html[data-theme="standard"] .widget-drag-handle {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+html[data-theme="standard"] [style*="180,190,210"],
+html[data-theme="standard"] [style*="180, 190, 210"],
+html[data-theme="standard"] [style*="#eaecef"],
+html[data-theme="standard"] [style*="#e8ecf1"] {
+  color: #526174 !important;
+}
+
+html[data-theme="standard"] [style*="20,24,30"],
+html[data-theme="standard"] [style*="20, 24, 30"],
+html[data-theme="standard"] [style*="11,14,17"],
+html[data-theme="standard"] [style*="11, 14, 17"],
+html[data-theme="standard"] [style*="9,13,20"],
+html[data-theme="standard"] [style*="9, 13, 20"] {
+  background: #ffffff !important;
+  border-color: #d7e0ea !important;
+}
+
+html[data-theme="standard"] .bot-hero-overlay {
+  background: linear-gradient(135deg, rgb(246 248 251 / 0.9), rgb(231 238 246 / 0.84)) !important;
+}
+
+html[data-theme="standard"] .bot-hero-title {
+  background: none !important;
+  color: #397aa5 !important;
+  -webkit-text-fill-color: #397aa5 !important;
+}
+
+html[data-theme="extra"] .bot-hero-title {
+  background: linear-gradient(135deg, #f0b90b, #ffe58a) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+html[data-theme="extra"] [style*="#38e0f8"],
+html[data-theme="extra"] [style*="56,224,248"],
+html[data-theme="extra"] [style*="56, 224, 248"] {
+  color: rgb(var(--oui-color-primary)) !important;
+  border-color: rgb(var(--oui-color-primary) / 0.55) !important;
+  text-shadow: 0 0 12px rgb(var(--oui-color-primary) / 0.35) !important;
+}
+
+html[data-theme="extra"] [style*="linear-gradient(135deg, #38e0f8"] {
+  background: linear-gradient(135deg, #f0b90b, #ffe58a) !important;
+}

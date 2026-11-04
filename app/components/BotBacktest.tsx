@@ -16,6 +16,9 @@ interface BacktestResult {
   winRate: number;
   maxDrawdown: number;
   sharpe: number;
+  feesPaid: number;
+  liquidations: number;
+  leverage: number;
   signals: Signal[];
   equityCurve: number[];
 }
@@ -29,6 +32,9 @@ const SYMBOLS = [
 ];
 
 const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d"];
+const TAKER_FEE_RATE = 0.0005;
+const MAINTENANCE_MARGIN_RATE = 0.005;
+
 function computeRSI(candles: Candle[], period = 14): number[] {
   const rsi: number[] = Array(candles.length).fill(50);
   if (candles.length < period + 1) return rsi;
@@ -77,18 +83,44 @@ function computeATR(candles: Candle[], period = 14): number[] {
   return atr;
 }
 
-function runBacktest(
+export function runBacktest(
   candles: Candle[],
   strategy: Strategy,
   params: Record<string, number>,
   investment: number,
+  leverage = 1,
+  timeframe: Timeframe = "1h",
 ): BacktestResult {
+  const selectedLeverage = Math.min(
+    100,
+    Math.max(1, Number.isFinite(leverage) ? leverage : 1),
+  );
+  if (!Number.isFinite(investment) || investment <= 0 || candles.length === 0) {
+    return {
+      totalReturn: 0,
+      totalReturnPct: 0,
+      totalTrades: 0,
+      winRate: 0,
+      maxDrawdown: 0,
+      sharpe: 0,
+      feesPaid: 0,
+      liquidations: 0,
+      leverage: selectedLeverage,
+      signals: [],
+      equityCurve: [Math.max(0, investment || 0)],
+    };
+  }
+
   const signals: Signal[] = [];
   const equity: number[] = [investment];
   let cash = investment;
   let position = 0;
+  let reservedMargin = 0;
+  let positionFees = 0;
   let trades = 0;
   let wins = 0;
+  let feesPaid = 0;
+  let liquidations = 0;
   let entryPrice = 0;
   let stopPrice = 0;
   let targetPrice = 0;
@@ -102,9 +134,30 @@ function runBacktest(
   const trendStopAtr = normalizeTrendParameter(params.stopAtr, 2);
   const trendRewardRisk = normalizeTrendParameter(params.rewardRisk, 2.5);
 
+  const openPosition = (marginBudget: number, price: number) => {
+    const margin = Math.min(marginBudget, cash);
+    if (!Number.isFinite(margin) || margin <= 0 || price <= 0) return false;
+    const quantity = (margin * selectedLeverage) / price;
+    const notional = quantity * price;
+    const fee = notional * TAKER_FEE_RATE;
+    if (margin + fee > cash) return false;
+
+    entryPrice =
+      position > 0
+        ? (entryPrice * position + price * quantity) / (position + quantity)
+        : price;
+    position += quantity;
+    reservedMargin += margin;
+    cash -= margin + fee;
+    positionFees += fee;
+    feesPaid += fee;
+    return true;
+  };
+
   for (let i = 20; i < candles.length; i++) {
     const c = candles[i];
-    const portfolioValue = cash + position * c.c;
+    const portfolioValue =
+      cash + reservedMargin + position * (c.c - entryPrice);
     equity.push(portfolioValue);
     if (portfolioValue > peak) peak = portfolioValue;
     const dd = (peak - portfolioValue) / peak;
@@ -113,6 +166,7 @@ function runBacktest(
     let shouldBuy = false;
     let shouldSell = false;
     let exitPrice = c.c;
+    let wasLiquidated = false;
 
     if (strategy === "signal") {
       const rsiBuy = params.rsiOversold || 35;
@@ -121,10 +175,12 @@ function runBacktest(
       shouldSell =
         (rsi[i] > rsiSell || emaFast[i] < emaSlow[i]) && position > 0;
     } else if (strategy === "grid") {
-      const loP = Math.min(...candles.map((c) => c.l));
-      const hiP = Math.max(...candles.map((c) => c.h));
+      const history = candles.slice(Math.max(0, i - 100), i);
+      const loP = Math.min(...history.map((candle) => candle.l));
+      const hiP = Math.max(...history.map((candle) => candle.h));
       const gridCount = params.grids || 10;
       const step = (hiP - loP) / gridCount;
+      if (!Number.isFinite(step) || step <= 0) continue;
       const gridLevel = Math.floor((c.c - loP) / step);
       const prevLevel = Math.floor((candles[i - 1].c - loP) / step);
       shouldBuy = gridLevel < prevLevel && position === 0 && cash > c.c * 0.1;
@@ -155,61 +211,103 @@ function runBacktest(
       }
     }
 
-    if (shouldBuy && cash > c.c * 0.05) {
+    if (position > 0 && selectedLeverage > 1) {
+      const liquidationPrice =
+        (entryPrice * (1 - 1 / selectedLeverage)) /
+        (1 - MAINTENANCE_MARGIN_RATE);
+      if (c.l <= liquidationPrice) {
+        shouldSell = true;
+        exitPrice = liquidationPrice;
+        wasLiquidated = true;
+      }
+    }
+
+    if (shouldBuy && cash > 0) {
       if (strategy === "trend") {
         const stopDistance = atr[i] * trendStopAtr;
         const quantity = Math.min(
-          (cash * 0.01) / stopDistance,
-          (cash * 0.25) / c.c,
+          ((Math.max(0, portfolioValue) * 0.01) / stopDistance),
+          ((cash * 0.25 * selectedLeverage) / c.c),
         );
         if (quantity > 0) {
-          position = quantity;
-          entryPrice = c.c;
-          cash -= position * c.c;
-          stopPrice = c.c - stopDistance;
-          targetPrice = c.c + stopDistance * trendRewardRisk;
-          trades++;
-          signals.push({ t: c.t, price: c.c, side: "BUY" });
+          const margin = (quantity * c.c) / selectedLeverage;
+          if (openPosition(margin, c.c)) {
+            stopPrice = c.c - stopDistance;
+            targetPrice = c.c + stopDistance * trendRewardRisk;
+            signals.push({ t: c.t, price: c.c, side: "BUY" });
+          }
         }
       } else {
-        const amount = Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
-        position += amount / c.c;
-        entryPrice = c.c;
-        cash -= amount;
-        trades++;
-        signals.push({ t: c.t, price: c.c, side: "BUY" });
+        const margin = Math.min(
+          cash * 0.95,
+          params.amountPerBuy || cash * 0.5,
+        );
+        if (openPosition(margin, c.c)) {
+          signals.push({ t: c.t, price: c.c, side: "BUY" });
+        }
       }
     } else if (shouldSell && position > 0) {
-      const proceeds = position * exitPrice;
-      if (proceeds > entryPrice * position) wins++;
-      cash += proceeds;
-      position = 0;
+      const grossPnl = position * (exitPrice - entryPrice);
+      const notional = position * exitPrice;
+      const exitFee = notional * TAKER_FEE_RATE;
+      const liquidationFee = wasLiquidated
+        ? notional * MAINTENANCE_MARGIN_RATE
+        : 0;
+      const tradePnl =
+        grossPnl - positionFees - exitFee - liquidationFee;
+      cash += Math.max(
+        0,
+        reservedMargin + grossPnl - exitFee - liquidationFee,
+      );
+      feesPaid += exitFee + liquidationFee;
       trades++;
+      if (tradePnl > 0) wins++;
+      if (wasLiquidated) liquidations++;
+      position = 0;
+      reservedMargin = 0;
+      positionFees = 0;
       signals.push({ t: c.t, price: exitPrice, side: "SELL" });
     }
   }
 
-  const finalValue = cash + position * candles[candles.length - 1].c;
+  const finalPrice = candles[candles.length - 1].c;
+  const finalValue =
+    cash + reservedMargin + position * (finalPrice - entryPrice);
+  equity.push(finalValue);
+  if (finalValue > peak) peak = finalValue;
+  maxDD = Math.max(maxDD, peak > 0 ? (peak - finalValue) / peak : 0);
   const totalReturn = finalValue - investment;
   const totalReturnPct = (totalReturn / investment) * 100;
-  const winRate =
-    trades > 0 ? (wins / Math.max(1, Math.floor(trades / 2))) * 100 : 0;
+  const winRate = trades > 0 ? (wins / trades) * 100 : 0;
 
-  // Sharpe (simplified)
-  const returns = equity.slice(1).map((v, i) => (v - equity[i]) / equity[i]);
+  const returns = equity
+    .slice(1)
+    .map((value, i) => (equity[i] > 0 ? (value - equity[i]) / equity[i] : 0));
   const meanR = returns.reduce((a, b) => a + b, 0) / returns.length;
   const stdR = Math.sqrt(
     returns.reduce((a, r) => a + (r - meanR) ** 2, 0) / returns.length,
   );
-  const sharpe = stdR > 0 ? (meanR / stdR) * Math.sqrt(365) : 0;
+  const periodsPerYear: Record<Timeframe, number> = {
+    "15m": 35_040,
+    "1h": 8_760,
+    "4h": 2_190,
+    "1d": 365,
+  };
+  const sharpe =
+    stdR > 0 && returns.length > 0
+      ? (meanR / stdR) * Math.sqrt(periodsPerYear[timeframe])
+      : 0;
 
   return {
     totalReturn,
     totalReturnPct,
     totalTrades: trades,
-    winRate: Math.min(winRate, 100),
+    winRate,
     maxDrawdown: maxDD * 100,
     sharpe,
+    feesPaid,
+    liquidations,
+    leverage: selectedLeverage,
     signals,
     equityCurve: equity,
   };
@@ -294,6 +392,7 @@ export default function BotBacktest({
   const [tf, setTf] = useState<Timeframe>("1h");
   const [strategy, setStrategy] = useState<Strategy>(defaultStrategy);
   const [investment, setInvestment] = useState(1000);
+  const [leverage, setLeverage] = useState(1);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [realtimeMode, setRealtimeMode] = useState(false);
@@ -329,7 +428,7 @@ export default function BotBacktest({
             : strategy === "dca"
               ? { intervalCandles: dcaInterval, amountPerBuy: dcaAmount }
               : { stopAtr: trendStopAtr, rewardRisk: trendRewardRisk };
-      const res = runBacktest(snapshot, strategy, params, investment);
+      const res = runBacktest(snapshot, strategy, params, investment, leverage, tf);
       setResult(res);
       setRunning(false);
     }, 400);
@@ -346,6 +445,8 @@ export default function BotBacktest({
     trendStopAtr,
     trendRewardRisk,
     investment,
+    leverage,
+    tf,
   ]);
 
   const chartData = feed.candles;
@@ -443,8 +544,30 @@ export default function BotBacktest({
             type="number"
             value={investment}
             onChange={(e) => setInvestment(Number(e.target.value))}
+            min="1"
+            step="1"
             style={{ ...selectSt, width: 90 }}
           />
+        </div>
+        <div>
+          <label htmlFor="backtest-leverage" style={labelSt}>
+            Sim leverage
+          </label>
+          <select
+            id="backtest-leverage"
+            value={leverage}
+            onChange={(e) => setLeverage(Number(e.target.value))}
+            style={selectSt}
+          >
+            {[1, 2, 5, 10, 20, 50, 100].map((value) => (
+              <option key={value} value={value}>
+                {value}x
+              </option>
+            ))}
+          </select>
+          <div style={{ ...labelSt, maxWidth: 170, marginTop: 4 }}>
+            0.05% taker fees · estimated liquidation; venue limits differ
+          </div>
         </div>
         <div
           style={{
@@ -806,6 +929,18 @@ export default function BotBacktest({
                   .length.toString(),
                 sub: "total exits",
                 color: "#38e0f8",
+              },
+              {
+                label: "Trading costs",
+                value: `$${result.feesPaid.toFixed(2)}`,
+                sub: "fees + modeled liquidation cost",
+                color: "#f0b90b",
+              },
+              {
+                label: "Liquidations",
+                value: result.liquidations.toString(),
+                sub: `${result.leverage}x scenario · estimated maintenance margin`,
+                color: result.liquidations > 0 ? "#f6465d" : "#0ecb81",
               },
             ].map((stat) => (
               <div

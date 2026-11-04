@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useDraggable } from "@/hooks/useDraggable";
 
 interface KlineRow {
+  open: number;
+  high: number;
+  low: number;
   close: number;
   volume: number;
   start_timestamp: number;
@@ -39,30 +42,73 @@ function calcEMA(closes: number[], period: number): number[] {
 
 async function fetchKlines(symbol: string, type: TF): Promise<KlineRow[]> {
   try {
+    const to = Math.floor(Date.now() / 1000);
+    const isDaily = type === "1d";
+    const secondsPerCandle = isDaily ? 86_400 : 3_600;
+    const requestedCandles = type === "4h" ? 240 : 80;
+    const resolution = isDaily ? "1D" : "60";
+    const from = to - secondsPerCandle * requestedCandles;
     const res = await fetch(
-      `https://api.orderly.org/v1/public/kline?symbol=${symbol}&type=${type}&limit=50`,
+      `https://api.orderly.org/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${to}`,
       { cache: "no-store" },
     );
     if (!res.ok) return [];
-    const json = (await res.json()) as { data?: { rows?: unknown[] } };
-    const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
-    return rows
-      .filter(
-        (row): row is Record<string, unknown> | unknown[] =>
-          typeof row === "object" && row !== null,
-      )
-      .map((value) => {
-        const row = Array.isArray(value)
-          ? {}
-          : (value as Record<string, unknown>);
-        const tuple = Array.isArray(value) ? value : [];
-        return {
-          close: Number(row.close ?? tuple[4] ?? 0),
-          volume: Number(row.volume ?? tuple[5] ?? 0),
-          start_timestamp: Number(row.start_timestamp ?? tuple[0] ?? 0),
-        };
-      })
-      .filter((row) => row.close > 0);
+    const history = (await res.json()) as {
+      s?: string;
+      o?: number[];
+      h?: number[];
+      l?: number[];
+      c?: number[];
+      v?: number[];
+      t?: number[];
+    };
+    const length = Math.min(
+      history.t?.length ?? 0,
+      history.o?.length ?? 0,
+      history.h?.length ?? 0,
+      history.l?.length ?? 0,
+      history.c?.length ?? 0,
+      history.v?.length ?? 0,
+    );
+    if (history.s !== "ok" || length === 0) return [];
+
+    const rows = Array.from({ length }, (_, index) => ({
+      open: history.o![index],
+      high: history.h![index],
+      low: history.l![index],
+      close: history.c![index],
+      volume: history.v![index],
+      start_timestamp: history.t![index],
+    })).filter(
+      (row) =>
+        row.start_timestamp > 0 &&
+        Number.isFinite(row.open) &&
+        Number.isFinite(row.high) &&
+        Number.isFinite(row.low) &&
+        Number.isFinite(row.close) &&
+        row.close > 0,
+    );
+
+    if (type !== "4h") return rows;
+
+    const fourHourSeconds = 4 * 3_600;
+    const candles = new Map<number, KlineRow>();
+    for (const row of rows) {
+      const start =
+        Math.floor(row.start_timestamp / fourHourSeconds) * fourHourSeconds;
+      const candle = candles.get(start);
+      if (candle) {
+        candle.high = Math.max(candle.high, row.high);
+        candle.low = Math.min(candle.low, row.low);
+        candle.close = row.close;
+        candle.volume += row.volume;
+      } else {
+        candles.set(start, { ...row, start_timestamp: start });
+      }
+    }
+    return [...candles.values()].filter(
+      (candle) => candle.start_timestamp + fourHourSeconds <= to,
+    );
   } catch {
     return [];
   }
@@ -133,7 +179,6 @@ async function computeSignals(tf: TF): Promise<MACSignal[]> {
     });
 
   const fns = candidates.map((sym) => async () => {
-    await new Promise((r) => setTimeout(r, Math.random() * 200));
     const klines = await fetchKlines(sym, tf);
     if (klines.length < 22) return null;
     const closes = klines.map((k) => k.close);
@@ -222,7 +267,7 @@ export default function MACWidget({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("mac-widget", defaultPos);
+  } = useDraggable("mac-widget", defaultPos, true);
 
   const load = useCallback(async () => {
     setLoading(true);

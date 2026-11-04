@@ -33,7 +33,11 @@ function snapToEdge(x: number, y: number, w: number, h: number): Position {
   return { x: snappedX, y: snappedY };
 }
 
-export function useDraggable(id: string, defaultPos: Position) {
+export function useDraggable(
+  id: string,
+  defaultPos: Position,
+  keepInViewport = false,
+) {
   const getInitialPos = (): Position => {
     try {
       const saved = localStorage.getItem(`widget-pos-${id}`);
@@ -63,6 +67,23 @@ export function useDraggable(id: string, defaultPos: Position) {
   } | null>(null);
   const hasDraggedRef = useRef(false);
   const elementRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!keepInViewport) return;
+
+    const constrainPosition = () => {
+      const width = elementRef.current?.offsetWidth ?? 50;
+      const height = elementRef.current?.offsetHeight ?? 50;
+      setPos((current) => ({
+        x: clamp(current.x, 0, Math.max(0, window.innerWidth - width)),
+        y: clamp(current.y, 0, Math.max(0, window.innerHeight - height)),
+      }));
+    };
+
+    constrainPosition();
+    window.addEventListener("resize", constrainPosition);
+    return () => window.removeEventListener("resize", constrainPosition);
+  }, [keepInViewport]);
 
   const savePos = useCallback(
     (p: Position) => {
@@ -108,12 +129,16 @@ export function useDraggable(id: string, defaultPos: Position) {
       const newX = clamp(
         dragStartRef.current.posX + dx,
         0,
-        window.innerWidth - w,
+        keepInViewport
+          ? Math.max(0, window.innerWidth - w)
+          : window.innerWidth - w,
       );
       const newY = clamp(
         dragStartRef.current.posY + dy,
         0,
-        window.innerHeight - h,
+        keepInViewport
+          ? Math.max(0, window.innerHeight - h)
+          : window.innerHeight - h,
       );
       setPos({ x: newX, y: newY });
     };
@@ -133,10 +158,16 @@ export function useDraggable(id: string, defaultPos: Position) {
 
       setPos((current) => {
         const snapped = snapToEdge(current.x, current.y, w, h);
-        const didSnap = snapped.x !== current.x || snapped.y !== current.y;
+        const bounded = keepInViewport
+          ? {
+              x: clamp(snapped.x, 0, Math.max(0, window.innerWidth - w)),
+              y: clamp(snapped.y, 0, Math.max(0, window.innerHeight - h)),
+            }
+          : snapped;
+        const didSnap = bounded.x !== current.x || bounded.y !== current.y;
         if (didSnap) setIsSnapping(true);
-        savePos(snapped);
-        return snapped;
+        savePos(bounded);
+        return bounded;
       });
     };
 
@@ -151,7 +182,7 @@ export function useDraggable(id: string, defaultPos: Position) {
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onEnd);
     };
-  }, [savePos]);
+  }, [keepInViewport, savePos]);
 
   useEffect(() => {
     if (!isSnapping) return;

@@ -40,7 +40,7 @@ function fmtVal(v: number) {
   return "$" + v.toFixed(0);
 }
 function fmtTime(ts: number) {
-  const d = Math.floor((Date.now() - ts) / 1000);
+  const d = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (d < 60) return `${d}s ago`;
   if (d < 3600) return `${Math.floor(d / 60)}m ago`;
   return `${Math.floor(d / 3600)}h ago`;
@@ -65,23 +65,38 @@ async function fetchRecentTrades(symbol: string): Promise<WhaleAlert[]> {
       .filter((value): value is Record<string, unknown> => {
         if (!value || typeof value !== "object") return false;
         const row = value as Record<string, unknown>;
+        const price = Number(row.executed_price);
+        const size = Number(row.executed_quantity);
+        const timestamp = Number(row.executed_timestamp ?? row.ts);
         return (
-          Number(row.executed_price) * Number(row.executed_quantity) >=
-          WHALE_THRESHOLD
+          Number.isFinite(price) &&
+          Number.isFinite(size) &&
+          Number.isFinite(timestamp) &&
+          timestamp > 0 &&
+          price * size >= WHALE_THRESHOLD
         );
       })
-      .map((t) => ({
-        id: `${symbol}-${String(t.ts)}-${String(t.executed_quantity)}`,
-        symbol,
-        side:
-          typeof t.side === "string" && t.side.toLowerCase() === "buy"
-            ? "buy"
-            : "sell",
-        size: Number(t.executed_quantity),
-        price: Number(t.executed_price),
-        value: Number(t.executed_price) * Number(t.executed_quantity),
-        time: Number(t.ts),
-      }));
+      .map((trade) => {
+        const rawTimestamp = Number(
+          trade.executed_timestamp ?? trade.ts,
+        );
+        const time = rawTimestamp < 1e12 ? rawTimestamp * 1000 : rawTimestamp;
+        const price = Number(trade.executed_price);
+        const size = Number(trade.executed_quantity);
+        return {
+          id: `${symbol}-${time}-${size}-${price}`,
+          symbol,
+          side:
+            typeof trade.side === "string" &&
+            trade.side.toLowerCase() === "buy"
+              ? "buy"
+              : "sell",
+          size,
+          price,
+          value: price * size,
+          time,
+        };
+      });
   } catch {
     return [];
   }
@@ -131,7 +146,7 @@ export default function WhaleAlerts({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("whale-alerts", defaultPos);
+  } = useDraggable("whale-alerts", defaultPos, true);
 
   const fetchAll = useCallback(async () => {
     const all = (await Promise.all(SYMBOLS.map(fetchRecentTrades))).flat();

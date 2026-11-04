@@ -6,7 +6,7 @@ interface SMSignal {
   base: string;
   signal: "accumulation" | "distribution" | "neutral" | "watch";
   funding: number;
-  oiChange: number;
+  oiChange: number | null;
   priceChange: number;
   score: number;
 }
@@ -27,7 +27,7 @@ const TOP_SYMBOLS = [
 function calcSignal(
   funding: number,
   priceChange: number,
-  oiChange: number,
+  oiChange: number | null,
 ): { signal: SMSignal["signal"]; score: number } {
   let score = 0;
 
@@ -45,11 +45,13 @@ function calcSignal(
   else if (priceChange < -1) score -= 1;
 
   // OI change: rising OI + rising price = accumulation
-  if (oiChange > 5 && priceChange > 0) score += 2;
-  else if (oiChange > 2 && priceChange > 0) score += 1;
-  else if (oiChange > 5 && priceChange < 0)
-    score -= 1; // rising OI falling price = distribution
-  else if (oiChange < -5) score -= 1;
+  if (oiChange !== null) {
+    if (oiChange > 5 && priceChange > 0) score += 2;
+    else if (oiChange > 2 && priceChange > 0) score += 1;
+    else if (oiChange > 5 && priceChange < 0)
+      score -= 1; // rising OI falling price = distribution
+    else if (oiChange < -5) score -= 1;
+  }
 
   const signal: SMSignal["signal"] =
     score >= 3
@@ -63,12 +65,14 @@ function calcSignal(
   return { signal, score };
 }
 
-async function fetchSmartMoneyData(): Promise<SMSignal[]> {
+async function fetchSmartMoneyData(
+  previousOpenInterest: Map<string, number>,
+): Promise<SMSignal[] | null> {
   try {
     const res = await fetch("https://api.orderly.org/v1/public/futures", {
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const body = (await res.json()) as { data?: { rows?: unknown[] } };
     const rows = Array.isArray(body.data?.rows) ? body.data.rows : [];
 
@@ -89,15 +93,21 @@ async function fetchSmartMoneyData(): Promise<SMSignal[]> {
         const open = Number(r["24h_open"] ?? 0);
         const priceChange = open > 0 ? ((close - open) / open) * 100 : 0;
         const oi = Number(r.open_interest ?? 0);
-        const oiOld = Number(r.open_interest_24h ?? oi);
-        const oiChange = oiOld > 0 ? ((oi - oiOld) / oiOld) * 100 : 0;
+        const previousOi = previousOpenInterest.get(symbol);
+        const oiChange =
+          Number.isFinite(oi) && oi > 0 && previousOi
+            ? ((oi - previousOi) / previousOi) * 100
+            : null;
+        if (Number.isFinite(oi) && oi > 0) {
+          previousOpenInterest.set(symbol, oi);
+        }
         const { signal, score } = calcSignal(funding, priceChange, oiChange);
         const base = symbol.split("_")[1];
         return { symbol, base, signal, funding, oiChange, priceChange, score };
       })
       .sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -135,12 +145,14 @@ export default function SmartMoney({ onHide }: Props) {
   const [signals, setSignals] = useState<SMSignal[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [hasNew, setHasNew] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [tab, setTab] = useState<"all" | "accumulation" | "distribution">(
     "all",
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousOpenInterest = useRef(new Map<string, number>());
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   const defaultPos = {
@@ -155,14 +167,19 @@ export default function SmartMoney({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("smart-money", defaultPos);
+  } = useDraggable("smart-money", defaultPos, true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await fetchSmartMoneyData();
-    setSignals(data);
+    const data = await fetchSmartMoneyData(previousOpenInterest.current);
+    if (data === null) {
+      setError("Orderly market data unavailable");
+    } else {
+      setError("");
+      setSignals(data);
+      if (!open && data.length > 0) setHasNew(true);
+    }
     setLoading(false);
-    if (!open) setHasNew(true);
   }, [open]);
 
   useEffect(() => {
@@ -313,7 +330,13 @@ export default function SmartMoney({ onHide }: Props) {
             {loading && signals.length === 0 && (
               <div className="sm-empty">Analyzing market flows…</div>
             )}
-            {!loading && filtered.length === 0 && (
+            {error && signals.length === 0 && (
+              <div className="sm-empty">{error}</div>
+            )}
+            {error && signals.length > 0 && (
+              <div className="sm-empty">{error} · showing last update</div>
+            )}
+            {!loading && !error && filtered.length === 0 && (
               <div className="sm-empty">No strong signals right now</div>
             )}
             {filtered.map((s) => {
@@ -343,15 +366,15 @@ export default function SmartMoney({ onHide }: Props) {
                       <span className="sm-stat-sep">·</span>
                       <span
                         className="sm-stat"
-                        title="OI Change"
+                        title="Open-interest change since the previous refresh"
                         style={{
                           color:
-                            s.oiChange >= 0
+                            s.oiChange !== null && s.oiChange >= 0
                               ? "rgba(56,224,248,0.8)"
                               : "rgba(180,190,210,0.5)",
                         }}
                       >
-                        OI {fmt(s.oiChange, 1)}
+                        OI {s.oiChange === null ? "—" : fmt(s.oiChange, 1)}
                       </span>
                     </div>
                     <div
@@ -376,7 +399,7 @@ export default function SmartMoney({ onHide }: Props) {
           </div>
 
           <div className="sm-footer">
-            Live · updates every 30s · Not financial advice
+            {error ? "Feed unavailable · last successful snapshot shown" : "Orderly data · refreshes every 30s"}
           </div>
         </div>
       )}

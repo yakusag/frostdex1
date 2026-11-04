@@ -10,9 +10,8 @@ interface FuturesRow {
 interface LiqLevel {
   price: number;
   side: "long" | "short";
-  intensity: number;
   leverage: string;
-  usd: number;
+  movePct: number;
 }
 
 const DISPLAY_MAP: Record<string, string> = {
@@ -28,16 +27,7 @@ function baseLabel(sym: string): string {
   return m ? m[1] : sym;
 }
 
-const LEVERAGE_LEVELS = [
-  { pct: 0.5, label: "100x", weight: 0.06 },
-  { pct: 0.8, label: "75x", weight: 0.07 },
-  { pct: 1.5, label: "50x", weight: 0.14 },
-  { pct: 3.5, label: "25x", weight: 0.16 },
-  { pct: 4.5, label: "20x", weight: 0.14 },
-  { pct: 6.0, label: "15x", weight: 0.12 },
-  { pct: 9.0, label: "10x", weight: 0.18 },
-  { pct: 19.0, label: "5x", weight: 0.13 },
-];
+const LEVERAGE_LEVELS = [100, 75, 50, 25, 20, 15, 10, 5];
 
 const PRIORITY = [
   "PERP_BTC_USDC",
@@ -82,23 +72,21 @@ async function fetchAllFutures(): Promise<FuturesRow[]> {
   }
 }
 
-function buildLevels(mark: number, oi: number): LiqLevel[] {
-  const notional = mark * oi;
+function buildLevels(mark: number): LiqLevel[] {
   const levels: LiqLevel[] = [];
-  for (const lv of LEVERAGE_LEVELS) {
+  for (const leverage of LEVERAGE_LEVELS) {
+    const movePct = 100 / leverage;
     levels.push({
-      price: mark * (1 - lv.pct / 100),
+      price: mark * (1 - movePct / 100),
       side: "long",
-      intensity: lv.weight,
-      leverage: lv.label,
-      usd: notional * lv.weight * 0.6,
+      leverage: `${leverage}x`,
+      movePct,
     });
     levels.push({
-      price: mark * (1 + lv.pct / 100),
+      price: mark * (1 + movePct / 100),
       side: "short",
-      intensity: lv.weight,
-      leverage: lv.label,
-      usd: notional * lv.weight * 0.4,
+      leverage: `${leverage}x`,
+      movePct,
     });
   }
   return levels.sort((a, b) => b.price - a.price);
@@ -140,7 +128,7 @@ export default function LiqHeatmap({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("liq-heatmap", defaultPos);
+  } = useDraggable("liq-heatmap", defaultPos, true);
 
   const loadAll = async () => {
     setLoading(true);
@@ -149,7 +137,7 @@ export default function LiqHeatmap({ onHide }: Props) {
     setSelected((prev) => {
       const sym = prev?.symbol ?? rows[0]?.symbol;
       const found = rows.find((r) => r.symbol === sym) ?? rows[0] ?? null;
-      if (found) setLevels(buildLevels(found.mark_price, found.open_interest));
+      if (found) setLevels(buildLevels(found.mark_price));
       return found;
     });
     setLoading(false);
@@ -157,7 +145,7 @@ export default function LiqHeatmap({ onHide }: Props) {
 
   const selectRow = (row: FuturesRow) => {
     setSelected(row);
-    setLevels(buildLevels(row.mark_price, row.open_interest));
+    setLevels(buildLevels(row.mark_price));
     setSymSearch("");
   };
 
@@ -174,7 +162,7 @@ export default function LiqHeatmap({ onHide }: Props) {
     : { position: "absolute", top: "calc(100% + 8px)", right: 0 };
 
   const markPrice = selected?.mark_price ?? 0;
-  const maxIntensity = Math.max(...levels.map((l) => l.intensity), 0.01);
+  const maxMove = Math.max(...levels.map((level) => level.movePct), 0.01);
   const query = symSearch.trim().toUpperCase();
   const filteredRows = query
     ? allRows.filter(
@@ -233,9 +221,9 @@ export default function LiqHeatmap({ onHide }: Props) {
             <div className="liq-header-left">
               <span style={{ fontSize: 14 }}>🔥</span>
               <div>
-                <div className="liq-title">Liq Heatmap</div>
+                <div className="liq-title">Liq Scenarios</div>
                 <div className="liq-sub">
-                  Estimated liquidation zones · {allRows.length} markets
+                  Live OI {fmtUSD(markPrice * (selected?.open_interest ?? 0))} · {allRows.length} markets
                 </div>
               </div>
             </div>
@@ -305,9 +293,8 @@ export default function LiqHeatmap({ onHide }: Props) {
           </div>
 
           <div className="liq-legend">
-            <span style={{ color: "#0ecb81" }}>■</span> Short liq &nbsp;
-            <span style={{ color: "#f6465d" }}>■</span> Long liq &nbsp;
-            <span style={{ color: "rgba(56,224,248,0.7)" }}>──</span> Mark
+            <span style={{ color: "#0ecb81" }}>■</span> Short-risk move &nbsp;
+            <span style={{ color: "#f6465d" }}>■</span> Long-risk move
           </div>
 
           <div
@@ -321,7 +308,7 @@ export default function LiqHeatmap({ onHide }: Props) {
             )}
             {levels.map((lv, i) => {
               const isAbove = lv.price > markPrice;
-              const barPct = Math.round((lv.intensity / maxIntensity) * 100);
+              const barPct = Math.round((lv.movePct / maxMove) * 100);
               const color = isAbove ? "#0ecb81" : "#f6465d";
               const isMarkRow =
                 i < levels.length - 1 &&
@@ -351,7 +338,7 @@ export default function LiqHeatmap({ onHide }: Props) {
                         }}
                       />
                       <span className="liq-bar-label" style={{ color }}>
-                        {fmtUSD(lv.usd)}
+                        {lv.movePct.toFixed(2)}% move
                       </span>
                     </div>
                     <div className="liq-row-lev">{lv.leverage}</div>
@@ -362,7 +349,7 @@ export default function LiqHeatmap({ onHide }: Props) {
           </div>
 
           <div className="liq-footer">
-            Estimated · updates every 20s · Not financial advice
+            Live mark/OI · 1 ÷ leverage price moves only; actual liquidation depends on venue margin rules, fees, and funding.
           </div>
         </div>
       )}

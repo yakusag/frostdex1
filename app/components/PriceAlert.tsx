@@ -57,7 +57,10 @@ async function fetchPrices(): Promise<Record<string, number>> {
       if (!value || typeof value !== "object") continue;
       const row = value as Record<string, unknown>;
       if (typeof row.symbol === "string") {
-        out[row.symbol] = Number(row["24h_close"] ?? row.mark_price ?? 0);
+        const markPrice = Number(row.mark_price ?? row["24h_close"] ?? 0);
+        if (Number.isFinite(markPrice) && markPrice > 0) {
+          out[row.symbol] = markPrice;
+        }
       }
     }
     return out;
@@ -125,7 +128,7 @@ export default function PriceAlert({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("price-alert-widget", defaultPos);
+  } = useDraggable("price-alert-widget", defaultPos, true);
 
   const panelStyle: React.CSSProperties = isBottomHalf
     ? { position: "absolute", bottom: "calc(100% + 8px)", right: 0 }

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDraggable } from "@/hooks/useDraggable";
 
 interface MarketSentiment {
-  fearGreed: number;
-  label: string;
-  bullishPct: number;
-  totalSymbols: number;
-  bullishCount: number;
-  bearishCount: number;
+  fearGreed: number | null;
+  label: string | null;
+  bullishPct: number | null;
+  totalSymbols: number | null;
+  bullishCount: number | null;
+  bearishCount: number | null;
   timestamp: number;
 }
 
@@ -47,6 +47,7 @@ async function fetchMarketMomentum() {
       }
     }
     const total = bullish + bearish;
+    if (total === 0) return null;
     return {
       bullishPct: total > 0 ? Math.round((bullish / total) * 100) : 50,
       bullish,
@@ -65,14 +66,6 @@ function getFGColor(v: number) {
   if (v <= 75) return "#0ecb81";
   return "#38e0f8";
 }
-function getFGLabel(v: number) {
-  if (v <= 25) return "Extreme Fear";
-  if (v <= 45) return "Fear";
-  if (v <= 55) return "Neutral";
-  if (v <= 75) return "Greed";
-  return "Extreme Greed";
-}
-
 function GaugeArc({ value }: { value: number }) {
   const pct = value / 100,
     r = 40,
@@ -130,9 +123,10 @@ export default function SentimentDashboard({ onHide }: Props) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<MarketSentiment | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [hovered, setHovered] = useState(false);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasData = useRef(false);
 
   const defaultPos = { x: 12, y: 122 };
   const {
@@ -143,7 +137,7 @@ export default function SentimentDashboard({ onHide }: Props) {
     isBottomHalf,
     dragHandleProps,
     wasDragged,
-  } = useDraggable("sentiment-dashboard", defaultPos);
+  } = useDraggable("sentiment-dashboard", defaultPos, true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,30 +145,42 @@ export default function SentimentDashboard({ onHide }: Props) {
       fetchFearGreed(),
       fetchMarketMomentum(),
     ]);
-    const fgVal = fg?.value ?? 50;
+    const unavailable = [
+      !fg ? "Fear & Greed" : null,
+      !momentum ? "perpetual market" : null,
+    ].filter(Boolean);
+    if (!fg && !momentum) {
+      setError(
+        hasData.current
+          ? "Live sources unavailable · showing last successful update"
+          : "Live sentiment data unavailable",
+      );
+      setLoading(false);
+      return;
+    }
+    setError(unavailable.length ? `${unavailable.join(" and ")} source unavailable` : "");
     setData({
-      fearGreed: fgVal,
-      label: fg?.label ?? getFGLabel(fgVal),
-      bullishPct: momentum?.bullishPct ?? 50,
-      totalSymbols: momentum?.total ?? 0,
-      bullishCount: momentum?.bullish ?? 0,
-      bearishCount: momentum?.bearish ?? 0,
+      fearGreed: fg?.value ?? null,
+      label: fg?.label ?? null,
+      bullishPct: momentum?.bullishPct ?? null,
+      totalSymbols: momentum?.total ?? null,
+      bullishCount: momentum?.bullish ?? null,
+      bearishCount: momentum?.bearish ?? null,
       timestamp: Date.now(),
     });
+    hasData.current = true;
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (open && !data) load();
-    if (open) {
-      intervalRef.current = setInterval(load, 60_000);
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [open, data, load]);
+    if (!open) return;
+    void load();
+    const interval = setInterval(() => void load(), 60_000);
+    return () => clearInterval(interval);
+  }, [open, load]);
 
-  const fgColor = data ? getFGColor(data.fearGreed) : "#eaecef";
+  const fgColor =
+    data?.fearGreed != null ? getFGColor(data.fearGreed) : "#eaecef";
 
   const panelStyle: React.CSSProperties = isBottomHalf
     ? { position: "absolute", bottom: "calc(100% + 8px)", left: 0 }
@@ -236,66 +242,93 @@ export default function SentimentDashboard({ onHide }: Props) {
           {loading && !data && (
             <div className="sentiment-loading">Loading…</div>
           )}
+          {error && !data && (
+            <div className="sentiment-loading" role="status">
+              {error}
+            </div>
+          )}
           {data && (
             <div className="sentiment-body">
+              {error && (
+                <div className="sentiment-updated" role="status">
+                  {error}
+                </div>
+              )}
               <div className="sentiment-card">
                 <div className="sentiment-card-title">Fear & Greed Index</div>
-                <GaugeArc value={data.fearGreed} />
-                <div className="sentiment-fg-value" style={{ color: fgColor }}>
-                  {data.fearGreed}
-                </div>
-                <div className="sentiment-fg-label" style={{ color: fgColor }}>
-                  {data.label}
-                </div>
-                <div className="sentiment-fg-scale">
-                  <span style={{ color: "#f6465d" }}>Fear</span>
-                  <span style={{ color: "#eaecef" }}>Neutral</span>
-                  <span style={{ color: "#0ecb81" }}>Greed</span>
-                </div>
+                {data.fearGreed !== null ? (
+                  <>
+                    <GaugeArc value={data.fearGreed} />
+                    <div className="sentiment-fg-value" style={{ color: fgColor }}>
+                      {data.fearGreed}
+                    </div>
+                    <div className="sentiment-fg-label" style={{ color: fgColor }}>
+                      {data.label}
+                    </div>
+                    <div className="sentiment-fg-scale">
+                      <span style={{ color: "#f6465d" }}>Fear</span>
+                      <span style={{ color: "#eaecef" }}>Neutral</span>
+                      <span style={{ color: "#0ecb81" }}>Greed</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="sentiment-loading">Source unavailable</div>
+                )}
               </div>
               <div className="sentiment-card">
                 <div className="sentiment-card-title">
-                  Perp Markets ({data.totalSymbols} pairs)
+                  Perp Markets
                 </div>
-                <div className="sentiment-bar-wrap">
-                  <div
-                    className="sentiment-bar-fill sentiment-bar-fill--bull"
-                    style={{ width: `${data.bullishPct}%` }}
-                  />
-                  <div
-                    className="sentiment-bar-fill sentiment-bar-fill--bear"
-                    style={{ width: `${100 - data.bullishPct}%` }}
-                  />
-                </div>
-                <div className="sentiment-bar-labels">
-                  <span style={{ color: "#0ecb81" }}>
-                    ▲ Bullish {data.bullishCount} ({data.bullishPct}%)
-                  </span>
-                  <span style={{ color: "#f6465d" }}>
-                    ▼ Bearish {data.bearishCount} ({100 - data.bullishPct}%)
-                  </span>
-                </div>
-                <div
-                  className="sentiment-mood-label"
-                  style={{
-                    color:
-                      data.bullishPct >= 60
-                        ? "#0ecb81"
-                        : data.bullishPct <= 40
-                          ? "#f6465d"
-                          : "#eaecef",
-                  }}
-                >
-                  {data.bullishPct >= 65
-                    ? "🔥 Strong Bullish"
-                    : data.bullishPct >= 55
-                      ? "📈 Mildly Bullish"
-                      : data.bullishPct <= 35
-                        ? "🧊 Strong Bearish"
-                        : data.bullishPct <= 45
-                          ? "📉 Mildly Bearish"
-                          : "⚖ Neutral"}
-                </div>
+                {data.bullishPct !== null &&
+                data.bullishCount !== null &&
+                data.bearishCount !== null ? (
+                  <>
+                    <div className="sentiment-bar-wrap">
+                      <div
+                        className="sentiment-bar-fill sentiment-bar-fill--bull"
+                        style={{ width: `${data.bullishPct}%` }}
+                      />
+                      <div
+                        className="sentiment-bar-fill sentiment-bar-fill--bear"
+                        style={{ width: `${100 - data.bullishPct}%` }}
+                      />
+                    </div>
+                    <div className="sentiment-bar-labels">
+                      <span style={{ color: "#0ecb81" }}>
+                        ▲ Bullish {data.bullishCount} ({data.bullishPct}%)
+                      </span>
+                      <span style={{ color: "#f6465d" }}>
+                        ▼ Bearish {data.bearishCount} ({100 - data.bullishPct}%)
+                      </span>
+                    </div>
+                    <div
+                      className="sentiment-mood-label"
+                      style={{
+                        color:
+                          data.bullishPct >= 60
+                            ? "#0ecb81"
+                            : data.bullishPct <= 40
+                              ? "#f6465d"
+                              : "#eaecef",
+                      }}
+                    >
+                      {data.bullishPct >= 65
+                        ? "🔥 Strong Bullish"
+                        : data.bullishPct >= 55
+                          ? "📈 Mildly Bullish"
+                          : data.bullishPct <= 35
+                            ? "🧊 Strong Bearish"
+                            : data.bullishPct <= 45
+                              ? "📉 Mildly Bearish"
+                              : "⚖ Neutral"}
+                    </div>
+                    <div className="sentiment-updated">
+                      {data.totalSymbols} active pairs
+                    </div>
+                  </>
+                ) : (
+                  <div className="sentiment-loading">Source unavailable</div>
+                )}
               </div>
               <div className="sentiment-updated">
                 Updated {new Date(data.timestamp).toLocaleTimeString()}
