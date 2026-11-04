@@ -1,10 +1,26 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FROST_TOKEN } from "@/utils/customTokens";
 
-const DEXSCREENER_EMBED = `https://dexscreener.com/arbitrum/${FROST_TOKEN.poolAddress}?embed=1&theme=dark&trades=1&info=1`;
+type ThemeMode = "frost" | "standard" | "extra";
+
+function getThemeMode(): ThemeMode {
+  const theme = document.documentElement.dataset.theme;
+  return theme === "standard" || theme === "extra" ? theme : "frost";
+}
 
 export default function FrostDexScreenerChart() {
   const [expanded, setExpanded] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(getThemeMode);
+
+  useEffect(() => {
+    const handleThemeChange = () => setTheme(getThemeMode());
+    window.addEventListener("frostdex-theme-change", handleThemeChange);
+    return () =>
+      window.removeEventListener("frostdex-theme-change", handleThemeChange);
+  }, []);
+
+  const chartTheme = theme === "standard" ? "light" : "dark";
+  const chartSrc = `https://dexscreener.com/arbitrum/${FROST_TOKEN.poolAddress}?embed=1&theme=${chartTheme}&trades=1&info=1`;
 
   return (
     <div
@@ -69,7 +85,7 @@ export default function FrostDexScreenerChart() {
       {expanded && (
         <div style={{ width: "100%", height: 480, position: "relative" }}>
           <iframe
-            src={DEXSCREENER_EMBED}
+            src={chartSrc}
             title="FROST/WETH DexScreener Chart"
             style={{
               width: "100%",

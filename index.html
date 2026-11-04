@@ -11,8 +11,11 @@
           savedTheme === "standard" || savedTheme === "extra"
             ? savedTheme
             : "frost";
+        document.documentElement.dataset.ouiTheme =
+          savedTheme === "standard" ? "light" : "dark";
       } catch {
         document.documentElement.dataset.theme = "frost";
+        document.documentElement.dataset.ouiTheme = "dark";
       }
     </script>
 
@@ -24,7 +27,7 @@
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <link rel="apple-touch-icon" href="/favicon.webp" />
+    <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
 
     <title>FrostDex</title>
 

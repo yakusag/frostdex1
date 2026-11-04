@@ -28,7 +28,7 @@ function Section({
 }) {
   return (
     <div
-      className={`oui-rounded-2xl oui-p-6 md:oui-p-8 ${className}`}
+      className={`whitepaper-section oui-rounded-2xl oui-p-6 md:oui-p-8 ${className}`}
       style={{
         background: "rgba(255,255,255,0.025)",
         border: "1px solid rgba(255,255,255,0.07)",
@@ -60,7 +60,7 @@ export default function WhitepaperIndex() {
       <Helmet>
         <title>{generatePageTitle("Whitepaper")}</title>
       </Helmet>
-      <div className="oui-min-h-screen oui-bg-base-9 oui-text-base-contrast-80">
+      <div className="whitepaper-page oui-min-h-screen oui-bg-base-9 oui-text-base-contrast-80">
         <div className="oui-max-w-5xl oui-mx-auto oui-px-4 oui-py-8 oui-space-y-8">
           {/* ── Hero image ── */}
           <div
@@ -147,7 +147,7 @@ export default function WhitepaperIndex() {
             ].map((f) => (
               <div
                 key={f.title}
-                className="oui-rounded-xl oui-p-5 oui-text-center oui-space-y-3"
+                className="whitepaper-feature-card oui-rounded-xl oui-p-5 oui-text-center oui-space-y-3"
                 style={{
                   background: "rgba(255,255,255,0.03)",
                   border: "1px solid rgba(255,255,255,0.07)",
@@ -261,7 +261,7 @@ export default function WhitepaperIndex() {
                 ].map((chain) => (
                   <span
                     key={chain}
-                    className="oui-text-xs oui-font-semibold oui-px-3 oui-py-1.5 oui-rounded-full"
+                    className="whitepaper-chain-badge oui-text-xs oui-font-semibold oui-px-3 oui-py-1.5 oui-rounded-full"
                     style={{
                       background:
                         chain === "Blast"
@@ -333,7 +333,7 @@ export default function WhitepaperIndex() {
             </div>
             <div className="oui-relative">
               <div
-                className="oui-absolute oui-left-3 oui-top-0 oui-bottom-0 oui-w-px"
+                className="whitepaper-roadmap-line oui-absolute oui-left-3 oui-top-0 oui-bottom-0 oui-w-px"
                 style={{ background: "rgba(56,224,248,0.12)" }}
               />
               <div className="oui-space-y-6">
@@ -399,7 +399,7 @@ export default function WhitepaperIndex() {
                     className="oui-flex oui-gap-5 oui-pl-8 oui-relative"
                   >
                     <div
-                      className="oui-absolute oui-left-0 oui-top-1 oui-w-6 oui-h-6 oui-rounded-full oui-flex oui-items-center oui-justify-center oui-flex-shrink-0"
+                      className={`oui-absolute oui-left-0 oui-top-1 oui-w-6 oui-h-6 oui-rounded-full oui-flex oui-items-center oui-justify-center oui-flex-shrink-0${phase.done ? "" : " whitepaper-roadmap-pending"}`}
                       style={{
                         background: phase.done
                           ? `${GREEN}20`

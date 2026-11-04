@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "@orderly.network/i18n";
 import { AppLogos } from "@orderly.network/react-app";
@@ -24,6 +24,7 @@ import {
 } from "@orderly.network/ui-scaffold";
 import { CampaignsNavTitle } from "@/components/CampaignsNavTitle";
 import CustomLeftNav from "@/components/CustomLeftNav";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { OrderlyActiveIcon, OrderlyIcon } from "../components/icons/orderly";
 import { withBasePath } from "./base-path";
 import {
@@ -52,6 +53,11 @@ interface ColorConfigInterface {
   pnlUpColor?: string;
   pnlDownColor?: string;
   chartBG?: string;
+  textColor?: string;
+  qtyTextColor?: string;
+  volumeUpColor?: string;
+  volumeDownColor?: string;
+  closeIcon?: string;
 }
 
 export type OrderlyConfig = {
@@ -315,31 +321,73 @@ const getBottomNavIcon = (menuId: string) => {
   }
 };
 
-const getColorConfig = (): ColorConfigInterface | undefined => {
+type ThemeMode = "frost" | "standard" | "extra";
+
+const getThemeMode = (): ThemeMode => {
+  if (typeof document === "undefined") return "frost";
+  const theme = document.documentElement.dataset.theme;
+  return theme === "extra" || theme === "standard" ? theme : "frost";
+};
+
+const getColorConfig = (
+  theme: ThemeMode,
+): ColorConfigInterface | undefined => {
   const customColorConfigEnv = getRuntimeConfig(
     "VITE_TRADING_VIEW_COLOR_CONFIG",
   );
 
-  if (
-    !customColorConfigEnv ||
-    typeof customColorConfigEnv !== "string" ||
-    customColorConfigEnv.trim() === ""
-  ) {
-    return undefined;
+  let customColorConfig: ColorConfigInterface = {};
+  try {
+    if (
+      typeof customColorConfigEnv === "string" &&
+      customColorConfigEnv.trim() !== ""
+    ) {
+      customColorConfig = JSON.parse(customColorConfigEnv);
+    }
+  } catch (error) {
+    console.warn("Error parsing VITE_TRADING_VIEW_COLOR_CONFIG:", error);
   }
 
-  try {
-    const customColorConfig = JSON.parse(customColorConfigEnv);
-    return customColorConfig;
-  } catch (e) {
-    console.warn("Error parsing VITE_TRADING_VIEW_COLOR_CONFIG:", e);
-    return undefined;
+  if (theme === "extra") {
+    return {
+      ...customColorConfig,
+      chartBG: "#111418",
+      upColor: "#0ecb81",
+      downColor: "#f6465d",
+      textColor: "#eaecef",
+    };
   }
+
+  if (theme === "standard") {
+    return {
+      ...customColorConfig,
+      chartBG: "#ffffff",
+      upColor: "#2ebd85",
+      downColor: "#f6465d",
+      pnlUpColor: "#2ebd85",
+      pnlDownColor: "#f6465d",
+      textColor: "#1f2937",
+      qtyTextColor: "#1f2937",
+      volumeUpColor: "#2ebd85",
+      volumeDownColor: "#f6465d",
+      closeIcon: "rgba(31, 41, 55, 0.8)",
+    };
+  }
+
+  return Object.keys(customColorConfig).length ? customColorConfig : undefined;
 };
 
 export const useOrderlyConfig = () => {
   const { t } = useTranslation();
   const { isMobile } = useScreen();
+  const [theme, setTheme] = useState<ThemeMode>(getThemeMode);
+
+  useEffect(() => {
+    const handleThemeChange = () => setTheme(getThemeMode());
+    window.addEventListener("frostdex-theme-change", handleThemeChange);
+    return () =>
+      window.removeEventListener("frostdex-theme-change", handleThemeChange);
+  }, []);
 
   return useMemo<OrderlyConfig>(() => {
     const allMenuItems: MenuConfigItem[] = [
@@ -499,6 +547,7 @@ export const useOrderlyConfig = () => {
           </Flex>
 
           <Flex itemAlign={"center"} className="oui-gap-2">
+            <ThemeSwitcher />
             {components.accountSummary}
             {components.linkDevice}
             {components.scanQRCode}
@@ -557,7 +606,7 @@ export const useOrderlyConfig = () => {
           ),
           library_path: withBasePath("/tradingview/charting_library/"),
           customCssUrl: withBasePath("/tradingview/chart.css"),
-          colorConfig: getColorConfig(),
+          colorConfig: getColorConfig(theme),
         },
         sharePnLConfig: {
           backgroundImages: getPnLBackgroundImages(),
@@ -573,5 +622,5 @@ export const useOrderlyConfig = () => {
         },
       },
     };
-  }, [t, isMobile]);
+  }, [t, isMobile, theme]);
 };

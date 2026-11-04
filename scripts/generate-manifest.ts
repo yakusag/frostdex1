@@ -117,7 +117,8 @@ function generateManifest() {
 
   console.log(`✓ Using base path: ${basePath}`);
 
-  const iconPath = withBasePath("/favicon.webp", basePath);
+  const icon192Path = withBasePath("/pwa-icon-192.png", basePath);
+  const icon512Path = withBasePath("/pwa-icon-512.png", basePath);
   const startUrl = withBasePath("/", basePath);
 
   const manifest = {
@@ -134,9 +135,15 @@ function generateManifest() {
     orientation: "any",
     icons: [
       {
-        src: iconPath,
-        sizes: "200x200",
-        type: "image/webp",
+        src: icon192Path,
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+      {
+        src: icon512Path,
+        sizes: "512x512",
+        type: "image/png",
         purpose: "any maskable",
       },
     ],
@@ -149,9 +156,9 @@ function generateManifest() {
         url: withBasePath("/perp", basePath),
         icons: [
           {
-            src: iconPath,
-            sizes: "200x200",
-            type: "image/webp",
+            src: icon192Path,
+            sizes: "192x192",
+            type: "image/png",
           },
         ],
       },
@@ -162,9 +169,9 @@ function generateManifest() {
         url: withBasePath("/portfolio", basePath),
         icons: [
           {
-            src: iconPath,
-            sizes: "200x200",
-            type: "image/webp",
+            src: icon192Path,
+            sizes: "192x192",
+            type: "image/png",
           },
         ],
       },

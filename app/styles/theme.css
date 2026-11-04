@@ -169,11 +169,15 @@ html[data-theme="standard"] body {
   color: #1f2937;
 }
 
-html[data-theme="extra"] img[alt*="FrostDex"],
-html[data-theme="extra"] img[src*="/logo.webp"],
-html[data-theme="extra"] img[src*="frostdex-logo"],
-html[data-theme="extra"] img[src*="frostdex-badge"] {
-  filter: brightness(0) saturate(100%) invert(75%) sepia(90%) saturate(1200%) hue-rotate(2deg) brightness(103%) contrast(103%);
+html[data-theme="extra"] img[src$="/logo.webp"] {
+  content: url("/logo-extra.webp");
+  filter: drop-shadow(0 0 8px rgb(var(--oui-color-primary) / 0.22));
+}
+
+html[data-theme="extra"] #splash-flake {
+  width: 260px;
+  height: 260px;
+  max-width: min(80vw, 320px);
 }
 
 html[data-theme="standard"] .bot-card,
@@ -203,6 +207,13 @@ html[data-theme="standard"] [style*="180, 190, 210"],
 html[data-theme="standard"] [style*="#eaecef"],
 html[data-theme="standard"] [style*="#e8ecf1"] {
   color: #526174 !important;
+}
+
+html[data-theme="standard"] [style*="#38e0f8"],
+html[data-theme="standard"] [style*="56,224,248"],
+html[data-theme="standard"] [style*="56, 224, 248"] {
+  color: #397aa5 !important;
+  text-shadow: none !important;
 }
 
 html[data-theme="standard"] [style*="20,24,30"],
@@ -242,4 +253,106 @@ html[data-theme="extra"] [style*="56, 224, 248"] {
 
 html[data-theme="extra"] [style*="linear-gradient(135deg, #38e0f8"] {
   background: linear-gradient(135deg, #f0b90b, #ffe58a) !important;
+}
+
+html[data-theme="extra"] .bot-launch-button {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--oui-gradient-primary-start)),
+    rgb(var(--oui-gradient-primary-end))
+  ) !important;
+  color: rgb(var(--oui-color-primary-contrast)) !important;
+}
+
+html[data-theme="extra"] .bot-launch-button:disabled {
+  opacity: 0.48;
+}
+
+.bot-chart {
+  --bot-chart-area-start: rgba(56, 224, 248, 0.12);
+  --bot-chart-area-end: rgba(56, 224, 248, 0);
+  --bot-chart-grid: rgba(30, 36, 50, 1);
+  --bot-chart-label: rgba(180, 190, 210, 0.65);
+  --bot-chart-accent: rgba(56, 224, 248, 0.7);
+  --bot-chart-crosshair: rgba(56, 224, 248, 0.3);
+  --bot-chart-tooltip-bg: rgba(14, 17, 22, 0.95);
+}
+
+html[data-theme="extra"] .bot-chart {
+  --bot-chart-area-start: rgba(240, 185, 11, 0.2);
+  --bot-chart-area-end: rgba(240, 185, 11, 0);
+  --bot-chart-grid: rgba(234, 236, 239, 0.12);
+  --bot-chart-label: rgba(234, 236, 239, 0.68);
+  --bot-chart-accent: rgba(240, 185, 11, 0.9);
+  --bot-chart-crosshair: rgba(240, 185, 11, 0.4);
+  --bot-chart-tooltip-bg: rgba(17, 20, 24, 0.97);
+  background: #111418;
+  border-radius: 8px;
+}
+
+html[data-theme="standard"] .bot-chart {
+  --bot-chart-area-start: rgba(57, 122, 165, 0.16);
+  --bot-chart-area-end: rgba(57, 122, 165, 0);
+  --bot-chart-grid: rgba(71, 85, 105, 0.16);
+  --bot-chart-label: rgba(71, 85, 105, 0.82);
+  --bot-chart-accent: rgba(57, 122, 165, 0.9);
+  --bot-chart-crosshair: rgba(57, 122, 165, 0.4);
+  --bot-chart-tooltip-bg: rgba(255, 255, 255, 0.98);
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+html[data-theme="standard"] .whitepaper-page {
+  color: #1f2937 !important;
+}
+
+html[data-theme="standard"] .whitepaper-page .oui-text-base-contrast-80,
+html[data-theme="standard"] .whitepaper-page .oui-text-base-contrast {
+  color: #1f2937 !important;
+}
+
+html[data-theme="standard"] .whitepaper-page .oui-text-base-contrast-54,
+html[data-theme="standard"] .whitepaper-page .oui-text-base-contrast-36,
+html[data-theme="standard"]
+  .whitepaper-page
+  [style*="color: rgba(255,255,255"],
+html[data-theme="standard"]
+  .whitepaper-page
+  [style*="color: rgba(255, 255, 255"] {
+  color: #526174 !important;
+}
+
+html[data-theme="standard"] .whitepaper-page [style*="56,224,248"],
+html[data-theme="standard"] .whitepaper-page [style*="56, 224, 248"] {
+  color: #397aa5 !important;
+  text-shadow: none !important;
+}
+
+html[data-theme="standard"]
+  .whitepaper-page
+  [style*="color: #0ecb81"],
+html[data-theme="standard"]
+  .whitepaper-page
+  [style*="color: rgb(14, 203, 129)"] {
+  color: #087f55 !important;
+}
+
+html[data-theme="standard"] .whitepaper-section,
+html[data-theme="standard"] .whitepaper-feature-card {
+  background: #ffffff !important;
+  border-color: #d7e0ea !important;
+}
+
+html[data-theme="standard"] .whitepaper-chain-badge {
+  background: #f1f5f9 !important;
+  border-color: #d7e0ea !important;
+  color: #526174 !important;
+}
+
+html[data-theme="standard"] .whitepaper-roadmap-line {
+  background: #d7e0ea !important;
+}
+
+html[data-theme="standard"] .whitepaper-roadmap-pending {
+  color: #397aa5 !important;
 }

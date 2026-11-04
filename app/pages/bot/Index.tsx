@@ -2816,6 +2816,7 @@ export default function BotPage() {
           </div>
 
           <button
+            className="bot-launch-button"
             onClick={handleCreate}
             disabled={
               creating ||

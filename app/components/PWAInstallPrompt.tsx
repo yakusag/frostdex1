@@ -6,10 +6,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
-function isAndroid() {
-  return /android/i.test(navigator.userAgent);
-}
-
 function isInStandaloneMode() {
   return (
     (window.matchMedia &&
@@ -29,15 +25,13 @@ export default function PWAInstallPrompt() {
     if (isInStandaloneMode()) return;
     if (sessionStorage.getItem("pwa-dismissed")) return;
 
-    if (isAndroid()) {
-      const handler = (e: Event) => {
-        e.preventDefault();
-        setDeferredPrompt(e as BeforeInstallPromptEvent);
-        setShow(true);
-      };
-      window.addEventListener("beforeinstallprompt", handler);
-      return () => window.removeEventListener("beforeinstallprompt", handler);
-    }
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setShow(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
   useEffect(() => {
@@ -48,13 +42,17 @@ export default function PWAInstallPrompt() {
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
       setShow(false);
-      setInstalled(true);
+      if (outcome === "accepted") setInstalled(true);
+    } catch (error) {
+      console.warn("Failed to open the app install prompt:", error);
+      setShow(false);
+    } finally {
+      setDeferredPrompt(null);
     }
-    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {

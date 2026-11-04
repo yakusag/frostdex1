@@ -145,9 +145,13 @@ export default function BotChart({
     ` L${px(n - 1).toFixed(1)},${(PAD.top + hChart).toFixed(1)} L${px(0).toFixed(1)},${(PAD.top + hChart).toFixed(1)} Z`;
 
   return (
-    <div style={{ position: "relative", width: "100%", userSelect: "none" }}>
+    <div
+      className="bot-chart"
+      style={{ position: "relative", width: "100%", userSelect: "none" }}
+    >
       <svg
         ref={svgRef}
+        className="bot-chart__svg"
         viewBox={`0 0 ${W} ${totalH + PAD.top + PAD.bottom}`}
         style={{ width: "100%", height: height, display: "block" }}
         onMouseMove={handleMouseMove}
@@ -155,8 +159,8 @@ export default function BotChart({
       >
         <defs>
           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(56,224,248,0.12)" />
-            <stop offset="100%" stopColor="rgba(56,224,248,0)" />
+            <stop offset="0%" stopColor="var(--bot-chart-area-start)" />
+            <stop offset="100%" stopColor="var(--bot-chart-area-end)" />
           </linearGradient>
           <clipPath id="chartClip">
             <rect x={PAD.left} y={PAD.top} width={innerW} height={hChart} />
@@ -173,14 +177,14 @@ export default function BotChart({
                 y1={y}
                 x2={W - PAD.right}
                 y2={y}
-                stroke="rgba(30,36,50,1)"
+                stroke="var(--bot-chart-grid)"
                 strokeWidth="1"
               />
               <text
                 x={W - PAD.right + 6}
                 y={y + 4}
                 fontSize="10"
-                fill="rgba(180,190,210,0.4)"
+                fill="var(--bot-chart-label)"
                 fontFamily="Manrope, sans-serif"
               >
                 {formatPrice(p)}
@@ -229,7 +233,7 @@ export default function BotChart({
           <path
             d={emaPath}
             fill="none"
-            stroke="rgba(240,185,11,0.7)"
+            stroke="var(--bot-chart-accent)"
             strokeWidth="1.5"
           />
 
@@ -271,7 +275,7 @@ export default function BotChart({
               y1={PAD.top + hChart + 6}
               x2={W - PAD.right}
               y2={PAD.top + hChart + 6}
-              stroke="rgba(30,36,50,1)"
+              stroke="var(--bot-chart-grid)"
               strokeWidth="1"
             />
             {candles.map((c, i) => {
@@ -299,7 +303,7 @@ export default function BotChart({
               y1={PAD.top}
               x2={tooltip.x}
               y2={PAD.top + hChart}
-              stroke="rgba(56,224,248,0.3)"
+              stroke="var(--bot-chart-crosshair)"
               strokeWidth="1"
               strokeDasharray="4,3"
             />
@@ -307,7 +311,7 @@ export default function BotChart({
               cx={tooltip.x}
               cy={tooltip.y}
               r="3"
-              fill="#38e0f8"
+              fill="var(--bot-chart-accent)"
               opacity="0.8"
             />
           </g>
@@ -326,19 +330,24 @@ export default function BotChart({
                 position: "absolute",
                 top: 8,
                 left: 12,
-                background: "rgba(14,17,22,0.95)",
-                border: "1px solid rgba(30,36,50,1)",
+                background: "var(--bot-chart-tooltip-bg)",
+                border: "1px solid var(--bot-chart-grid)",
                 borderRadius: 6,
                 padding: "8px 12px",
                 fontSize: 11,
                 fontFamily: "Manrope, sans-serif",
-                color: "#eaecef",
+                color: "var(--oui-color-base-foreground)",
                 pointerEvents: "none",
                 lineHeight: 1.7,
                 minWidth: 140,
               }}
             >
-              <div style={{ color: "rgba(180,190,210,0.5)", marginBottom: 4 }}>
+              <div
+                style={{
+                  color: "var(--bot-chart-label)",
+                  marginBottom: 4,
+                }}
+              >
                 {new Date(c.t).toLocaleString()}
               </div>
               <div>
