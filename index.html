@@ -83,11 +83,14 @@
 
       /* ── logo ── */
       #splash-flake {
+        display: block;
         width: auto;
         height: 300px;
         max-width: 320px;
+        align-self: center;
         margin-bottom: 32px;
         object-fit: contain;
+        object-position: center;
         filter: drop-shadow(0 0 40px rgba(56,224,248,0.55))
                 drop-shadow(0 0 16px rgba(14,203,129,0.45));
         animation: flake-appear 0.7s cubic-bezier(0.34,1.56,0.64,1) both,
@@ -131,6 +134,20 @@
         background-clip: text;
         animation: name-appear 0.6s ease 0.9s both;
       }
+      html[data-theme="extra"] #splash-motto {
+        background: linear-gradient(
+          90deg,
+          rgb(var(--oui-gradient-brand-start)) 0%,
+          rgb(var(--oui-gradient-brand-end)) 100%
+        );
+      }
+
+      /* Installed apps should open on the site, not on the web splash screen. */
+      @media (display-mode: standalone), (display-mode: fullscreen) {
+        #splash {
+          display: none !important;
+        }
+      }
 
       /* ── falling snowflakes ── */
       #splash-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
@@ -166,6 +183,9 @@
     <script>
       /* generate falling snowflakes */
       (function () {
+        if (window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) {
+          return;
+        }
         var container = document.getElementById('splash-particles');
         var flakes = ['❄', '❅', '❆', '✦', '·'];
         for (var i = 0; i < 22; i++) {

@@ -87,12 +87,13 @@ export default function BotChart({
   if (!candles.length) {
     return (
       <div
+        className="bot-chart"
         style={{
           height,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "rgba(180,190,210,0.3)",
+          color: "var(--bot-chart-label)",
           fontSize: 13,
         }}
       >

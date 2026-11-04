@@ -106,8 +106,11 @@ export default function PWAInstallPrompt() {
             src="/pwa-icon-192.png"
             alt="FrostDex"
             style={{
+              display: "block",
               width: "48px",
               height: "48px",
+              objectFit: "contain",
+              objectPosition: "center",
               borderRadius: "12px",
               flexShrink: 0,
             }}
