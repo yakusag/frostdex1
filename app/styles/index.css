@@ -110,43 +110,41 @@ tr:hover td {
   }
 }
 
-@property --frost-orbit-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0turn;
+@keyframes frost-edge-sweep {
+  to {
+    transform: translateX(350%);
+  }
 }
 
-@keyframes frost-orbit {
-  to {
-    --frost-orbit-angle: 1turn;
-  }
+.market-ticker-bar::before,
+.market-ticker-bar::after,
+.oui-scaffold-topNavbar::before,
+.oui-scaffold-topNavbar::after {
+  position: absolute;
+  z-index: 20;
+  left: -40%;
+  width: 40%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--oui-color-primary)),
+    transparent
+  );
+  content: "";
+  pointer-events: none;
+  animation: frost-edge-sweep 3.2s linear infinite;
+}
+
+.market-ticker-bar::before,
+.oui-scaffold-topNavbar::before {
+  top: 0;
 }
 
 .market-ticker-bar::after,
 .oui-scaffold-topNavbar::after {
-  position: absolute;
-  z-index: 20;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--frost-orbit-angle),
-    transparent 0deg 300deg,
-    rgb(var(--oui-color-primary) / 0.12) 324deg,
-    rgb(var(--oui-color-primary)) 345deg,
-    transparent 360deg
-  );
-  content: "";
-  pointer-events: none;
-  animation: frost-orbit 3.2s linear infinite;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
+  bottom: 0;
+  animation-delay: -1.6s;
 }
 
 /* ─── modals & dialogs ─────────────────────────────────────────────── */
