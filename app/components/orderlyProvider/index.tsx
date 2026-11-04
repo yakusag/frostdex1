@@ -67,33 +67,46 @@ const getAvailableLanguages = (): string[] => {
     : ["en"];
 };
 
+const normalizeAvailableLanguage = (language: string): LocaleCode => {
+  const availableLanguages = getAvailableLanguages();
+  const normalized = language.toLowerCase();
+  const baseLanguage = normalized.split(/[-_]/, 1)[0];
+
+  if (availableLanguages.includes(normalized)) return normalized;
+  if (availableLanguages.includes(baseLanguage)) return baseLanguage;
+  return LocaleEnum.en;
+};
+
 const getDefaultLanguage = (): LocaleCode => {
   const seoConfig = getSEOConfig();
-  const userLanguage = getUserLanguage();
-  const availableLanguages = getAvailableLanguages();
 
   if (typeof window !== "undefined") {
     const urlParams = new URLSearchParams(window.location.search);
     const langParam = urlParams.get("lang");
-    if (langParam && availableLanguages.includes(langParam)) {
-      return langParam as LocaleCode;
+    if (langParam) {
+      const language = normalizeAvailableLanguage(langParam);
+      if (language !== LocaleEnum.en || langParam === LocaleEnum.en) {
+        return language;
+      }
     }
 
     const savedLanguage = localStorage.getItem("frostdex_lang");
-    if (savedLanguage && availableLanguages.includes(savedLanguage)) {
-      return savedLanguage as LocaleCode;
+    if (savedLanguage) {
+      const language = normalizeAvailableLanguage(savedLanguage);
+      if (language !== LocaleEnum.en || savedLanguage === LocaleEnum.en) {
+        return language;
+      }
     }
   }
 
-  if (seoConfig.language && availableLanguages.includes(seoConfig.language)) {
-    return seoConfig.language as LocaleCode;
+  if (seoConfig.language) {
+    const language = normalizeAvailableLanguage(seoConfig.language);
+    if (language !== LocaleEnum.en || seoConfig.language === LocaleEnum.en) {
+      return language;
+    }
   }
 
-  if (availableLanguages.includes(userLanguage)) {
-    return userLanguage as LocaleCode;
-  }
-
-  return (availableLanguages[0] || "en") as LocaleCode;
+  return normalizeAvailableLanguage(getUserLanguage());
 };
 
 const PrivyConnector = lazy(
@@ -265,6 +278,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
       resources={resources}
       locale={activeLanguage}
       languages={filteredLanguages}
+      convertDetectedLanguage={normalizeAvailableLanguage}
     >
       <Suspense fallback={<LoadingSpinner />}>{walletConnector}</Suspense>
     </LocaleProvider>

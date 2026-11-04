@@ -111,14 +111,20 @@ tr:hover td {
 }
 
 @keyframes frost-edge-sweep {
+  from {
+    background-position: 0% center;
+  }
   to {
-    transform: translateX(350%);
+    background-position: 100% center;
   }
 }
 
 @keyframes frost-edge-sweep-reverse {
+  from {
+    background-position: 100% center;
+  }
   to {
-    transform: translateX(-350%);
+    background-position: 0% center;
   }
 }
 
@@ -128,8 +134,8 @@ tr:hover td {
 .oui-scaffold-topNavbar::after {
   position: absolute;
   z-index: 20;
-  left: -40%;
-  width: 40%;
+  right: 0;
+  left: 0;
   height: 2px;
   background: linear-gradient(
     90deg,
@@ -137,6 +143,8 @@ tr:hover td {
     rgb(var(--oui-color-primary)),
     transparent
   );
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
   content: "";
   pointer-events: none;
   animation: frost-edge-sweep 3.2s linear infinite;
@@ -149,8 +157,6 @@ tr:hover td {
 
 .market-ticker-bar::after,
 .oui-scaffold-topNavbar::after {
-  right: -40%;
-  left: auto;
   bottom: 0;
   animation-name: frost-edge-sweep-reverse;
 }
