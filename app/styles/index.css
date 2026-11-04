@@ -94,37 +94,9 @@ tr:hover td {
 
 :where(input, textarea, [contenteditable="true"]):focus {
   caret-color: rgb(var(--oui-color-primary));
-  border-color: rgb(var(--oui-color-primary)) !important;
-  outline: 2px solid rgb(var(--oui-color-primary) / 0.8) !important;
-  outline-offset: 3px !important;
-  box-shadow:
-    0 0 0 4px rgb(var(--oui-color-primary) / 0.22),
-    0 0 18px rgb(var(--oui-color-primary) / 0.42);
-  animation:
-    themed-field-glow 1.1s ease-in-out infinite alternate,
-    themed-caret-blink 1s steps(1, end) infinite;
-}
-
-/* The order ticket quantity field keeps the typing caret without the global focus frame. */
-input[id="order_quantity_input"]:focus {
   outline: none !important;
   box-shadow: none !important;
-  animation: themed-caret-blink 1s steps(1, end) infinite !important;
-}
-
-@keyframes themed-field-glow {
-  from {
-    outline-color: rgb(var(--oui-color-primary) / 0.65);
-    box-shadow:
-      0 0 0 3px rgb(var(--oui-color-primary) / 0.18),
-      0 0 12px rgb(var(--oui-color-primary) / 0.3);
-  }
-  to {
-    outline-color: rgb(var(--oui-color-primary));
-    box-shadow:
-      0 0 0 5px rgb(var(--oui-color-primary) / 0.32),
-      0 0 24px rgb(var(--oui-color-primary) / 0.55);
-  }
+  animation: themed-caret-blink 1s steps(1, end) infinite;
 }
 
 @keyframes themed-caret-blink {
