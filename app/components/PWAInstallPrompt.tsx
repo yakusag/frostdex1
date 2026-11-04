@@ -103,7 +103,7 @@ export default function PWAInstallPrompt() {
           }}
         >
           <img
-            src="/favicon.webp"
+            src="/pwa-icon-192.png"
             alt="FrostDex"
             style={{
               width: "48px",
