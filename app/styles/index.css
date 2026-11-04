@@ -105,6 +105,13 @@ tr:hover td {
     themed-caret-blink 1s steps(1, end) infinite;
 }
 
+/* The order ticket quantity field keeps the typing caret without the global focus frame. */
+input[id="order_quantity_input"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  animation: themed-caret-blink 1s steps(1, end) infinite !important;
+}
+
 @keyframes themed-field-glow {
   from {
     outline-color: rgb(var(--oui-color-primary) / 0.65);
