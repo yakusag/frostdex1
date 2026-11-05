@@ -10,18 +10,76 @@ export interface SignalParameters {
   emaSlow?: number;
 }
 
-export interface StrategyDecision {
-  buy: boolean;
-  sell: boolean;
+export interface SniperAlert {
+  kind: "PUMP" | "DUMP";
+  symbol: string;
+  price: number;
+  changePct: number;
+  volumeRatio: number;
+  candleTime: number;
 }
 
-export function combineStrategyDecisions(
-  decisions: [StrategyDecision, StrategyDecision, StrategyDecision],
-): StrategyDecision {
-  return {
-    buy: decisions.filter((decision) => decision.buy).length >= 2,
-    sell: decisions.filter((decision) => decision.sell).length >= 2,
-  };
+export const SNIPER_DEFAULT_THRESHOLDS = {
+  pumpPct: 8,
+  dumpPct: 5,
+  volumeMultiplier: 3,
+};
+
+export function getSniperAlert(
+  symbol: string,
+  candles: Candle[],
+  index: number,
+  thresholds = SNIPER_DEFAULT_THRESHOLDS,
+): SniperAlert | null {
+  if (index < 20 || index >= candles.length) return null;
+
+  const current = candles[index];
+  const baseline = candles[index - 4]?.c;
+  const averageVolume =
+    candles
+      .slice(index - 20, index)
+      .reduce((total, candle) => total + Math.max(0, candle.v), 0) / 20;
+  if (
+    !Number.isFinite(baseline) ||
+    baseline <= 0 ||
+    !Number.isFinite(current.v) ||
+    averageVolume <= 0
+  ) {
+    return null;
+  }
+
+  const volumeRatio = current.v / averageVolume;
+  if (volumeRatio < thresholds.volumeMultiplier) return null;
+
+  const changePct = ((current.c - baseline) / baseline) * 100;
+  const recentHigh = Math.max(
+    ...candles.slice(index - 4, index + 1).map((candle) => candle.h),
+  );
+  const drawdownPct = ((current.c - recentHigh) / recentHigh) * 100;
+
+  if (drawdownPct <= -thresholds.dumpPct && current.c < candles[index - 1].c) {
+    return {
+      kind: "DUMP",
+      symbol,
+      price: current.c,
+      changePct: drawdownPct,
+      volumeRatio,
+      candleTime: current.t,
+    };
+  }
+
+  if (changePct >= thresholds.pumpPct) {
+    return {
+      kind: "PUMP",
+      symbol,
+      price: current.c,
+      changePct,
+      volumeRatio,
+      candleTime: current.t,
+    };
+  }
+
+  return null;
 }
 
 export function computeRSI(candles: Candle[], period = 14): number[] {

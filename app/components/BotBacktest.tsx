@@ -2,18 +2,18 @@ import { useState, useCallback, useEffect } from "react";
 import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 import {
   BOT_TAKER_FEE_RATE,
-  combineStrategyDecisions,
   computeATR,
   computeEMA,
   computeRSI,
   getDcaIntervalMs,
   getGridDecision,
+  getSniperAlert,
   getSignalDecisionFromIndicators,
 } from "@/utils/bot-strategy";
 import { normalizeTrendParameter } from "@/utils/trend-strategy";
 import BotChart, { Candle, Signal } from "./BotChart";
 
-type Strategy = "grid" | "dca" | "signal" | "trend";
+type Strategy = "grid" | "dca" | "signal" | "trend" | "sniper";
 type Timeframe = "15m" | "1h" | "4h" | "1d";
 
 interface BacktestResult {
@@ -168,7 +168,7 @@ export function runBacktest(
         cash > 0;
       shouldSell = position > 0 && c.c > entryPrice * 1.05;
     } else if (strategy === "trend") {
-      const signalDecision = getSignalDecisionFromIndicators(
+      const decision = getSignalDecisionFromIndicators(
         i,
         {
           rsiPeriod: params.rsiPeriod || 14,
@@ -182,38 +182,20 @@ export function runBacktest(
         emaFast,
         emaSlow,
       );
-      const gridDecision = getGridDecision(
-        candles,
-        i,
-        params.grids || 10,
-        position > 0,
-        params.lower,
-        params.upper,
-      );
-      const dcaDecision = {
-        buy:
-          position === 0 &&
-          cash > 0 &&
-          c.t - lastDcaBuyTime >= (params.intervalMs || getDcaIntervalMs("1h")),
-        sell: position > 0 && c.c > entryPrice * 1.05,
-      };
-      const combinedDecision = combineStrategyDecisions([
-        dcaDecision,
-        gridDecision,
-        signalDecision,
-      ]);
-
-      if (position === 0) {
-        shouldBuy = combinedDecision.buy;
-      } else if (c.l <= stopPrice) {
+      if (position > 0 && c.l <= stopPrice) {
         shouldSell = true;
         exitPrice = stopPrice;
-      } else if (c.h >= targetPrice) {
+      } else if (position > 0 && c.h >= targetPrice) {
         shouldSell = true;
         exitPrice = targetPrice;
       } else {
-        shouldSell = combinedDecision.sell;
+        shouldBuy = decision.buy;
+        shouldSell = decision.sell;
       }
+    } else if (strategy === "sniper") {
+      const alert = getSniperAlert("BACKTEST", candles, i);
+      shouldBuy = position === 0 && alert?.kind === "PUMP";
+      shouldSell = position > 0 && alert?.kind === "DUMP";
     }
 
     if (position > 0 && selectedLeverage > 1) {
@@ -233,8 +215,8 @@ export function runBacktest(
         const quantity =
           Number.isFinite(stopDistance) && stopDistance > 0
             ? Math.min(
-                (Math.max(0, portfolioValue) * 0.01) / stopDistance,
-                (cash * 0.25 * selectedLeverage) / c.c,
+                (investment * 0.01) / stopDistance,
+                (investment * 0.25 * selectedLeverage) / c.c,
               )
             : 0;
         if (quantity > 0) {
@@ -242,7 +224,6 @@ export function runBacktest(
           if (openPosition(margin, c.c)) {
             stopPrice = c.c - stopDistance;
             targetPrice = c.c + stopDistance * trendRewardRisk;
-            lastDcaBuyTime = c.t;
             signals.push({ t: c.t, price: c.c, side: "BUY" });
           }
         }
@@ -253,7 +234,9 @@ export function runBacktest(
                 cash / (1 + BOT_TAKER_FEE_RATE),
                 params.amountPerBuy || investment * 0.1,
               )
-            : Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
+            : strategy === "sniper"
+              ? Math.min(cash * 0.25, investment * 0.25)
+              : Math.min(cash * 0.95, params.amountPerBuy || cash * 0.5);
         if (openPosition(margin, c.c)) {
           if (strategy === "dca") lastDcaBuyTime = c.t;
           signals.push({ t: c.t, price: c.c, side: "BUY" });
@@ -404,7 +387,9 @@ export default function BotBacktest({
   defaultSymbol = "BTC",
 }: Props) {
   const [symbol, setSymbol] = useState(defaultSymbol);
-  const [tf, setTf] = useState<Timeframe>("1h");
+  const [tf, setTf] = useState<Timeframe>(
+    defaultStrategy === "sniper" ? "15m" : "1h",
+  );
   const [strategy, setStrategy] = useState<Strategy>(defaultStrategy);
   const [investment, setInvestment] = useState(1000);
   const [leverage, setLeverage] = useState(1);
@@ -468,27 +453,17 @@ export default function BotBacktest({
                   intervalMs: getDcaIntervalMs(dcaInterval),
                   amountPerBuy: dcaAmount,
                 }
-              : {
-                  stopAtr: trendStopAtr,
-                  rewardRisk: trendRewardRisk,
-                  intervalMs: getDcaIntervalMs(dcaInterval),
-                  grids,
-                  ...(gridLowerBound.trim() &&
-                  gridUpperBound.trim() &&
-                  Number.isFinite(Number(gridLowerBound)) &&
-                  Number.isFinite(Number(gridUpperBound)) &&
-                  Number(gridLowerBound) < Number(gridUpperBound)
-                    ? {
-                        lower: Number(gridLowerBound),
-                        upper: Number(gridUpperBound),
-                      }
-                    : {}),
-                  rsiPeriod: signalRsiPeriod,
-                  rsiOversold,
-                  rsiOverbought,
-                  emaFast,
-                  emaSlow,
-                };
+              : strategy === "trend"
+                ? {
+                    stopAtr: trendStopAtr,
+                    rewardRisk: trendRewardRisk,
+                    rsiPeriod: signalRsiPeriod,
+                    rsiOversold,
+                    rsiOverbought,
+                    emaFast,
+                    emaSlow,
+                  }
+                : {};
       const res = runBacktest(
         snapshot,
         strategy,
@@ -572,12 +547,18 @@ export default function BotBacktest({
               <button
                 key={t}
                 onClick={() => setTf(t)}
+                disabled={strategy === "sniper" && t !== "15m"}
                 style={{
                   ...btnSm,
                   background:
                     tf === t ? "rgba(56,224,248,0.15)" : "rgb(20,24,30)",
                   border: `1px solid ${tf === t ? "rgba(56,224,248,0.4)" : "rgba(30,36,50,1)"}`,
                   color: tf === t ? "#38e0f8" : "rgba(180,190,210,0.6)",
+                  opacity: strategy === "sniper" && t !== "15m" ? 0.4 : 1,
+                  cursor:
+                    strategy === "sniper" && t !== "15m"
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 {t}
@@ -587,23 +568,35 @@ export default function BotBacktest({
         </div>
         <div>
           <div style={labelSt}>Strategy</div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {(["grid", "dca", "signal", "trend"] as Strategy[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStrategy(s)}
-                style={{
-                  ...btnSm,
-                  background:
-                    strategy === s ? "rgba(56,224,248,0.12)" : "rgb(20,24,30)",
-                  border: `1px solid ${strategy === s ? "rgba(56,224,248,0.35)" : "rgba(30,36,50,1)"}`,
-                  color: strategy === s ? "#38e0f8" : "rgba(180,190,210,0.55)",
-                  textTransform: "capitalize",
-                }}
-              >
-                {s}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {(["grid", "dca", "signal", "trend", "sniper"] as Strategy[]).map(
+              (s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setStrategy(s);
+                    if (s === "sniper") setTf("15m");
+                  }}
+                  style={{
+                    ...btnSm,
+                    background:
+                      strategy === s
+                        ? "rgba(56,224,248,0.12)"
+                        : "rgb(20,24,30)",
+                    border: `1px solid ${strategy === s ? "rgba(56,224,248,0.35)" : "rgba(30,36,50,1)"}`,
+                    color:
+                      strategy === s ? "#38e0f8" : "rgba(180,190,210,0.55)",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {s === "trend"
+                    ? "Risk-Managed Trend"
+                    : s === "sniper"
+                      ? "FrostDex Sniper"
+                      : s}
+                </button>
+              ),
+            )}
           </div>
         </div>
         <div>
@@ -838,87 +831,36 @@ export default function BotBacktest({
               max={5}
               onChange={setTrendRewardRisk}
             />
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                fontSize: 11,
-                color: "rgba(180,190,210,0.5)",
-              }}
-            >
-              DCA Vote Interval
-              <select
-                value={dcaInterval}
-                onChange={(event) => setDcaInterval(event.target.value)}
-                style={selectSt}
-              >
-                {["15m", "30m", "1h", "4h", "8h", "12h", "1d", "3d", "1w"].map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
             <ParamInput
-              label="Grid Count"
-              value={grids}
-              min={3}
-              max={200}
-              onChange={setGrids}
-            />
-            <label style={labelSt}>
-              Grid Lower (optional)
-              <input
-                type="number"
-                value={gridLowerBound}
-                onChange={(event) => setGridLowerBound(event.target.value)}
-                placeholder="Auto"
-                style={selectSt}
-              />
-            </label>
-            <label style={labelSt}>
-              Grid Upper (optional)
-              <input
-                type="number"
-                value={gridUpperBound}
-                onChange={(event) => setGridUpperBound(event.target.value)}
-                placeholder="Auto"
-                style={selectSt}
-              />
-            </label>
-            <ParamInput
-              label="Signal RSI Period"
+              label="RSI Period"
               value={signalRsiPeriod}
               min={2}
               max={50}
               onChange={setSignalRsiPeriod}
             />
             <ParamInput
-              label="Signal RSI Oversold"
+              label="RSI Oversold"
               value={rsiOversold}
               min={10}
               max={50}
               onChange={setRsiOversold}
             />
             <ParamInput
-              label="Signal RSI Overbought"
+              label="RSI Overbought"
               value={rsiOverbought}
               min={50}
               max={90}
               onChange={setRsiOverbought}
             />
             <ParamInput
-              label="Signal EMA Fast"
+              label="EMA Fast"
               value={emaFast}
               min={3}
               max={50}
               onChange={setEmaFast}
             />
             <ParamInput
-              label="Signal EMA Slow"
+              label="EMA Slow"
               value={emaSlow}
               min={5}
               max={200}
@@ -931,9 +873,21 @@ export default function BotBacktest({
                 color: "rgba(180,190,210,0.45)",
               }}
             >
-              2-of-3 DCA/Grid/Signal votes · 1% risk · max 25% exposure
+              RSI/EMA entry · ATR stop/target · 1% risk · max 25% exposure
             </span>
           </>
+        )}
+        {strategy === "sniper" && (
+          <span
+            style={{
+              alignSelf: "flex-end",
+              fontSize: 11,
+              color: "rgba(180,190,210,0.55)",
+            }}
+          >
+            Same as live Sniper: 8% pump / 5% drawdown with 3× volume. Backtest
+            runs the selected symbol; live mode scans all markets.
+          </span>
         )}
       </div>
 

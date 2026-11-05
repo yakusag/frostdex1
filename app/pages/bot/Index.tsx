@@ -22,8 +22,10 @@ import {
   computeATR,
   getDcaIntervalMs,
   getGridDecision,
+  getSniperAlert,
   getSignalDecision,
 } from "@/utils/bot-strategy";
+import type { SniperAlert } from "@/utils/bot-strategy";
 import {
   getLastClosedTrendCandleIndex,
   normalizeTrendParameter,
@@ -33,15 +35,6 @@ const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
 type BotStrategy = "grid" | "dca" | "signal" | "trend" | "sniper";
 type BotStatus = "running" | "stopped" | "paused";
-
-interface SniperAlert {
-  kind: "PUMP" | "DUMP";
-  symbol: string;
-  price: number;
-  changePct: number;
-  volumeRatio: number;
-  candleTime: number;
-}
 
 interface SniperMarketSnapshot {
   alerts: SniperAlert[];
@@ -389,74 +382,12 @@ const STRATEGY_INFO: Record<
   },
 };
 
-const SNIPER_DEFAULT_THRESHOLDS = {
-  pumpPct: 8,
-  dumpPct: 5,
-  volumeMultiplier: 3,
-};
 const SNIPER_CANDLE_INTERVAL_MS = 15 * 60 * 1000;
 const SNIPER_SCAN_CACHE_MS = 60 * 1000;
 let sniperMarketSnapshotCache:
   | { snapshot: SniperMarketSnapshot; expiresAt: number }
   | undefined;
 let sniperMarketScanInFlight: Promise<SniperMarketSnapshot> | undefined;
-
-function getSniperAlert(
-  symbol: string,
-  candles: Candle[],
-  index: number,
-  thresholds: { pumpPct: number; dumpPct: number; volumeMultiplier: number },
-): SniperAlert | null {
-  if (index < 20 || index >= candles.length) return null;
-
-  const current = candles[index];
-  const baseline = candles[index - 4]?.c;
-  const averageVolume =
-    candles
-      .slice(index - 20, index)
-      .reduce((total, candle) => total + Math.max(0, candle.v), 0) / 20;
-  if (
-    !Number.isFinite(baseline) ||
-    baseline <= 0 ||
-    !Number.isFinite(current.v) ||
-    averageVolume <= 0
-  ) {
-    return null;
-  }
-
-  const volumeRatio = current.v / averageVolume;
-  if (volumeRatio < thresholds.volumeMultiplier) return null;
-
-  const changePct = ((current.c - baseline) / baseline) * 100;
-  const recentHigh = Math.max(
-    ...candles.slice(index - 4, index + 1).map((candle) => candle.h),
-  );
-  const drawdownPct = ((current.c - recentHigh) / recentHigh) * 100;
-
-  if (drawdownPct <= -thresholds.dumpPct && current.c < candles[index - 1].c) {
-    return {
-      kind: "DUMP",
-      symbol,
-      price: current.c,
-      changePct: drawdownPct,
-      volumeRatio,
-      candleTime: current.t,
-    };
-  }
-
-  if (changePct >= thresholds.pumpPct) {
-    return {
-      kind: "PUMP",
-      symbol,
-      price: current.c,
-      changePct,
-      volumeRatio,
-      candleTime: current.t,
-    };
-  }
-
-  return null;
-}
 
 function getCurrentSniperAlert(
   bot: BotConfig,
@@ -556,12 +487,7 @@ async function scanOrderlyMarkets(): Promise<SniperMarketSnapshot> {
           if (lastClosed < 20) throw new Error("No closed candles available");
 
           candleTime = Math.max(candleTime, candles[lastClosed].t);
-          const alert = getSniperAlert(
-            symbol,
-            candles,
-            lastClosed,
-            SNIPER_DEFAULT_THRESHOLDS,
-          );
+          const alert = getSniperAlert(symbol, candles, lastClosed);
           if (alert) alerts.push(alert);
         } catch (error) {
           failedMarkets++;
