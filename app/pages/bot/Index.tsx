@@ -20,7 +20,6 @@ import type { Candle } from "@/components/BotChart";
 import {
   BOT_TAKER_FEE_RATE,
   computeATR,
-  combineStrategyDecisions,
   getDcaIntervalMs,
   getGridDecision,
   getSignalDecision,
@@ -32,8 +31,23 @@ import {
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
-type BotStrategy = "grid" | "dca" | "signal" | "trend";
+type BotStrategy = "grid" | "dca" | "signal" | "trend" | "sniper";
 type BotStatus = "running" | "stopped" | "paused";
+
+interface SniperAlert {
+  kind: "PUMP" | "DUMP";
+  symbol: string;
+  price: number;
+  changePct: number;
+  volumeRatio: number;
+  candleTime: number;
+}
+
+interface SniperMarketSnapshot {
+  alerts: SniperAlert[];
+  marketsScanned: number;
+  candleTime: number;
+}
 
 interface BotConfig {
   id: string;
@@ -56,6 +70,9 @@ interface BotConfig {
   paperRealizedPnl?: number;
   paperLastCandle?: number;
   marketDataStatus?: "ready" | "unavailable";
+  sniperAlert?: SniperAlert | null;
+  sniperLastCandle?: number;
+  sniperMarketCount?: number;
 }
 
 interface BotPosition {
@@ -359,11 +376,305 @@ const STRATEGY_INFO: Record<
   },
   trend: {
     label: "Risk-Managed Trend",
-    desc: "Combines DCA, Grid, and RSI/EMA signals with 1% risk sizing, an ATR stop, and a 2.5R target.",
+    desc: "Uses RSI/EMA entries with 1% risk sizing, an ATR stop, and a configurable reward target.",
     icon: "↗",
     color: "#ff8a65",
   },
+  sniper: {
+    label: "FrostDex Sniper",
+    desc: "Trades pump/dump signals in simulation or live mode, with a 25% allocation cap per entry.",
+    icon: "◎",
+    color: "#ff5b73",
+  },
 };
+
+const SNIPER_DEFAULT_THRESHOLDS = {
+  pumpPct: 8,
+  dumpPct: 5,
+  volumeMultiplier: 3,
+};
+const SNIPER_CANDLE_INTERVAL_MS = 15 * 60 * 1000;
+const SNIPER_SCAN_CACHE_MS = 60 * 1000;
+let sniperMarketSnapshotCache:
+  | { snapshot: SniperMarketSnapshot; expiresAt: number }
+  | undefined;
+let sniperMarketScanInFlight: Promise<SniperMarketSnapshot> | undefined;
+
+function getSniperAlert(
+  symbol: string,
+  candles: Candle[],
+  index: number,
+  thresholds: { pumpPct: number; dumpPct: number; volumeMultiplier: number },
+): SniperAlert | null {
+  if (index < 20 || index >= candles.length) return null;
+
+  const current = candles[index];
+  const baseline = candles[index - 4]?.c;
+  const averageVolume =
+    candles
+      .slice(index - 20, index)
+      .reduce((total, candle) => total + Math.max(0, candle.v), 0) / 20;
+  if (
+    !Number.isFinite(baseline) ||
+    baseline <= 0 ||
+    !Number.isFinite(current.v) ||
+    averageVolume <= 0
+  ) {
+    return null;
+  }
+
+  const volumeRatio = current.v / averageVolume;
+  if (volumeRatio < thresholds.volumeMultiplier) return null;
+
+  const changePct = ((current.c - baseline) / baseline) * 100;
+  const recentHigh = Math.max(
+    ...candles.slice(index - 4, index + 1).map((candle) => candle.h),
+  );
+  const drawdownPct = ((current.c - recentHigh) / recentHigh) * 100;
+
+  if (drawdownPct <= -thresholds.dumpPct && current.c < candles[index - 1].c) {
+    return {
+      kind: "DUMP",
+      symbol,
+      price: current.c,
+      changePct: drawdownPct,
+      volumeRatio,
+      candleTime: current.t,
+    };
+  }
+
+  if (changePct >= thresholds.pumpPct) {
+    return {
+      kind: "PUMP",
+      symbol,
+      price: current.c,
+      changePct,
+      volumeRatio,
+      candleTime: current.t,
+    };
+  }
+
+  return null;
+}
+
+function getCurrentSniperAlert(
+  bot: BotConfig,
+  candles: Candle[],
+  index: number,
+) {
+  const alert = bot.sniperAlert;
+  return alert &&
+    alert.symbol === bot.symbol &&
+    alert.candleTime === candles[index]?.t
+    ? alert
+    : null;
+}
+
+async function scanOrderlyMarkets(): Promise<SniperMarketSnapshot> {
+  const cachedSnapshot = sniperMarketSnapshotCache;
+  if (cachedSnapshot && cachedSnapshot.expiresAt > Date.now()) {
+    return cachedSnapshot.snapshot;
+  }
+  if (sniperMarketScanInFlight) return sniperMarketScanInFlight;
+
+  const scan = (async () => {
+    const marketsResponse = await fetch(
+      "https://api.orderly.org/v1/public/futures",
+      { cache: "no-store" },
+    );
+    if (!marketsResponse.ok) {
+      throw new Error(
+        `Unable to load Orderly markets (${marketsResponse.status})`,
+      );
+    }
+
+    const marketBody = (await marketsResponse.json()) as {
+      data?: { rows?: unknown[] };
+    };
+    const rows = marketBody.data?.rows ?? [];
+    const symbols = [
+      ...new Set(
+        rows
+          .filter(
+            (row): row is Record<string, unknown> =>
+              !!row &&
+              typeof row === "object" &&
+              typeof (row as Record<string, unknown>).symbol === "string" &&
+              /^PERP_.+_(USDC|USDT)(?:_|$)/.test(
+                String((row as Record<string, unknown>).symbol),
+              ) &&
+              (row as Record<string, unknown>).status !== "DELISTING",
+          )
+          .map((row) => String(row.symbol)),
+      ),
+    ];
+    if (symbols.length === 0) {
+      throw new Error("Orderly returned no active USDC/USDT perpetual markets");
+    }
+
+    const to = Math.floor(Date.now() / 1000);
+    const from = to - 30 * 60 * 60;
+    let failedMarkets = 0;
+    let candleTime = 0;
+    let nextIndex = 0;
+    const alerts: SniperAlert[] = [];
+    const worker = async () => {
+      while (nextIndex < symbols.length) {
+        const symbol = symbols[nextIndex++];
+        try {
+          const response = await fetch(
+            `https://api.orderly.org/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=15&from=${from}&to=${to}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) {
+            throw new Error(`Market history unavailable (${response.status})`);
+          }
+
+          const data = (await response.json()) as OrderlyHistory;
+          const length = Math.min(
+            data.t?.length ?? 0,
+            data.o?.length ?? 0,
+            data.h?.length ?? 0,
+            data.l?.length ?? 0,
+            data.c?.length ?? 0,
+            data.v?.length ?? 0,
+          );
+          if (data.s !== "ok" || length < 22) {
+            throw new Error("Insufficient market history");
+          }
+
+          const candles: Candle[] = Array.from({ length }, (_, index) => ({
+            t: (data.t![index] ?? 0) * 1000,
+            o: data.o![index] ?? 0,
+            h: data.h![index] ?? 0,
+            l: data.l![index] ?? 0,
+            c: data.c![index] ?? 0,
+            v: data.v![index] ?? 0,
+          })).filter((candle) => candle.t > 0 && candle.c > 0);
+          const lastClosed = getLastClosedTrendCandleIndex(candles);
+          if (lastClosed < 20) throw new Error("No closed candles available");
+
+          candleTime = Math.max(candleTime, candles[lastClosed].t);
+          const alert = getSniperAlert(
+            symbol,
+            candles,
+            lastClosed,
+            SNIPER_DEFAULT_THRESHOLDS,
+          );
+          if (alert) alerts.push(alert);
+        } catch (error) {
+          failedMarkets++;
+          console.warn(`FrostDex Sniper could not scan ${symbol}:`, error);
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(6, symbols.length) }, worker),
+    );
+    if (candleTime === 0) {
+      throw new Error("FrostDex Sniper could not load candles for any market");
+    }
+    if (failedMarkets > 0) {
+      console.warn(
+        `FrostDex Sniper scanned ${symbols.length - failedMarkets}/${symbols.length} markets; ${failedMarkets} market histories were unavailable.`,
+      );
+    }
+    alerts.sort(
+      (a, b) =>
+        Math.abs(b.changePct) * b.volumeRatio -
+        Math.abs(a.changePct) * a.volumeRatio,
+    );
+    const snapshot = {
+      alerts,
+      marketsScanned: symbols.length - failedMarkets,
+      candleTime,
+    };
+    sniperMarketSnapshotCache = {
+      snapshot,
+      expiresAt:
+        Math.floor(Date.now() / SNIPER_CANDLE_INTERVAL_MS) *
+          SNIPER_CANDLE_INTERVAL_MS +
+        SNIPER_CANDLE_INTERVAL_MS +
+        SNIPER_SCAN_CACHE_MS,
+    };
+    return snapshot;
+  })();
+
+  sniperMarketScanInFlight = scan;
+  try {
+    return await scan;
+  } finally {
+    sniperMarketScanInFlight = undefined;
+  }
+}
+
+function BotSniperEngine({
+  bot,
+  onUpdate,
+}: {
+  bot: BotConfig;
+  onUpdate: (
+    botId: string,
+    update: Partial<
+      Pick<
+        BotConfig,
+        | "symbol"
+        | "marketDataStatus"
+        | "sniperAlert"
+        | "sniperLastCandle"
+        | "sniperMarketCount"
+      >
+    >,
+  ) => void;
+}) {
+  const hasPosition = !!bot.position;
+
+  useEffect(() => {
+    if (bot.status !== "running") return;
+    let active = true;
+    const scan = async () => {
+      try {
+        const snapshot = await scanOrderlyMarkets();
+        if (!active) return;
+        const alert = hasPosition
+          ? (snapshot.alerts.find(
+              (candidate) =>
+                candidate.symbol === bot.symbol && candidate.kind === "DUMP",
+            ) ?? null)
+          : (snapshot.alerts.find((candidate) => candidate.kind === "PUMP") ??
+            snapshot.alerts[0] ??
+            null);
+        onUpdate(bot.id, {
+          symbol: hasPosition ? bot.symbol : (alert?.symbol ?? bot.symbol),
+          marketDataStatus: "ready",
+          sniperAlert: alert,
+          sniperLastCandle: snapshot.candleTime,
+          sniperMarketCount: snapshot.marketsScanned,
+        });
+      } catch (error) {
+        if (!active) return;
+        console.error("FrostDex Sniper market scan failed:", error);
+        onUpdate(bot.id, {
+          marketDataStatus: "unavailable",
+          sniperAlert: null,
+        });
+      }
+    };
+
+    void scan();
+    const interval = window.setInterval(
+      () => void scan(),
+      SNIPER_SCAN_CACHE_MS,
+    );
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [bot.id, hasPosition, bot.status, bot.symbol, onUpdate]);
+
+  return null;
+}
 
 // ── Live Order Submitter ──────────────────────────────────────────────────────
 // Renders briefly to place one real market order on Orderly, then calls onDone.
@@ -572,7 +883,12 @@ function BotLiveEngine({
     const requestedBuyNotional =
       bot.strategy === "dca"
         ? Math.min(Number(bot.params.amount) || investment * 0.5, orderBudget)
-        : Math.min(investment * 0.5, orderBudget);
+        : bot.strategy === "sniper"
+          ? Math.min(
+              (investment * 0.25) / (1 + BOT_TAKER_FEE_RATE),
+              orderBudget,
+            )
+          : Math.min(investment * 0.5, orderBudget);
     const buyNotional = Math.min(
       orderBudget,
       Math.max(minimumOrderNotional, requestedBuyNotional),
@@ -658,7 +974,7 @@ function BotLiveEngine({
       const stopAtr = normalizeTrendParameter(bot.params.stopAtr, 2);
       const rewardRisk = normalizeTrendParameter(bot.params.rewardRisk, 2.5);
       const position = managedPosition;
-      const signalDecision = getSignalDecision(
+      const decision = getSignalDecision(
         candles,
         lastClosed,
         {
@@ -670,31 +986,11 @@ function BotLiveEngine({
         },
         !!position,
       );
-      const gridDecision = getGridDecision(
-        candles,
-        lastClosed,
-        Number(bot.params.grids) || 10,
-        !!position,
-        getConfiguredGridBound(bot.params.lower),
-        getConfiguredGridBound(bot.params.upper),
-      );
-      const dcaDue =
-        now - lastDcaBuyRef.current >=
-        getDcaIntervalMs(bot.params.interval ?? "1h");
-      const dcaDecision = {
-        buy: !position && dcaDue && strategyBudget >= minimumOrderNotional,
-        sell: !!position && price > position.entryPrice * 1.05,
-      };
-      const combinedDecision = combineStrategyDecisions([
-        dcaDecision,
-        gridDecision,
-        signalDecision,
-      ]);
       const riskExit =
         !!position &&
         (price <= position.stopPrice || price >= position.targetPrice);
-      shouldBuy = combinedDecision.buy;
-      shouldSell = riskExit || combinedDecision.sell;
+      shouldBuy = decision.buy && strategyBudget >= minimumOrderNotional;
+      shouldSell = riskExit || decision.sell;
 
       const stopDistance = atrValue * stopAtr;
 
@@ -738,16 +1034,25 @@ function BotLiveEngine({
         });
       }
       return;
+    } else if (bot.strategy === "sniper") {
+      const alert = getCurrentSniperAlert(bot, candles, lastClosed);
+      shouldBuy = !positionRef.current && alert?.kind === "PUMP";
+      shouldSell = !!positionRef.current && alert?.kind === "DUMP";
     }
 
     if (shouldBuy && !pendingOrder) {
-      queueOrder({
-        botId: bot.id,
-        symbol: bot.symbol,
-        side: "BUY",
-        qty: (buyNotional / price).toFixed(symbolRules.base_dp),
-        triggerPrice: price,
-      });
+      queueOrder(
+        {
+          botId: bot.id,
+          symbol: bot.symbol,
+          side: "BUY",
+          qty: (buyNotional / price).toFixed(symbolRules.base_dp),
+          triggerPrice: price,
+        },
+        bot.strategy === "sniper"
+          ? Math.min(investment * 0.25, availableBudget)
+          : undefined,
+      );
     } else if (shouldSell && !pendingOrder && positionRef.current) {
       const position = positionRef.current;
       queueOrder({
@@ -794,7 +1099,7 @@ function BotLiveEngine({
               };
               realizedPnlRef.current -=
                 pendingOrder.triggerPrice * quantity * BOT_TAKER_FEE_RATE;
-              if (bot.strategy === "dca" || bot.strategy === "trend") {
+              if (bot.strategy === "dca") {
                 lastDcaBuyRef.current = Date.now();
               }
               if (bot.strategy === "trend") {
@@ -905,7 +1210,7 @@ function BotPaperEngine({
       ) {
         exitPrice = position.targetPrice;
       } else if (newClosedCandle) {
-        const signalDecision = getSignalDecision(
+        const decision = getSignalDecision(
           candles,
           last,
           {
@@ -917,24 +1222,7 @@ function BotPaperEngine({
           },
           true,
         );
-        const gridDecision = getGridDecision(
-          candles,
-          last,
-          Number(bot.params.grids) || 10,
-          true,
-          getConfiguredGridBound(bot.params.lower),
-          getConfiguredGridBound(bot.params.upper),
-        );
-        const dcaDecision = {
-          buy: false,
-          sell: price > position.entryPrice * 1.05,
-        };
-        if (
-          combineStrategyDecisions([dcaDecision, gridDecision, signalDecision])
-            .sell
-        ) {
-          exitPrice = price;
-        }
+        if (decision.sell) exitPrice = price;
       }
 
       if (exitPrice !== null) {
@@ -954,7 +1242,7 @@ function BotPaperEngine({
       }
     } else if (newClosedCandle) {
       const atr = computeATR(candles, 14);
-      const signalDecision = getSignalDecision(
+      const decision = getSignalDecision(
         candles,
         last,
         {
@@ -966,27 +1254,8 @@ function BotPaperEngine({
         },
         false,
       );
-      const gridDecision = getGridDecision(
-        candles,
-        last,
-        Number(bot.params.grids) || 10,
-        false,
-        getConfiguredGridBound(bot.params.lower),
-        getConfiguredGridBound(bot.params.upper),
-      );
-      const dcaDecision = {
-        buy:
-          Date.now() - (bot.dcaLastBuyAt ?? bot.createdAt) >=
-          getDcaIntervalMs(bot.params.interval ?? "1h"),
-        sell: false,
-      };
-      const shouldBuy = combineStrategyDecisions([
-        dcaDecision,
-        gridDecision,
-        signalDecision,
-      ]).buy;
 
-      if (shouldBuy) {
+      if (decision.buy) {
         const stopDistance =
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
         const riskBudget = bot.investment * 0.01;
@@ -1046,16 +1315,11 @@ function BotPaperEngine({
     bot.symbol,
     bot.params.stopAtr,
     bot.params.rewardRisk,
-    bot.params.interval,
-    bot.params.grids,
-    bot.params.lower,
-    bot.params.upper,
     bot.params.rsi,
     bot.params.rsiOversold,
     bot.params.rsiOverbought,
     bot.params.emaFast,
     bot.params.ema,
-    bot.dcaLastBuyAt,
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
@@ -1150,6 +1414,11 @@ function BotSimulationEngine({
         Date.now() - lastDcaBuyRef.current >=
           getDcaIntervalMs(bot.params.interval);
       shouldSell = !!position && price > position.entryPrice * 1.05;
+    } else if (bot.strategy === "sniper") {
+      const alert = getCurrentSniperAlert(bot, candles, lastClosed);
+      buyNotional = bot.investment * 0.25;
+      shouldBuy = !position && alert?.kind === "PUMP";
+      shouldSell = !!position && alert?.kind === "DUMP";
     } else {
       return;
     }
@@ -1266,7 +1535,6 @@ export default function BotPage() {
   const [sigEma, setSigEma] = useState("21");
   const [trendStopAtr, setTrendStopAtr] = useState("2");
   const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
-
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
   const quoteAsset =
@@ -1345,8 +1613,7 @@ export default function BotPage() {
           ? {
               ...b,
               trades: b.trades + 1,
-              ...((b.strategy === "dca" || b.strategy === "trend") &&
-              log.side === "BUY"
+              ...(b.strategy === "dca" && log.side === "BUY"
                 ? { dcaLastBuyAt: log.ts }
                 : {}),
             }
@@ -1406,6 +1673,56 @@ export default function BotPage() {
     [],
   );
 
+  const handleSniperUpdate = useCallback(
+    (
+      botId: string,
+      update: Partial<
+        Pick<
+          BotConfig,
+          | "symbol"
+          | "marketDataStatus"
+          | "sniperAlert"
+          | "sniperLastCandle"
+          | "sniperMarketCount"
+        >
+      >,
+    ) => {
+      setBots((prev) => {
+        let changed = false;
+        const updated = prev.map((bot) => {
+          if (bot.id !== botId) return bot;
+          const currentAlert = bot.sniperAlert;
+          const nextAlert = update.sniperAlert;
+          const alertChanged =
+            nextAlert !== undefined &&
+            (currentAlert?.symbol !== nextAlert?.symbol ||
+              currentAlert?.kind !== nextAlert?.kind ||
+              currentAlert?.candleTime !== nextAlert?.candleTime);
+          const nextStatus = update.marketDataStatus ?? bot.marketDataStatus;
+          const nextSymbol = update.symbol ?? bot.symbol;
+          const nextCandle = update.sniperLastCandle ?? bot.sniperLastCandle;
+          const nextMarketCount =
+            update.sniperMarketCount ?? bot.sniperMarketCount;
+          if (
+            !alertChanged &&
+            nextStatus === bot.marketDataStatus &&
+            nextSymbol === bot.symbol &&
+            nextCandle === bot.sniperLastCandle &&
+            nextMarketCount === bot.sniperMarketCount
+          ) {
+            return bot;
+          }
+          changed = true;
+          return { ...bot, ...update };
+        });
+        if (!changed) return prev;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [],
+  );
+
   const handlePaperUpdate = useCallback(
     (botId: string, update: PaperBotUpdate, trade?: Omit<TradeLog, "id">) => {
       if (trade) {
@@ -1425,9 +1742,7 @@ export default function BotPage() {
                 ...current,
                 ...update,
                 trades: current.trades + (trade ? 1 : 0),
-                ...((current.strategy === "dca" ||
-                  current.strategy === "trend") &&
-                trade?.side === "BUY"
+                ...(current.strategy === "dca" && trade?.side === "BUY"
                   ? { dcaLastBuyAt: trade.ts }
                   : {}),
               }
@@ -1468,7 +1783,7 @@ export default function BotPage() {
     const lowerGrid = Number(gridLower);
     const upperGrid = Number(gridUpper);
     if (
-      (strategy === "grid" || strategy === "trend") &&
+      strategy === "grid" &&
       ((gridLower.trim() === "") !== (gridUpper.trim() === "") ||
         (gridLower.trim() !== "" &&
           (!Number.isFinite(lowerGrid) ||
@@ -1521,16 +1836,14 @@ export default function BotPage() {
             ? { interval: dcaInterval, amount: Number(dcaAmount) }
             : strategy === "signal"
               ? { rsi: Number(sigRsi), ema: Number(sigEma) }
-              : {
-                  stopAtr: normalizeTrendParameter(trendStopAtr, 2),
-                  rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
-                  interval: dcaInterval,
-                  grids: Number(gridCount) || 10,
-                  lower: gridLower || "auto",
-                  upper: gridUpper || "auto",
-                  rsi: Number(sigRsi) || 14,
-                  ema: Number(sigEma) || 21,
-                };
+              : strategy === "trend"
+                ? {
+                    stopAtr: normalizeTrendParameter(trendStopAtr, 2),
+                    rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
+                    rsi: Number(sigRsi) || 14,
+                    ema: Number(sigEma) || 21,
+                  }
+                : {};
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -1576,8 +1889,8 @@ export default function BotPage() {
     saveBots(bots.filter((b) => b.id !== id));
   };
 
-  const totalInvestment = bots.reduce((s, b) => s + b.investment, 0);
-  const totalPnl = bots.reduce((s, b) => s + b.pnl, 0);
+  const totalInvestment = bots.reduce((sum, bot) => sum + bot.investment, 0);
+  const totalPnl = bots.reduce((sum, bot) => sum + bot.pnl, 0);
   const runningCount = bots.filter((b) => b.status === "running").length;
   const liveCount = bots.filter(
     (b) => b.status === "running" && b.liveMode,
@@ -1643,6 +1956,16 @@ export default function BotPage() {
         margin: "0 auto",
       }}
     >
+      {/* Sniper signals are displayed in both simulation and live mode. */}
+      {bots
+        .filter((bot) => bot.status === "running" && bot.strategy === "sniper")
+        .map((bot) => (
+          <BotSniperEngine
+            key={bot.id}
+            bot={bot}
+            onUpdate={handleSniperUpdate}
+          />
+        ))}
       {/* Live engines — one per running live bot */}
       {bots
         .filter((b) => b.status === "running" && b.liveMode && isConnected)
@@ -2017,6 +2340,7 @@ export default function BotPage() {
               {bots.map((bot) => {
                 const info = STRATEGY_INFO[bot.strategy];
                 const isRunning = bot.status === "running";
+                const isSniper = bot.strategy === "sniper";
                 const isLive = bot.liveMode;
                 const botLogs = logs.filter((l) => l.botId === bot.id);
                 return (
@@ -2049,7 +2373,9 @@ export default function BotPage() {
                                   ? "14,203,129"
                                   : info.color === "#ff8a65"
                                     ? "255,138,101"
-                                    : "240,185,11"
+                                    : info.color === "#ff5b73"
+                                      ? "255,91,115"
+                                      : "240,185,11"
                             },0.12)`,
                             display: "flex",
                             alignItems: "center",
@@ -2133,10 +2459,51 @@ export default function BotPage() {
                               marginTop: 2,
                             }}
                           >
-                            {info.label} · {symbolDisplay(bot.symbol)} · $
-                            {bot.investment.toLocaleString()} · {botLogs.length}{" "}
-                            trades
+                            {isSniper
+                              ? `${info.label} · Auto market scan · $${bot.investment.toLocaleString()}`
+                              : `${info.label} · ${symbolDisplay(bot.symbol)} · $${bot.investment.toLocaleString()} · ${botLogs.length} trades`}
                           </div>
+                          {isRunning &&
+                            isLive &&
+                            (!isConnected || availableBalance <= 0) && (
+                              <div
+                                role="alert"
+                                style={{
+                                  marginTop: 4,
+                                  color: "#f6a0a9",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {!isConnected
+                                  ? "Live orders paused — connect your Orderly account."
+                                  : "Live orders paused — deposit supported collateral to continue."}
+                              </div>
+                            )}
+                          {isRunning && isSniper && (
+                            <div
+                              role="status"
+                              style={{
+                                fontSize: 11,
+                                color:
+                                  bot.marketDataStatus === "unavailable"
+                                    ? "#f6465d"
+                                    : bot.sniperAlert?.kind === "DUMP"
+                                      ? "#ff8293"
+                                      : bot.sniperAlert?.kind === "PUMP"
+                                        ? "#f0b90b"
+                                        : "rgba(180,190,210,0.55)",
+                                marginTop: 4,
+                              }}
+                            >
+                              {bot.marketDataStatus === "unavailable"
+                                ? "Market data unavailable — scanning paused."
+                                : bot.marketDataStatus !== "ready"
+                                  ? "Scanning Orderly perpetual markets..."
+                                  : bot.sniperAlert
+                                    ? `${bot.sniperAlert.kind} · ${symbolDisplay(bot.sniperAlert.symbol)} · ${bot.sniperAlert.changePct >= 0 ? "+" : ""}${bot.sniperAlert.changePct.toFixed(2)}% · volume ${bot.sniperAlert.volumeRatio.toFixed(1)}× · $${bot.sniperAlert.price.toLocaleString()} · ${new Date(bot.sniperAlert.candleTime).toLocaleString()}`
+                                    : `Scanning ${bot.sniperMarketCount ?? "all"} active markets · waiting for an 8% pump or 5% drop with 3× volume. Keep this page open.`}
+                            </div>
+                          )}
                           {isRunning && !isLive && bot.strategy === "trend" && (
                             <div
                               style={{
@@ -2153,7 +2520,7 @@ export default function BotPage() {
                                 : bot.marketDataStatus === "ready"
                                   ? bot.paperPosition
                                     ? `Paper position open · stop $${bot.paperPosition.stopPrice.toLocaleString()} · target $${bot.paperPosition.targetPrice.toLocaleString()}`
-                                    : "Waiting for at least 2 of 3 DCA, Grid, and Signal votes. Keep this page open."
+                                    : "Waiting for RSI/EMA signal. Keep this page open."
                                   : "Connecting to live market data..."}
                             </div>
                           )}
@@ -2263,28 +2630,37 @@ export default function BotPage() {
                         flexWrap: "wrap",
                       }}
                     >
-                      {Object.entries(bot.params).map(([k, v]) => (
-                        <div key={k} style={{ fontSize: 11 }}>
-                          <span
-                            style={{
-                              color: "rgba(180,190,210,0.4)",
-                              textTransform: "uppercase",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {k}:{" "}
-                          </span>
-                          <span style={{ color: "#eaecef", fontWeight: 600 }}>
-                            {String(
-                              bot.strategy === "trend" && k === "stopAtr"
-                                ? normalizeTrendParameter(v, 2)
-                                : bot.strategy === "trend" && k === "rewardRisk"
-                                  ? normalizeTrendParameter(v, 2.5)
-                                  : v,
-                            )}
-                          </span>
-                        </div>
-                      ))}
+                      {Object.entries(bot.params)
+                        .filter(
+                          ([key]) =>
+                            bot.strategy !== "trend" ||
+                            !["interval", "grids", "lower", "upper"].includes(
+                              key,
+                            ),
+                        )
+                        .map(([k, v]) => (
+                          <div key={k} style={{ fontSize: 11 }}>
+                            <span
+                              style={{
+                                color: "rgba(180,190,210,0.4)",
+                                textTransform: "uppercase",
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              {k}:{" "}
+                            </span>
+                            <span style={{ color: "#eaecef", fontWeight: 600 }}>
+                              {String(
+                                bot.strategy === "trend" && k === "stopAtr"
+                                  ? normalizeTrendParameter(v, 2)
+                                  : bot.strategy === "trend" &&
+                                      k === "rewardRisk"
+                                    ? normalizeTrendParameter(v, 2.5)
+                                    : v,
+                              )}
+                            </span>
+                          </div>
+                        ))}
                       <div style={{ fontSize: 11 }}>
                         <span
                           style={{
@@ -2321,63 +2697,66 @@ export default function BotPage() {
                 gap: 10,
               }}
             >
-              {(["grid", "dca", "signal", "trend"] as BotStrategy[]).map(
-                (s) => {
-                  const info = STRATEGY_INFO[s];
-                  const selected = strategy === s;
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => setStrategy(s)}
+              {(
+                ["grid", "dca", "signal", "trend", "sniper"] as BotStrategy[]
+              ).map((s) => {
+                const info = STRATEGY_INFO[s];
+                const selected = strategy === s;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setStrategy(s);
+                      if (s === "sniper") setLiveMode(false);
+                    }}
+                    style={{
+                      background: selected
+                        ? `rgba(${
+                            info.color === "#38e0f8"
+                              ? "56,224,248"
+                              : info.color === "#0ecb81"
+                                ? "14,203,129"
+                                : info.color === "#ff8a65"
+                                  ? "255,138,101"
+                                  : "240,185,11"
+                          },0.1)`
+                        : "rgb(20,24,30)",
+                      border: `1px solid ${
+                        selected ? info.color : "rgba(30,36,50,1)"
+                      }`,
+                      borderRadius: 10,
+                      padding: "14px 10px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.15s ease",
+                      fontFamily: "Manrope, sans-serif",
+                    }}
+                  >
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>
+                      {info.icon}
+                    </div>
+                    <div
                       style={{
-                        background: selected
-                          ? `rgba(${
-                              info.color === "#38e0f8"
-                                ? "56,224,248"
-                                : info.color === "#0ecb81"
-                                  ? "14,203,129"
-                                  : info.color === "#ff8a65"
-                                    ? "255,138,101"
-                                    : "240,185,11"
-                            },0.1)`
-                          : "rgb(20,24,30)",
-                        border: `1px solid ${
-                          selected ? info.color : "rgba(30,36,50,1)"
-                        }`,
-                        borderRadius: 10,
-                        padding: "14px 10px",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease",
-                        fontFamily: "Manrope, sans-serif",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: selected ? info.color : "#eaecef",
                       }}
                     >
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>
-                        {info.icon}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: selected ? info.color : "#eaecef",
-                        }}
-                      >
-                        {info.label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "rgba(180,190,210,0.5)",
-                          marginTop: 4,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {info.desc}
-                      </div>
-                    </button>
-                  );
-                },
-              )}
+                      {info.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(180,190,210,0.5)",
+                        marginTop: 4,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {info.desc}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -2505,38 +2884,54 @@ export default function BotPage() {
               marginBottom: 20,
             }}
           >
-            <div>
-              <label htmlFor="bot-name" style={labelStyle}>
-                Bot Name (optional)
-              </label>
-              <input
-                id="bot-name"
-                value={botName}
-                onChange={(e) => setBotName(e.target.value)}
-                placeholder={`My ${STRATEGY_INFO[strategy].label}`}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label htmlFor="bot-symbol" style={labelStyle}>
-                Symbol
-              </label>
-              <select
-                id="bot-symbol"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-                style={inputStyle}
+            {strategy === "sniper" ? (
+              <div
+                style={{
+                  alignSelf: "center",
+                  color: "rgba(180,190,210,0.65)",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
               >
-                {allSymbols.map((s) => (
-                  <option key={s} value={s}>
-                    {symbolDisplay(s)}
-                  </option>
-                ))}
-              </select>
-            </div>
+                Automatically scans all active Orderly perpetual markets and
+                picks the strongest pump/dump signal.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="bot-name" style={labelStyle}>
+                    Bot Name (optional)
+                  </label>
+                  <input
+                    id="bot-name"
+                    value={botName}
+                    onChange={(e) => setBotName(e.target.value)}
+                    placeholder={`My ${STRATEGY_INFO[strategy].label}`}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="bot-symbol" style={labelStyle}>
+                    Symbol
+                  </label>
+                  <select
+                    id="bot-symbol"
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {allSymbols.map((s) => (
+                      <option key={s} value={s}>
+                        {symbolDisplay(s)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div>
               <label htmlFor="bot-investment" style={labelStyle}>
-                Investment ({quoteAsset})
+                Investment ({strategy === "sniper" ? "USD" : quoteAsset})
                 {isConnected && (
                   <span
                     style={{
@@ -2547,7 +2942,8 @@ export default function BotPage() {
                       letterSpacing: 0,
                     }}
                   >
-                    available {quoteAsset} {availableBalance.toFixed(2)}
+                    available {strategy === "sniper" ? "USD" : quoteAsset}{" "}
+                    {availableBalance.toFixed(2)}
                   </span>
                 )}
               </label>
@@ -2566,19 +2962,22 @@ export default function BotPage() {
                     : "rgba(30,36,50,1)",
                 }}
               />
-              {liveMode && strategy !== "dca" && minimumOrderNotional > 0 && (
-                <div
-                  aria-live="polite"
-                  style={{
-                    fontSize: 11,
-                    color: "rgba(240,185,11,0.75)",
-                    marginTop: 4,
-                  }}
-                >
-                  Minimum order for {symbolDisplay(symbol)}: {quoteAsset}{" "}
-                  {minimumOrderNotional.toFixed(2)}
-                </div>
-              )}
+              {liveMode &&
+                strategy !== "dca" &&
+                strategy !== "sniper" &&
+                minimumOrderNotional > 0 && (
+                  <div
+                    aria-live="polite"
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(240,185,11,0.75)",
+                      marginTop: 4,
+                    }}
+                  >
+                    Minimum order for {symbolDisplay(symbol)}: {quoteAsset}{" "}
+                    {minimumOrderNotional.toFixed(2)}
+                  </div>
+                )}
               {balanceWarning && availableBalance > 0 && (
                 <div
                   style={{
@@ -2843,52 +3242,11 @@ export default function BotPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                   gap: 12,
                   marginTop: 12,
                 }}
               >
-                <div>
-                  <label htmlFor="trend-dca-interval" style={labelStyle}>
-                    DCA Vote Interval
-                  </label>
-                  <select
-                    id="trend-dca-interval"
-                    value={dcaInterval}
-                    onChange={(e) => setDcaInterval(e.target.value)}
-                    style={inputStyle}
-                  >
-                    {[
-                      "15m",
-                      "30m",
-                      "1h",
-                      "4h",
-                      "8h",
-                      "12h",
-                      "1d",
-                      "3d",
-                      "1w",
-                    ].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="trend-grid-count" style={labelStyle}>
-                    Grid Count
-                  </label>
-                  <input
-                    id="trend-grid-count"
-                    type="number"
-                    value={gridCount}
-                    onChange={(e) => setGridCount(e.target.value)}
-                    min="3"
-                    max="200"
-                    style={inputStyle}
-                  />
-                </div>
                 <div>
                   <label htmlFor="trend-signal-rsi" style={labelStyle}>
                     Signal RSI Period
@@ -2920,51 +3278,16 @@ export default function BotPage() {
               </div>
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <div>
-                  <label htmlFor="trend-grid-lower" style={labelStyle}>
-                    Grid Lower Price (optional)
-                  </label>
-                  <input
-                    id="trend-grid-lower"
-                    value={gridLower}
-                    onChange={(e) => setGridLower(e.target.value)}
-                    placeholder="Auto"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="trend-grid-upper" style={labelStyle}>
-                    Grid Upper Price (optional)
-                  </label>
-                  <input
-                    id="trend-grid-upper"
-                    value={gridUpper}
-                    onChange={(e) => setGridUpper(e.target.value)}
-                    placeholder="Auto"
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-              <div
-                style={{
                   marginTop: 10,
                   fontSize: 12,
                   color: "rgba(180,190,210,0.5)",
                   lineHeight: 1.5,
                 }}
               >
-                Opens only when at least two of DCA cadence, Grid crossing, and
-                RSI/EMA Signal agree. RSI thresholds are 35/68 and the fast EMA
-                is 9. Position size risks up to 1% of the bot allocation, capped
-                at 25% notional; targets are capped at 5R and are not
-                guaranteed. Live stops are monitored by this app and can slip or
-                fail during outages.
+                Entries use RSI/EMA signals only. Position sizing targets up to
+                1% allocation risk with an ATR-based stop and a configurable
+                reward target; notional is capped at 25%. Live stops are
+                monitored by this app and can slip or fail during outages.
               </div>
             </div>
           )}
@@ -3025,8 +3348,10 @@ export default function BotPage() {
                     ? "Real orders will be placed on Orderly Network using your portfolio."
                     : "⚠ Connect your wallet first to use live trading."
                   : strategy === "trend"
-                    ? "Paper trades follow live Binance prices and the selected strategy. No real orders or funds are used."
-                    : "Bot runs in simulation mode — no real orders are placed."}
+                    ? "Paper trades use Orderly market data and the selected strategy. No real orders or funds are used."
+                    : strategy === "sniper"
+                      ? "Pump signals open simulated positions; dump signals close them. No real orders or funds are used."
+                      : "Bot runs in simulation mode — no real orders are placed."}
               </div>
             </div>
             <button
@@ -3072,8 +3397,9 @@ export default function BotPage() {
               lineHeight: 1.5,
             }}
           >
-            ⚠️ Trading bots involve financial risk. Only invest what you can
-            afford to lose. Past performance does not guarantee future results.
+            {strategy === "sniper"
+              ? "⚠️ Sniper signals can be noisy or delayed. Live trades use 25% of the bot allocation per entry and can lose money; alerts are not a guarantee."
+              : "⚠️ Trading bots involve financial risk. Only invest what you can afford to lose. Past performance does not guarantee future results."}
           </div>
 
           <button
