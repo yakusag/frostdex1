@@ -2,13 +2,16 @@ import { useState, useCallback, useEffect } from "react";
 import { useBinanceFeed } from "@/hooks/useBinanceFeed";
 import {
   BOT_TAKER_FEE_RATE,
+  BOT_MAINTENANCE_MARGIN_RATE,
   computeATR,
   computeEMA,
   computeRSI,
+  getLongLiquidationPrice,
   getDcaIntervalMs,
   getGridDecision,
   getSniperAlert,
   getSignalDecisionFromIndicators,
+  normalizeSimulationLeverage,
 } from "@/utils/bot-strategy";
 import { normalizeTrendParameter } from "@/utils/trend-strategy";
 import BotChart, { Candle, Signal } from "./BotChart";
@@ -38,6 +41,7 @@ const SYMBOLS = [
   { value: "BNB", label: "BNB/USDT" },
 ];
 
+const MAX_BACKTEST_CANDLES = 1000;
 const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d"];
 const TIMEFRAME_MS: Record<Timeframe, number> = {
   "15m": 15 * 60 * 1000,
@@ -45,8 +49,6 @@ const TIMEFRAME_MS: Record<Timeframe, number> = {
   "4h": 4 * 60 * 60 * 1000,
   "1d": 24 * 60 * 60 * 1000,
 };
-const MAINTENANCE_MARGIN_RATE = 0.005;
-
 export function runBacktest(
   candles: Candle[],
   strategy: Strategy,
@@ -55,10 +57,7 @@ export function runBacktest(
   leverage = 1,
   timeframe: Timeframe = "1h",
 ): BacktestResult {
-  const selectedLeverage = Math.min(
-    100,
-    Math.max(1, Number.isFinite(leverage) ? leverage : 1),
-  );
+  const selectedLeverage = normalizeSimulationLeverage(leverage);
   if (!Number.isFinite(investment) || investment <= 0 || candles.length === 0) {
     return {
       totalReturn: 0,
@@ -199,11 +198,13 @@ export function runBacktest(
     }
 
     if (position > 0 && selectedLeverage > 1) {
-      const liquidationPrice =
-        (entryPrice * (1 - 1 / selectedLeverage)) /
-        (1 - MAINTENANCE_MARGIN_RATE);
+      const liquidationPrice = getLongLiquidationPrice(
+        entryPrice,
+        selectedLeverage,
+      );
       if (c.l <= liquidationPrice) {
         shouldSell = true;
+        shouldBuy = false;
         exitPrice = liquidationPrice;
         wasLiquidated = true;
       }
@@ -247,7 +248,7 @@ export function runBacktest(
       const notional = position * exitPrice;
       const exitFee = notional * BOT_TAKER_FEE_RATE;
       const liquidationFee = wasLiquidated
-        ? notional * MAINTENANCE_MARGIN_RATE
+        ? notional * BOT_MAINTENANCE_MARGIN_RATE
         : 0;
       const tradePnl = grossPnl - positionFees - exitFee - liquidationFee;
       cash += Math.max(0, reservedMargin + grossPnl - exitFee - liquidationFee);
@@ -629,8 +630,12 @@ export default function BotBacktest({
               </option>
             ))}
           </select>
-          <div style={{ ...labelSt, maxWidth: 170, marginTop: 4 }}>
-            Binance candles · 0.05% estimated taker fees · live fills differ
+          <div style={{ ...labelSt, maxWidth: 220, marginTop: 4 }}>
+            Binance candles · up to{" "}
+            {Math.round(
+              (MAX_BACKTEST_CANDLES * TIMEFRAME_MS[tf]) / (24 * 60 * 60 * 1000),
+            )}{" "}
+            days · 0.05% fees · live fills differ
           </div>
         </div>
         <div
@@ -1026,6 +1031,25 @@ export default function BotBacktest({
             }}
           >
             Backtest Results
+          </div>
+          <div
+            role="status"
+            style={{
+              padding: "10px 12px",
+              marginBottom: 12,
+              borderRadius: 8,
+              border: "1px solid rgba(56,224,248,0.12)",
+              background: "rgba(56,224,248,0.04)",
+              color: "rgba(180,190,210,0.65)",
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            {result.signals.length === 0
+              ? "No entries were triggered in this sample. Leverage cannot create signals; try another timeframe or market, then compare the settings before changing anything live."
+              : result.totalReturn <= 0
+                ? "This historical sample lost money after estimated fees. Higher leverage increases losses as well as gains; it does not improve the strategy's signal quality."
+                : "This is a historical simulation, not a profit forecast. Binance candles and modeled costs may differ from Orderly live fills."}
           </div>
           <div
             style={{

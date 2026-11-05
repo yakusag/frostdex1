@@ -18,12 +18,15 @@ import {
 import { OrderSide, OrderType } from "@orderly.network/types";
 import type { Candle } from "@/components/BotChart";
 import {
+  BOT_MAINTENANCE_MARGIN_RATE,
   BOT_TAKER_FEE_RATE,
   computeATR,
   getDcaIntervalMs,
+  getLongLiquidationPrice,
   getGridDecision,
   getSniperAlert,
   getSignalDecision,
+  normalizeSimulationLeverage,
 } from "@/utils/bot-strategy";
 import type { SniperAlert } from "@/utils/bot-strategy";
 import {
@@ -1118,13 +1121,28 @@ function BotPaperEngine({
     const candleTime = candles[last].t;
     const closedCandle = candles[last];
     const newClosedCandle = candleTime !== bot.paperLastCandle;
+    const simulationLeverage = normalizeSimulationLeverage(
+      bot.params.simLeverage,
+    );
     let position = bot.paperPosition ?? null;
     let realizedPnl = bot.paperRealizedPnl ?? 0;
     let trade: Omit<TradeLog, "id"> | undefined;
 
     if (position) {
       let exitPrice: number | null = null;
+      let wasLiquidated = false;
+      const liquidationPrice = getLongLiquidationPrice(
+        position.entryPrice,
+        simulationLeverage,
+      );
       if (
+        liquidationPrice > 0 &&
+        (price <= liquidationPrice ||
+          (newClosedCandle && closedCandle.l <= liquidationPrice))
+      ) {
+        exitPrice = liquidationPrice;
+        wasLiquidated = true;
+      } else if (
         price <= position.stopPrice ||
         (newClosedCandle && closedCandle.l <= position.stopPrice)
       ) {
@@ -1153,7 +1171,10 @@ function BotPaperEngine({
       if (exitPrice !== null) {
         realizedPnl +=
           position.qty * (exitPrice - position.entryPrice) -
-          position.qty * exitPrice * BOT_TAKER_FEE_RATE;
+          position.qty *
+            exitPrice *
+            (BOT_TAKER_FEE_RATE +
+              (wasLiquidated ? BOT_MAINTENANCE_MARGIN_RATE : 0));
         trade = {
           botId: bot.id,
           side: "SELL",
@@ -1184,7 +1205,7 @@ function BotPaperEngine({
         const stopDistance =
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
         const riskBudget = bot.investment * 0.01;
-        const maxNotional = bot.investment * 0.25;
+        const maxNotional = bot.investment * 0.25 * simulationLeverage;
         const entryPrice = closedCandle.c;
         const qty =
           Number.isFinite(stopDistance) && stopDistance > 0
@@ -1245,6 +1266,7 @@ function BotPaperEngine({
     bot.params.rsiOverbought,
     bot.params.emaFast,
     bot.params.ema,
+    bot.params.simLeverage,
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
@@ -1295,9 +1317,14 @@ function BotSimulationEngine({
     lastEvaluationRef.current = { price, candleTime };
 
     const position = positionRef.current;
+    const simulationLeverage = normalizeSimulationLeverage(
+      bot.params.simLeverage,
+    );
     let shouldBuy = false;
     let shouldSell = false;
     let buyNotional = Math.min(bot.investment * 0.5, bot.investment);
+    let exitPrice = price;
+    let wasLiquidated = false;
 
     if (bot.strategy === "signal") {
       const rsiPeriod = Number(bot.params.rsi) || 14;
@@ -1328,7 +1355,9 @@ function BotSimulationEngine({
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
       const committedNotional = position
-        ? position.entryPrice * position.quantity * (1 + BOT_TAKER_FEE_RATE)
+        ? position.entryPrice *
+          position.quantity *
+          (1 / simulationLeverage + BOT_TAKER_FEE_RATE)
         : 0;
       buyNotional = Math.min(
         Number(bot.params.amount) || bot.investment * 0.5,
@@ -1348,9 +1377,25 @@ function BotSimulationEngine({
       return;
     }
 
+    if (position && simulationLeverage > 1) {
+      const liquidationPrice = getLongLiquidationPrice(
+        position.entryPrice,
+        simulationLeverage,
+      );
+      if (
+        price <= liquidationPrice ||
+        candles[lastClosed].l <= liquidationPrice
+      ) {
+        shouldSell = true;
+        shouldBuy = false;
+        exitPrice = liquidationPrice;
+        wasLiquidated = true;
+      }
+    }
+
     let nextPosition = position;
     if (shouldBuy && buyNotional > 0) {
-      const quantity = buyNotional / price;
+      const quantity = (buyNotional * simulationLeverage) / price;
       nextPosition =
         bot.strategy === "dca" && position
           ? {
@@ -1361,8 +1406,8 @@ function BotSimulationEngine({
             }
           : { entryPrice: price, quantity };
       positionRef.current = nextPosition;
-      realizedPnlRef.current -= buyNotional * BOT_TAKER_FEE_RATE;
-      if (bot.strategy === "dca") lastDcaBuyRef.current = Date.now();
+      realizedPnlRef.current -= quantity * price * BOT_TAKER_FEE_RATE;
+      if (bot.strategy === "dca") lastDcaBuyRef.current = candleTime;
       onTradeExecuted({
         botId: bot.id,
         side: "BUY",
@@ -1374,8 +1419,11 @@ function BotSimulationEngine({
       });
     } else if (shouldSell && position) {
       realizedPnlRef.current +=
-        (price - position.entryPrice) * position.quantity -
-        price * position.quantity * BOT_TAKER_FEE_RATE;
+        (exitPrice - position.entryPrice) * position.quantity -
+        exitPrice *
+          position.quantity *
+          (BOT_TAKER_FEE_RATE +
+            (wasLiquidated ? BOT_MAINTENANCE_MARGIN_RATE : 0));
       nextPosition = null;
       positionRef.current = null;
       onTradeExecuted({
@@ -1383,7 +1431,7 @@ function BotSimulationEngine({
         side: "SELL",
         symbol: bot.symbol,
         qty: position.quantity,
-        price,
+        price: exitPrice,
         ts: Date.now(),
         live: false,
       });
@@ -1460,6 +1508,10 @@ export default function BotPage() {
   const [sigEma, setSigEma] = useState("21");
   const [trendStopAtr, setTrendStopAtr] = useState("2");
   const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
+  const [simulationLeverage, setSimulationLeverage] = useState("1");
+  const [sigRsiOversold, setSigRsiOversold] = useState("35");
+  const [sigRsiOverbought, setSigRsiOverbought] = useState("68");
+  const [sigEmaFast, setSigEmaFast] = useState("9");
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
   const quoteAsset =
@@ -1695,9 +1747,15 @@ export default function BotPage() {
     setDcaAmount(String(bot.params.amount ?? 50));
     setSigRsi(String(bot.params.rsi ?? 14));
     setSigEma(String(bot.params.ema ?? 21));
+    setSigRsiOversold(String(bot.params.rsiOversold ?? 35));
+    setSigRsiOverbought(String(bot.params.rsiOverbought ?? 68));
+    setSigEmaFast(String(bot.params.emaFast ?? 9));
     setTrendStopAtr(String(normalizeTrendParameter(bot.params.stopAtr, 2)));
     setTrendRewardRisk(
       String(normalizeTrendParameter(bot.params.rewardRisk, 2.5)),
+    );
+    setSimulationLeverage(
+      String(normalizeSimulationLeverage(bot.params.simLeverage)),
     );
     setLiveMode(true);
     setTab("create");
@@ -1765,15 +1823,25 @@ export default function BotPage() {
           : strategy === "dca"
             ? { interval: dcaInterval, amount: Number(dcaAmount) }
             : strategy === "signal"
-              ? { rsi: Number(sigRsi), ema: Number(sigEma) }
+              ? {
+                  rsi: Number(sigRsi),
+                  rsiOversold: Number(sigRsiOversold),
+                  rsiOverbought: Number(sigRsiOverbought),
+                  emaFast: Number(sigEmaFast),
+                  ema: Number(sigEma),
+                }
               : strategy === "trend"
                 ? {
                     stopAtr: normalizeTrendParameter(trendStopAtr, 2),
                     rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
                     rsi: Number(sigRsi) || 14,
+                    rsiOversold: Number(sigRsiOversold) || 35,
+                    rsiOverbought: Number(sigRsiOverbought) || 68,
+                    emaFast: Number(sigEmaFast) || 9,
                     ema: Number(sigEma) || 21,
                   }
                 : {};
+      params.simLeverage = normalizeSimulationLeverage(simulationLeverage);
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -2891,7 +2959,7 @@ export default function BotPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
                   gap: 12,
                 }}
               >
@@ -2910,8 +2978,50 @@ export default function BotPage() {
                   />
                 </div>
                 <div>
+                  <label htmlFor="signal-rsi-oversold" style={labelStyle}>
+                    RSI Oversold
+                  </label>
+                  <input
+                    id="signal-rsi-oversold"
+                    type="number"
+                    value={sigRsiOversold}
+                    onChange={(e) => setSigRsiOversold(e.target.value)}
+                    min="10"
+                    max="50"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signal-rsi-overbought" style={labelStyle}>
+                    RSI Overbought
+                  </label>
+                  <input
+                    id="signal-rsi-overbought"
+                    type="number"
+                    value={sigRsiOverbought}
+                    onChange={(e) => setSigRsiOverbought(e.target.value)}
+                    min="50"
+                    max="90"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signal-ema-fast" style={labelStyle}>
+                    EMA Fast
+                  </label>
+                  <input
+                    id="signal-ema-fast"
+                    type="number"
+                    value={sigEmaFast}
+                    onChange={(e) => setSigEmaFast(e.target.value)}
+                    min="3"
+                    max="50"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
                   <label htmlFor="signal-ema" style={labelStyle}>
-                    EMA Period
+                    EMA Slow
                   </label>
                   <input
                     id="signal-ema"
@@ -3002,7 +3112,7 @@ export default function BotPage() {
                 </div>
                 <div>
                   <label htmlFor="trend-signal-ema" style={labelStyle}>
-                    Signal EMA Period
+                    Signal EMA Slow
                   </label>
                   <input
                     id="trend-signal-ema"
@@ -3011,6 +3121,51 @@ export default function BotPage() {
                     onChange={(e) => setSigEma(e.target.value)}
                     min="5"
                     max="200"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="trend-signal-rsi-oversold" style={labelStyle}>
+                    RSI Oversold
+                  </label>
+                  <input
+                    id="trend-signal-rsi-oversold"
+                    type="number"
+                    value={sigRsiOversold}
+                    onChange={(e) => setSigRsiOversold(e.target.value)}
+                    min="10"
+                    max="50"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="trend-signal-rsi-overbought"
+                    style={labelStyle}
+                  >
+                    RSI Overbought
+                  </label>
+                  <input
+                    id="trend-signal-rsi-overbought"
+                    type="number"
+                    value={sigRsiOverbought}
+                    onChange={(e) => setSigRsiOverbought(e.target.value)}
+                    min="50"
+                    max="90"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="trend-signal-ema-fast" style={labelStyle}>
+                    Signal EMA Fast
+                  </label>
+                  <input
+                    id="trend-signal-ema-fast"
+                    type="number"
+                    value={sigEmaFast}
+                    onChange={(e) => setSigEmaFast(e.target.value)}
+                    min="3"
+                    max="50"
                     style={inputStyle}
                   />
                 </div>
@@ -3030,6 +3185,41 @@ export default function BotPage() {
               </div>
             </div>
           )}
+
+          <div style={{ marginBottom: 20 }}>
+            <label htmlFor="bot-simulation-leverage" style={labelStyle}>
+              Simulation Leverage
+            </label>
+            <select
+              id="bot-simulation-leverage"
+              value={simulationLeverage}
+              onChange={(event) => setSimulationLeverage(event.target.value)}
+              disabled={liveMode}
+              style={{
+                ...inputStyle,
+                opacity: liveMode ? 0.55 : 1,
+                cursor: liveMode ? "not-allowed" : "pointer",
+              }}
+            >
+              {[1, 2, 5, 10, 20, 50, 100].map((value) => (
+                <option key={value} value={value}>
+                  {value}x
+                </option>
+              ))}
+            </select>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                color: "rgba(180,190,210,0.5)",
+                lineHeight: 1.5,
+              }}
+            >
+              {liveMode
+                ? "Simulation leverage does not change live orders. Live leverage follows your Orderly account's market setting."
+                : "Simulation only. Higher leverage increases both gains and losses and can trigger modeled liquidation. Start at 1x; backtest results are not a profit guarantee."}
+            </div>
+          </div>
 
           {/* Live Mode Toggle */}
           <div

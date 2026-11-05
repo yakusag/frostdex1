@@ -1,6 +1,18 @@
 import type { Candle } from "@/components/BotChart";
 
 export const BOT_TAKER_FEE_RATE = 0.0005;
+export const BOT_MAINTENANCE_MARGIN_RATE = 0.005;
+
+export function normalizeSimulationLeverage(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(100, Math.max(1, parsed));
+}
+
+export function getLongLiquidationPrice(entryPrice: number, leverage: number) {
+  if (leverage <= 1) return 0;
+  return (entryPrice * (1 - 1 / leverage)) / (1 - BOT_MAINTENANCE_MARGIN_RATE);
+}
 
 export interface SignalParameters {
   rsiPeriod?: number;
