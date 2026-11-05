@@ -160,6 +160,7 @@ const SYMBOL_DISPLAY_MAP: Record<string, string> = {
   PERP_CL_USDC: "OIL/USDC",
   PERP_NATGAS_USDC_arthur: "GAS/USDC",
 };
+
 function symbolDisplay(s: string) {
   if (SYMBOL_DISPLAY_MAP[s]) return SYMBOL_DISPLAY_MAP[s];
   const m = s.match(/^PERP_(.+?)_(USDC|USDT)(?:_|$)/);
@@ -677,7 +678,6 @@ function BotSniperEngine({
 }
 
 // ── Live Order Submitter ──────────────────────────────────────────────────────
-// Renders briefly to place one real market order on Orderly, then calls onDone.
 function OrderSubmitter({
   pending,
   onDone,
@@ -753,7 +753,6 @@ function OrderSubmitter({
 }
 
 // ── Bot Live Engine ───────────────────────────────────────────────────────────
-// Headless component: monitors real price + places real orders when signals fire.
 function BotLiveEngine({
   bot,
   tradeLogs,
@@ -1554,7 +1553,6 @@ export default function BotPage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   }, []);
 
-  // Fetch all available Orderly perp markets
   useEffect(() => {
     fetch("https://api.orderly.org/v1/public/futures")
       .then((response) => {
@@ -1808,9 +1806,15 @@ export default function BotPage() {
       return;
     }
 
+    if (liveMode && !isConnected) {
+      setBalanceMessage(
+        "Connect your Orderly account before starting a live bot.",
+      );
+      return;
+    }
+
     if (
       liveMode &&
-      isConnected &&
       (availableBalance <= 0 || Number(investment) > availableBalance)
     ) {
       setBalanceMessage(
@@ -1823,7 +1827,7 @@ export default function BotPage() {
 
     setBalanceMessage("");
     setCreating(true);
-    const willUseLive = liveMode && isConnected;
+    const willUseLive = liveMode;
     setTimeout(() => {
       const params: Record<string, string | number> =
         strategy === "grid"
@@ -1895,18 +1899,11 @@ export default function BotPage() {
   const liveCount = bots.filter(
     (b) => b.status === "running" && b.liveMode,
   ).length;
-
   const investmentNum = Number(investment);
   const balanceWarning =
     isConnected && investmentNum > 0 && investmentNum > availableBalance;
 
-  const stats: {
-    label: string;
-    value: string | number;
-    color: string;
-    prefix?: string;
-    suffix?: string;
-  }[] = [
+  const stats = [
     {
       label: "Active Bots",
       value: runningCount,
@@ -2006,7 +2003,6 @@ export default function BotPage() {
           />
         ))}
 
-      {/* Hero Header with FrostDex background */}
       <div
         className="bot-hero"
         style={{
@@ -2019,7 +2015,6 @@ export default function BotPage() {
           alignItems: "center",
         }}
       >
-        {/* Background image */}
         <div
           className="bot-hero-overlay"
           style={{
@@ -2033,7 +2028,6 @@ export default function BotPage() {
             filter: "blur(1px)",
           }}
         />
-        {/* Dark gradient overlay */}
         <div
           style={{
             position: "absolute",
@@ -2042,7 +2036,6 @@ export default function BotPage() {
               "linear-gradient(135deg, rgba(11,14,17,0.85) 0%, rgba(11,14,17,0.6) 50%, rgba(11,14,17,0.85) 100%)",
           }}
         />
-        {/* Cyan glow bottom */}
         <div
           style={{
             position: "absolute",
@@ -2055,7 +2048,6 @@ export default function BotPage() {
           }}
         />
 
-        {/* Content */}
         <div
           style={{ position: "relative", zIndex: 1, padding: "28px 24px 24px" }}
         >
@@ -2220,7 +2212,6 @@ export default function BotPage() {
         </div>
       )}
 
-      {/* Stats Row */}
       <div
         style={{
           display: "grid",
@@ -2256,7 +2247,6 @@ export default function BotPage() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div
         style={{
           display: "flex",
@@ -2299,7 +2289,6 @@ export default function BotPage() {
         ))}
       </div>
 
-      {/* ── Tab: My Bots ──────────────────────────────────────────────── */}
       {tab === "bots" && (
         <div style={{ padding: "0 16px" }}>
           {bots.length === 0 ? (
@@ -2537,11 +2526,6 @@ export default function BotPage() {
                       >
                         <div style={{ textAlign: "right" }}>
                           <div
-                            title={
-                              isLive
-                                ? "Estimated PnL uses 0.05% fees per side and requested prices; actual fills and fees may differ."
-                                : "Simulation PnL includes estimated 0.05% fees per side."
-                            }
                             style={{
                               fontSize: 16,
                               fontWeight: 700,
@@ -2621,7 +2605,6 @@ export default function BotPage() {
                       </div>
                     </div>
 
-                    {/* Params */}
                     <div
                       style={{
                         display: "flex",
@@ -2684,10 +2667,8 @@ export default function BotPage() {
         </div>
       )}
 
-      {/* ── Tab: Create Bot ────────────────────────────────────────────── */}
       {tab === "create" && (
-        <div style={{ maxWidth: 600 }}>
-          {/* Strategy Picker */}
+        <div style={{ maxWidth: 600, padding: "0 16px" }}>
           <div style={{ marginBottom: 24 }}>
             <div style={labelStyle}>Strategy</div>
             <div
@@ -2760,122 +2741,6 @@ export default function BotPage() {
             </div>
           </div>
 
-          {/* Portfolio Balance */}
-          {isConnected && (
-            <div
-              style={{
-                background: "rgba(56,224,248,0.06)",
-                border: "1px solid rgba(56,224,248,0.15)",
-                borderRadius: 8,
-                padding: "12px 16px",
-                marginBottom: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "rgba(56,224,248,0.7)",
-                    letterSpacing: 0.5,
-                    textTransform: "uppercase",
-                    marginBottom: 2,
-                  }}
-                >
-                  Your Portfolio — Available to Trade
-                </div>
-                <div
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: "#38e0f8",
-                  }}
-                >
-                  $
-                  {availableBalance.toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: "rgba(56,224,248,0.6)",
-                    }}
-                  >
-                    USD equivalent
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (availableBalance > 0) {
-                    setInvestment(
-                      Math.floor(availableBalance * 0.8).toString(),
-                    );
-                  }
-                }}
-                style={{
-                  background: "rgba(56,224,248,0.1)",
-                  border: "1px solid rgba(56,224,248,0.2)",
-                  borderRadius: 6,
-                  padding: "6px 12px",
-                  color: "#38e0f8",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontFamily: "Manrope, sans-serif",
-                }}
-              >
-                Use 80%
-              </button>
-            </div>
-          )}
-          {liveMode && isConnected && availableBalance <= 0 && (
-            <div
-              role="alert"
-              style={{
-                marginBottom: 20,
-                padding: "12px 16px",
-                border: "1px solid rgba(246,70,93,0.3)",
-                borderRadius: 8,
-                background: "rgba(246,70,93,0.08)",
-                color: "#f6a0a9",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                fontSize: 12,
-              }}
-            >
-              <span>
-                No eligible collateral is available for live trading. Deposit
-                USDC, USDT, or another supported asset into your Orderly
-                account.
-              </span>
-              <button
-                onClick={() => navigate("/portfolio/assets")}
-                style={{
-                  border: 0,
-                  padding: 0,
-                  background: "none",
-                  color: "#38e0f8",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Deposit collateral
-              </button>
-            </div>
-          )}
-
-          {/* Basic Settings */}
           <div
             style={{
               display: "grid",
@@ -2955,12 +2820,7 @@ export default function BotPage() {
                 placeholder="500"
                 min="0.01"
                 step="any"
-                style={{
-                  ...inputStyle,
-                  borderColor: balanceWarning
-                    ? "rgba(246,70,93,0.5)"
-                    : "rgba(30,36,50,1)",
-                }}
+                style={inputStyle}
               />
               {liveMode &&
                 strategy !== "dca" &&
@@ -2994,7 +2854,6 @@ export default function BotPage() {
             </div>
           </div>
 
-          {/* Strategy-specific params */}
           {strategy === "grid" && (
             <div style={{ marginBottom: 20 }}>
               <div style={sectionLabelStyle}>Grid Parameters</div>
@@ -3043,17 +2902,6 @@ export default function BotPage() {
                     style={inputStyle}
                   />
                 </div>
-              </div>
-              <div
-                style={{
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: "rgba(180,190,210,0.4)",
-                  lineHeight: 1.5,
-                }}
-              >
-                💡 Leave Upper/Lower empty for auto range detection based on
-                current volatility.
               </div>
             </div>
           )}
@@ -3106,31 +2954,7 @@ export default function BotPage() {
                     min="0.01"
                     style={inputStyle}
                   />
-                  {liveMode && minimumOrderNotional > 0 && (
-                    <div
-                      aria-live="polite"
-                      style={{
-                        fontSize: 11,
-                        color: "rgba(240,185,11,0.75)",
-                        marginTop: 4,
-                      }}
-                    >
-                      Minimum buy: {quoteAsset}{" "}
-                      {minimumOrderNotional.toFixed(2)}
-                    </div>
-                  )}
                 </div>
-              </div>
-              <div
-                style={{
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: "rgba(180,190,210,0.4)",
-                  lineHeight: 1.5,
-                }}
-              >
-                💡 DCA reduces volatility impact by spreading purchases over
-                time.
               </div>
             </div>
           )}
@@ -3173,17 +2997,6 @@ export default function BotPage() {
                     style={inputStyle}
                   />
                 </div>
-              </div>
-              <div
-                style={{
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: "rgba(180,190,210,0.4)",
-                  lineHeight: 1.5,
-                }}
-              >
-                💡 Buys when RSI &lt; 35 + EMA crossover confirmed, sells when
-                RSI &gt; 68.
               </div>
             </div>
           )}
@@ -3317,30 +3130,14 @@ export default function BotPage() {
                   fontWeight: 700,
                   color: liveMode ? "#0ecb81" : "#eaecef",
                   marginBottom: 4,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
                 }}
               >
-                {liveMode && (
-                  <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      background: "#0ecb81",
-                      boxShadow: "0 0 6px #0ecb81",
-                      display: "inline-block",
-                    }}
-                  />
-                )}
                 {liveMode ? "Live Trading Mode" : "Simulation Mode"}
               </div>
               <div
                 style={{
                   fontSize: 12,
                   color: "rgba(180,190,210,0.5)",
-                  lineHeight: 1.5,
                 }}
               >
                 {liveMode
@@ -3365,7 +3162,6 @@ export default function BotPage() {
                 background: liveMode ? "#0ecb81" : "rgba(30,36,50,1)",
                 cursor: "pointer",
                 position: "relative",
-                transition: "background 0.2s ease",
               }}
             >
               <span
@@ -3377,8 +3173,6 @@ export default function BotPage() {
                   height: 18,
                   borderRadius: "50%",
                   background: "#fff",
-                  transition: "left 0.2s ease",
-                  display: "block",
                 }}
               />
             </button>
@@ -3425,66 +3219,21 @@ export default function BotPage() {
                   ? "not-allowed"
                   : "pointer",
               fontFamily: "Manrope, sans-serif",
-              letterSpacing: 0.3,
-              transition: "opacity 0.15s ease",
             }}
           >
             {creating
               ? "Creating Bot..."
               : liveMode && !isConnected
                 ? "Connect Wallet to Use Live Mode"
-                : liveMode && availableBalance <= 0
-                  ? "Deposit Collateral to Use Live Mode"
-                  : liveMode && balanceWarning
-                    ? "Investment Exceeds Available Balance"
-                    : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
-                        liveMode ? " (Live)" : " (Simulation)"
-                      }`}
+                : `🚀 Launch ${STRATEGY_INFO[strategy].label}${
+                    liveMode ? " (Live)" : " (Simulation)"
+                  }`}
           </button>
         </div>
       )}
 
-      {/* ── Tab: Trade History ─────────────────────────────────────────── */}
       {tab === "logs" && (
-        <div>
-          {/* Link to full Orderly history */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 16,
-              flexWrap: "wrap",
-              gap: 8,
-            }}
-          >
-            <div style={{ fontSize: 13, color: "rgba(180,190,210,0.5)" }}>
-              Bot trade history · {logs.length} executions
-              {logs.filter((l) => l.live).length > 0 && (
-                <span
-                  style={{ marginLeft: 8, color: "#0ecb81", fontWeight: 600 }}
-                >
-                  ({logs.filter((l) => l.live).length} live)
-                </span>
-              )}
-            </div>
-            <a
-              href="/portfolio/history"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#38e0f8",
-                textDecoration: "none",
-                background: "rgba(56,224,248,0.08)",
-                border: "1px solid rgba(56,224,248,0.2)",
-                borderRadius: 6,
-                padding: "5px 12px",
-              }}
-            >
-              Orderly Account History →
-            </a>
-          </div>
-
+        <div style={{ padding: "0 16px" }}>
           {logs.length === 0 ? (
             <div
               style={{
@@ -3497,34 +3246,9 @@ export default function BotPage() {
               <div style={{ fontSize: 15, fontWeight: 600 }}>
                 No trade history yet
               </div>
-              <div style={{ fontSize: 13, marginTop: 4 }}>
-                Run a bot to see its simulated or live executions here
-              </div>
             </div>
           ) : (
             <div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 80px 130px 100px 110px 90px 120px",
-                  gap: 8,
-                  padding: "8px 16px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "rgba(180,190,210,0.4)",
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                  borderBottom: "1px solid rgba(30,36,50,1)",
-                }}
-              >
-                <div>Bot</div>
-                <div>Side</div>
-                <div>Symbol</div>
-                <div style={{ textAlign: "right" }}>Qty</div>
-                <div style={{ textAlign: "right" }}>Price</div>
-                <div>Mode</div>
-                <div style={{ textAlign: "right" }}>Time</div>
-              </div>
               {logs.slice(0, 100).map((log) => {
                 const bot = bots.find((b) => b.id === log.botId);
                 return (
@@ -3577,9 +3301,6 @@ export default function BotPage() {
                             fontSize: 10,
                             fontWeight: 700,
                             color: "#0ecb81",
-                            background: "rgba(14,203,129,0.1)",
-                            padding: "1px 6px",
-                            borderRadius: 3,
                           }}
                         >
                           LIVE
@@ -3602,12 +3323,7 @@ export default function BotPage() {
                         fontSize: 11,
                       }}
                     >
-                      {new Date(log.ts).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {new Date(log.ts).toLocaleString()}
                     </div>
                   </div>
                 );
@@ -3617,23 +3333,9 @@ export default function BotPage() {
         </div>
       )}
 
-      {/* ── Tab: Chart & Backtest ──────────────────────────────────────── */}
       {tab === "backtest" && (
         <div>
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "64px 24px",
-                  color: "rgba(180,190,210,0.35)",
-                  fontSize: 13,
-                }}
-              >
-                Loading chart...
-              </div>
-            }
-          >
+          <Suspense fallback={<div>Loading chart...</div>}>
             <BotBacktest defaultStrategy="signal" defaultSymbol="BTC" />
           </Suspense>
         </div>
