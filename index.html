@@ -137,9 +137,21 @@
       html[data-theme="extra"] #splash-motto {
         background: linear-gradient(
           90deg,
-          rgb(var(--oui-gradient-brand-start)) 0%,
-          rgb(var(--oui-gradient-brand-end)) 100%
+          #f0b90b 0%,
+          #ffe58a 52%,
+          #f0b90b 100%
         );
+      }
+      html[data-theme="extra"] #splash-tag {
+        background: linear-gradient(
+          90deg,
+          #f0b90b 0%,
+          #ffe58a 52%,
+          #f0b90b 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
 
       /* Installed apps should open on the site, not on the web splash screen. */
