@@ -10,9 +10,12 @@ import { useNavigate } from "react-router-dom";
 import {
   useAccount,
   useCollateral,
+  useLeverageBySymbol,
+  useMaxLeverage,
   useMarkPrice,
   useOrderEntry,
   useSymbolInfo,
+  useSymbolLeverage,
   useSymbolsInfo,
 } from "@orderly.network/hooks";
 import { OrderSide, OrderType } from "@orderly.network/types";
@@ -101,6 +104,7 @@ interface PendingOrder {
   side: "BUY" | "SELL";
   qty: string;
   triggerPrice: number;
+  leverage: number;
   position?: ManagedPosition;
 }
 
@@ -197,6 +201,12 @@ function getConfiguredGridBound(value: string | number | undefined) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function getBotLeverage(bot: BotConfig) {
+  return normalizeSimulationLeverage(
+    bot.params.leverage ?? (!bot.liveMode ? bot.params.simLeverage : undefined),
+  );
+}
+
 function getOrderQuantity(
   targetNotional: number,
   price: number,
@@ -220,6 +230,12 @@ function getOrderQuantity(
   return Number.isFinite(roundedQuantity) && roundedQuantity > 0
     ? roundedQuantity
     : null;
+}
+
+function getOrderQuantityDown(quantity: number, rules: SymbolOrderRules) {
+  if (!Number.isFinite(quantity) || quantity <= 0) return 0;
+  const step = rules.base_tick || 10 ** -rules.base_dp;
+  return Number((Math.floor(quantity / step) * step).toFixed(rules.base_dp));
 }
 
 function getHistoricalPerformance(trades: TradeLog[]) {
@@ -268,7 +284,7 @@ interface OrderlyHistory {
   v?: number[];
 }
 
-function useOrderlyFeed(symbol: string) {
+function useOrderlyFeed(symbol: string, enabled = true) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [latestPrice, setLatestPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -277,6 +293,16 @@ function useOrderlyFeed(symbol: string) {
   useEffect(() => {
     let active = true;
     let fetching = false;
+
+    if (!enabled) {
+      setCandles([]);
+      setLatestPrice(null);
+      setError(null);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     const load = async () => {
       if (fetching) return;
@@ -344,7 +370,7 @@ function useOrderlyFeed(symbol: string) {
       active = false;
       window.clearInterval(interval);
     };
-  }, [symbol]);
+  }, [symbol, enabled]);
 
   return { candles, latestPrice, loading, error };
 }
@@ -559,9 +585,47 @@ function BotSniperEngine({
   ) => void;
 }) {
   const hasPosition = !!bot.position;
+  const autoScan = bot.params.autoScan !== 0 && bot.params.autoScan !== "0";
+  const feed = useOrderlyFeed(bot.symbol, !autoScan);
 
   useEffect(() => {
     if (bot.status !== "running") return;
+    if (!autoScan) {
+      if (feed.loading) return;
+      if (feed.error || feed.candles.length < 22) {
+        onUpdate(bot.id, {
+          marketDataStatus: "unavailable",
+          sniperAlert: null,
+        });
+        return;
+      }
+
+      const lastClosed = getLastClosedTrendCandleIndex(feed.candles);
+      if (lastClosed < 20) {
+        onUpdate(bot.id, {
+          marketDataStatus: "unavailable",
+          sniperAlert: null,
+        });
+        return;
+      }
+
+      const candidate = getSniperAlert(bot.symbol, feed.candles, lastClosed);
+      const alert =
+        hasPosition && candidate?.kind !== "DUMP"
+          ? null
+          : !hasPosition && candidate?.kind !== "PUMP"
+            ? null
+            : candidate;
+      onUpdate(bot.id, {
+        symbol: bot.symbol,
+        marketDataStatus: "ready",
+        sniperAlert: alert,
+        sniperLastCandle: feed.candles[lastClosed].t,
+        sniperMarketCount: 1,
+      });
+      return;
+    }
+
     let active = true;
     const scan = async () => {
       try {
@@ -573,7 +637,6 @@ function BotSniperEngine({
                 candidate.symbol === bot.symbol && candidate.kind === "DUMP",
             ) ?? null)
           : (snapshot.alerts.find((candidate) => candidate.kind === "PUMP") ??
-            snapshot.alerts[0] ??
             null);
         onUpdate(bot.id, {
           symbol: hasPosition ? bot.symbol : (alert?.symbol ?? bot.symbol),
@@ -601,7 +664,17 @@ function BotSniperEngine({
       active = false;
       window.clearInterval(interval);
     };
-  }, [bot.id, hasPosition, bot.status, bot.symbol, onUpdate]);
+  }, [
+    autoScan,
+    bot.id,
+    bot.status,
+    bot.symbol,
+    feed.candles,
+    feed.error,
+    feed.loading,
+    hasPosition,
+    onUpdate,
+  ]);
 
   return null;
 }
@@ -614,9 +687,16 @@ function OrderSubmitter({
 }: {
   pending: PendingOrder;
   onDone: (result: { success: boolean; orderId?: string }) => void;
-  onInsufficientBalance: () => void;
+  onInsufficientBalance: (message?: string) => void;
 }) {
+  const { state: accountState } = useAccount();
   const { freeCollateral } = useCollateral();
+  const {
+    maxLeverage,
+    update,
+    isLoading: leverageLoading,
+  } = useSymbolLeverage(pending.symbol);
+  const currentLeverage = useLeverageBySymbol(pending.symbol);
   const { submit } = useOrderEntry(pending.symbol, {
     initialOrder: {
       side: pending.side === "BUY" ? OrderSide.BUY : OrderSide.SELL,
@@ -626,29 +706,95 @@ function OrderSubmitter({
   });
 
   const submitted = useRef(false);
+  const accountIdRef = useRef(accountState?.accountId);
+  const freeCollateralRef = useRef(freeCollateral);
+  accountIdRef.current = accountState?.accountId;
+  freeCollateralRef.current = freeCollateral;
 
   useEffect(() => {
-    if (submitted.current || !submit) return;
-    submitted.current = true;
+    if (submitted.current) return;
     const orderNotional = Number(pending.qty) * pending.triggerPrice;
-    const orderCost = orderNotional * (1 + BOT_TAKER_FEE_RATE);
+    const requiredCollateral =
+      orderNotional * (1 / pending.leverage + BOT_TAKER_FEE_RATE);
+    const reject = (message: string) => {
+      submitted.current = true;
+      onInsufficientBalance(message);
+      onDone({ success: false });
+    };
+
+    if (!accountState?.accountId) {
+      reject("Connect your Orderly wallet before placing a live bot order.");
+      return;
+    }
+    if (!Number.isFinite(freeCollateral) || freeCollateral <= 0) {
+      reject(
+        "Live bot orders are blocked because your Orderly account has no available collateral. Deposit supported collateral first.",
+      );
+      return;
+    }
+    if (!submit || leverageLoading) return;
     if (
       pending.side === "BUY" &&
-      (!Number.isFinite(freeCollateral) ||
-        freeCollateral <= 0 ||
-        orderCost > freeCollateral)
+      (!Number.isFinite(maxLeverage) ||
+        maxLeverage < 1 ||
+        pending.leverage > maxLeverage)
     ) {
-      onInsufficientBalance();
-      onDone({ success: false });
+      reject(
+        `The selected ${pending.leverage}x leverage is unavailable for ${symbolDisplay(pending.symbol)}. The market maximum is ${Number.isFinite(maxLeverage) ? `${maxLeverage}x` : "not available"}.`,
+      );
+      return;
+    }
+    if (
+      pending.side === "BUY" &&
+      (!Number.isFinite(requiredCollateral) ||
+        requiredCollateral <= 0 ||
+        requiredCollateral > freeCollateral)
+    ) {
+      reject(
+        `This ${pending.leverage}x order requires about $${requiredCollateral.toFixed(2)} in collateral and fees, but only $${freeCollateral.toFixed(2)} is available.`,
+      );
       return;
     }
 
-    submit()
-      .then((result) => {
-        if (!result.success) {
+    submitted.current = true;
+    const execute = async () => {
+      try {
+        if (pending.side === "BUY" && currentLeverage !== pending.leverage) {
+          await update({
+            leverage: pending.leverage,
+            symbol: pending.symbol,
+          });
+        }
+
+        const latestCollateral = freeCollateralRef.current;
+        if (!accountIdRef.current) {
+          onInsufficientBalance(
+            "The Orderly wallet disconnected before the live order could be sent.",
+          );
           onDone({ success: false });
           return;
         }
+        if (
+          !Number.isFinite(latestCollateral) ||
+          latestCollateral <= 0 ||
+          (pending.side === "BUY" && requiredCollateral > latestCollateral)
+        ) {
+          onInsufficientBalance(
+            "The live order was blocked because available Orderly collateral changed before submission.",
+          );
+          onDone({ success: false });
+          return;
+        }
+
+        const result = await submit();
+        if (!result.success) {
+          onInsufficientBalance(
+            "Orderly rejected the live bot order. No successful fill was confirmed.",
+          );
+          onDone({ success: false });
+          return;
+        }
+
         const data: unknown = result.data;
         const response =
           data && typeof data === "object"
@@ -666,16 +812,30 @@ function OrderSubmitter({
               ? nestedResponse.order_id
               : undefined;
         onDone({ success: true, orderId });
-      })
-      .catch(() => onDone({ success: false }));
+      } catch (error) {
+        console.error("FrostDex live order submission failed:", error);
+        onInsufficientBalance(
+          "The live bot order failed before a successful fill was confirmed.",
+        );
+        onDone({ success: false });
+      }
+    };
+    void execute();
   }, [
     submit,
     onDone,
     onInsufficientBalance,
+    accountState?.accountId,
     freeCollateral,
+    maxLeverage,
+    leverageLoading,
+    currentLeverage,
+    update,
     pending.qty,
     pending.side,
     pending.triggerPrice,
+    pending.leverage,
+    pending.symbol,
   ]);
 
   return null;
@@ -785,10 +945,14 @@ function BotLiveEngine({
     const lastClosed = getLastClosedTrendCandleIndex(candles);
     if (lastClosed < 21) return;
     const investment = bot.investment;
+    const leverage = getBotLeverage(bot);
 
     if (!symbolRules) return;
 
-    const availableBudget = Math.min(investment, freeCollateral || 0);
+    const availableBudget = Math.min(
+      investment,
+      Number.isFinite(freeCollateral) ? freeCollateral : 0,
+    );
     const currentPosition = positionRef.current;
     const dcaRemainingBudget =
       bot.strategy === "dca"
@@ -798,34 +962,37 @@ function BotLiveEngine({
               (currentPosition
                 ? currentPosition.entryPrice *
                   currentPosition.quantity *
-                  (1 + BOT_TAKER_FEE_RATE)
+                  (1 / leverage + BOT_TAKER_FEE_RATE)
                 : 0),
           )
         : availableBudget;
     const strategyBudget = Math.min(availableBudget, dcaRemainingBudget);
-    const orderBudget = strategyBudget / (1 + BOT_TAKER_FEE_RATE);
+    const marginPerNotional = 1 / leverage + BOT_TAKER_FEE_RATE;
     const minimumOrderNotional = Math.max(
       symbolRules.min_notional,
       symbolRules.base_min * price,
     );
-    const requestedBuyNotional =
+    const requestedOrderMargin =
       bot.strategy === "dca"
-        ? Math.min(Number(bot.params.amount) || investment * 0.5, orderBudget)
+        ? Math.min(
+            Number(bot.params.amount) || investment * 0.5,
+            strategyBudget,
+          )
         : bot.strategy === "sniper"
-          ? Math.min(
-              (investment * 0.25) / (1 + BOT_TAKER_FEE_RATE),
-              orderBudget,
-            )
-          : Math.min(investment * 0.5, orderBudget);
+          ? Math.min(investment * 0.25, strategyBudget)
+          : Math.min(investment * 0.5, strategyBudget);
+    const buyMarginBudget = Math.min(requestedOrderMargin, strategyBudget);
+    const maxAffordableNotional = strategyBudget / marginPerNotional;
     const buyNotional = Math.min(
-      orderBudget,
-      Math.max(minimumOrderNotional, requestedBuyNotional),
+      maxAffordableNotional,
+      Math.max(minimumOrderNotional, buyMarginBudget / marginPerNotional),
     );
 
     const queueOrder = (
       order: PendingOrder,
-      maxOrderBudget = bot.strategy === "dca" ? buyNotional : availableBudget,
+      maxOrderMargin = buyMarginBudget,
     ) => {
+      order.leverage = leverage;
       if (order.side === "BUY") {
         const quantity = getOrderQuantity(
           Number(order.qty) * order.triggerPrice,
@@ -834,19 +1001,19 @@ function BotLiveEngine({
         );
         if (quantity === null) return;
         const orderNotional = quantity * order.triggerPrice;
-        const orderCost = orderNotional * (1 + BOT_TAKER_FEE_RATE);
+        const orderCost = orderNotional * (1 / leverage + BOT_TAKER_FEE_RATE);
         if (
           !Number.isFinite(freeCollateral) ||
           freeCollateral <= 0 ||
           orderCost > freeCollateral ||
-          orderCost > maxOrderBudget
+          orderCost > maxOrderMargin
         ) {
           if (!balanceAlertedRef.current) {
             balanceAlertedRef.current = true;
             onInsufficientBalance(
-              `Orderly requires at least $${orderNotional.toFixed(2)} for this ${symbolDisplay(
+              `This ${leverage}x ${symbolDisplay(
                 bot.symbol,
-              )} order, but your available balance or bot allocation is too low.`,
+              )} order requires about $${orderCost.toFixed(2)} collateral and fees, but your available balance or bot allocation is too low.`,
             );
           }
           return;
@@ -891,7 +1058,7 @@ function BotLiveEngine({
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
       shouldBuy =
-        strategyBudget >= minimumOrderNotional &&
+        buyNotional >= minimumOrderNotional &&
         Date.now() - lastDcaBuyRef.current >=
           getDcaIntervalMs(bot.params.interval);
       shouldSell =
@@ -917,31 +1084,32 @@ function BotLiveEngine({
       const riskExit =
         !!position &&
         (price <= position.stopPrice || price >= position.targetPrice);
-      shouldBuy = decision.buy && strategyBudget >= minimumOrderNotional;
+      shouldBuy = decision.buy && buyNotional >= minimumOrderNotional;
       shouldSell = riskExit || decision.sell;
 
       const stopDistance = atrValue * stopAtr;
 
       if (!pendingOrder && shouldBuy) {
         const riskBudget = investment * 0.01;
-        const maxNotional = availableBudget * 0.25;
-        const qty =
+        const trendMarginBudget = Math.min(
+          availableBudget * 0.25,
+          investment * 0.25,
+        );
+        const maxNotional = trendMarginBudget / marginPerNotional;
+        const rawQuantity =
           Number.isFinite(stopDistance) && stopDistance > 0
-            ? Math.floor(
-                Math.min(
-                  riskBudget / stopDistance,
-                  maxNotional / (price * (1 + BOT_TAKER_FEE_RATE)),
-                ) * 1_000_000,
-              ) / 1_000_000
+            ? Math.min(riskBudget / stopDistance, maxNotional / price)
             : 0;
-        if (qty > 0) {
+        const qty = getOrderQuantityDown(rawQuantity, symbolRules);
+        if (qty > 0 && qty * price >= minimumOrderNotional) {
           queueOrder(
             {
               botId: bot.id,
               symbol: bot.symbol,
               side: "BUY",
-              qty: qty.toFixed(6),
+              qty: qty.toFixed(symbolRules.base_dp),
               triggerPrice: price,
+              leverage,
               position: {
                 qty,
                 entryPrice: price,
@@ -949,7 +1117,7 @@ function BotLiveEngine({
                 targetPrice: price + stopDistance * rewardRisk,
               },
             },
-            availableBudget * 0.25,
+            trendMarginBudget,
           );
         }
       } else if (!pendingOrder && shouldSell && position) {
@@ -957,8 +1125,9 @@ function BotLiveEngine({
           botId: bot.id,
           symbol: bot.symbol,
           side: "SELL",
-          qty: position.qty.toFixed(6),
+          qty: position.qty.toFixed(symbolRules.base_dp),
           triggerPrice: price,
+          leverage,
         });
       }
       return;
@@ -976,10 +1145,11 @@ function BotLiveEngine({
           side: "BUY",
           qty: (buyNotional / price).toFixed(symbolRules.base_dp),
           triggerPrice: price,
+          leverage,
         },
         bot.strategy === "sniper"
-          ? Math.min(investment * 0.25, availableBudget)
-          : undefined,
+          ? Math.min(investment * 0.25, strategyBudget)
+          : buyMarginBudget,
       );
     } else if (shouldSell && !pendingOrder && positionRef.current) {
       const position = positionRef.current;
@@ -987,8 +1157,9 @@ function BotLiveEngine({
         botId: bot.id,
         symbol: bot.symbol,
         side: "SELL",
-        qty: position.quantity.toFixed(6),
+        qty: position.quantity.toFixed(symbolRules.base_dp),
         triggerPrice: price,
+        leverage,
       });
     }
   }, [
@@ -1101,6 +1272,7 @@ function BotPaperEngine({
   ) => void;
 }) {
   const feed = useOrderlyFeed(bot.symbol);
+  const simulationLeverage = getBotLeverage(bot);
 
   useEffect(() => {
     if (bot.status !== "running" || feed.loading) return;
@@ -1121,9 +1293,6 @@ function BotPaperEngine({
     const candleTime = candles[last].t;
     const closedCandle = candles[last];
     const newClosedCandle = candleTime !== bot.paperLastCandle;
-    const simulationLeverage = normalizeSimulationLeverage(
-      bot.params.simLeverage,
-    );
     let position = bot.paperPosition ?? null;
     let realizedPnl = bot.paperRealizedPnl ?? 0;
     let trade: Omit<TradeLog, "id"> | undefined;
@@ -1257,6 +1426,7 @@ function BotPaperEngine({
   }, [
     bot.id,
     bot.status,
+    bot.strategy,
     bot.investment,
     bot.symbol,
     bot.params.stopAtr,
@@ -1266,7 +1436,7 @@ function BotPaperEngine({
     bot.params.rsiOverbought,
     bot.params.emaFast,
     bot.params.ema,
-    bot.params.simLeverage,
+    simulationLeverage,
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
@@ -1317,9 +1487,7 @@ function BotSimulationEngine({
     lastEvaluationRef.current = { price, candleTime };
 
     const position = positionRef.current;
-    const simulationLeverage = normalizeSimulationLeverage(
-      bot.params.simLeverage,
-    );
+    const simulationLeverage = getBotLeverage(bot);
     let shouldBuy = false;
     let shouldSell = false;
     let buyNotional = Math.min(bot.investment * 0.5, bot.investment);
@@ -1488,6 +1656,7 @@ export default function BotPage() {
   const [symbol, setSymbol] = useState("PERP_BTC_USDC");
   const selectedSymbolInfo = useSymbolInfo(symbol);
   const selectedSymbolRules = selectedSymbolInfo?.();
+  const maxSymbolLeverage = useMaxLeverage(symbol);
   const { data: selectedMarkPrice } = useMarkPrice(symbol);
   const minimumOrderNotional = Math.max(
     Number(selectedSymbolRules?.min_notional ?? 0),
@@ -1509,6 +1678,7 @@ export default function BotPage() {
   const [trendStopAtr, setTrendStopAtr] = useState("2");
   const [trendRewardRisk, setTrendRewardRisk] = useState("2.5");
   const [simulationLeverage, setSimulationLeverage] = useState("1");
+  const [sniperAutoScan, setSniperAutoScan] = useState(true);
   const [sigRsiOversold, setSigRsiOversold] = useState("35");
   const [sigRsiOverbought, setSigRsiOverbought] = useState("68");
   const [sigEmaFast, setSigEmaFast] = useState("9");
@@ -1679,6 +1849,42 @@ export default function BotPage() {
           const nextCandle = update.sniperLastCandle ?? bot.sniperLastCandle;
           const nextMarketCount =
             update.sniperMarketCount ?? bot.sniperMarketCount;
+          const leverageConflict =
+            bot.liveMode &&
+            update.sniperAlert?.kind === "PUMP" &&
+            nextSymbol !== bot.symbol &&
+            prev.some(
+              (otherBot) =>
+                otherBot.id !== bot.id &&
+                otherBot.liveMode &&
+                otherBot.symbol === nextSymbol &&
+                (otherBot.status === "running" ||
+                  (otherBot.position?.quantity ?? 0) > 0) &&
+                getBotLeverage(otherBot) !== getBotLeverage(bot),
+            );
+          if (leverageConflict) {
+            console.warn(
+              `FrostDex Sniper skipped ${nextSymbol}: another live bot has an open or running position at a different leverage.`,
+            );
+            const blockedUpdate = {
+              ...bot,
+              symbol: bot.symbol,
+              marketDataStatus: "ready",
+              sniperAlert: null,
+              sniperLastCandle: nextCandle,
+              sniperMarketCount: nextMarketCount,
+            };
+            if (
+              blockedUpdate.sniperAlert === bot.sniperAlert &&
+              blockedUpdate.sniperLastCandle === bot.sniperLastCandle &&
+              blockedUpdate.sniperMarketCount === bot.sniperMarketCount &&
+              blockedUpdate.marketDataStatus === bot.marketDataStatus
+            ) {
+              return bot;
+            }
+            changed = true;
+            return blockedUpdate;
+          }
           if (
             !alertChanged &&
             nextStatus === bot.marketDataStatus &&
@@ -1754,9 +1960,8 @@ export default function BotPage() {
     setTrendRewardRisk(
       String(normalizeTrendParameter(bot.params.rewardRisk, 2.5)),
     );
-    setSimulationLeverage(
-      String(normalizeSimulationLeverage(bot.params.simLeverage)),
-    );
+    setSimulationLeverage(String(getBotLeverage(bot)));
+    setSniperAutoScan(bot.params.autoScan !== 0 && bot.params.autoScan !== "0");
     setLiveMode(true);
     setTab("create");
   };
@@ -1809,6 +2014,34 @@ export default function BotPage() {
       return;
     }
 
+    const selectedLeverage = normalizeSimulationLeverage(simulationLeverage);
+    if (liveMode) {
+      if (
+        !Number.isFinite(maxSymbolLeverage) ||
+        maxSymbolLeverage < 1 ||
+        selectedLeverage > maxSymbolLeverage
+      ) {
+        setBalanceMessage(
+          `The selected ${selectedLeverage}x leverage is unavailable for ${symbolDisplay(symbol)}. The market maximum is ${Number.isFinite(maxSymbolLeverage) ? `${maxSymbolLeverage}x` : "not available"}.`,
+        );
+        return;
+      }
+
+      const conflictingBot = bots.find(
+        (bot) =>
+          bot.liveMode &&
+          bot.symbol === symbol &&
+          (bot.status === "running" || (bot.position?.quantity ?? 0) > 0) &&
+          getBotLeverage(bot) !== selectedLeverage,
+      );
+      if (conflictingBot) {
+        setBalanceMessage(
+          `Another live bot on ${symbolDisplay(symbol)} is running or has an open position at ${getBotLeverage(conflictingBot)}x. Use the same leverage or stop and close that position first.`,
+        );
+        return;
+      }
+    }
+
     setBalanceMessage("");
     setCreating(true);
     const willUseLive = liveMode;
@@ -1840,8 +2073,10 @@ export default function BotPage() {
                     emaFast: Number(sigEmaFast) || 9,
                     ema: Number(sigEma) || 21,
                   }
-                : {};
-      params.simLeverage = normalizeSimulationLeverage(simulationLeverage);
+                : strategy === "sniper"
+                  ? { autoScan: sniperAutoScan ? 1 : 0 }
+                  : {};
+      params.leverage = selectedLeverage;
 
       const newBot: BotConfig = {
         id: generateId(),
@@ -2682,7 +2917,6 @@ export default function BotPage() {
                     key={s}
                     onClick={() => {
                       setStrategy(s);
-                      if (s === "sniper") setLiveMode(false);
                     }}
                     style={{
                       background: selected
@@ -2744,16 +2978,53 @@ export default function BotPage() {
             }}
           >
             {strategy === "sniper" ? (
-              <div
-                style={{
-                  alignSelf: "center",
-                  color: "rgba(180,190,210,0.65)",
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                }}
-              >
-                Automatically scans all active Orderly perpetual markets and
-                picks the strongest pump/dump signal.
+              <div>
+                <label htmlFor="sniper-market-selection" style={labelStyle}>
+                  Sniper Market Selection
+                </label>
+                <select
+                  id="sniper-market-selection"
+                  value={sniperAutoScan ? "all" : "single"}
+                  onChange={(event) => {
+                    const autoScan = event.target.value === "all";
+                    setSniperAutoScan(autoScan);
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="all">Auto-scan all markets</option>
+                  <option value="single">Choose one coin</option>
+                </select>
+                {!sniperAutoScan && (
+                  <div style={{ marginTop: 10 }}>
+                    <label htmlFor="bot-symbol" style={labelStyle}>
+                      Coin
+                    </label>
+                    <select
+                      id="bot-symbol"
+                      value={symbol}
+                      onChange={(event) => setSymbol(event.target.value)}
+                      style={inputStyle}
+                    >
+                      {allSymbols.map((marketSymbol) => (
+                        <option key={marketSymbol} value={marketSymbol}>
+                          {symbolDisplay(marketSymbol)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: "rgba(180,190,210,0.65)",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {sniperAutoScan
+                    ? "Scans active Orderly perpetual markets and selects the strongest pump/dump signal."
+                    : "Watches only the selected market for the same pump/dump signal."}
+                </div>
               </div>
             ) : (
               <>
@@ -3187,18 +3458,15 @@ export default function BotPage() {
           )}
 
           <div style={{ marginBottom: 20 }}>
-            <label htmlFor="bot-simulation-leverage" style={labelStyle}>
-              Simulation Leverage
+            <label htmlFor="bot-leverage" style={labelStyle}>
+              Bot Leverage
             </label>
             <select
-              id="bot-simulation-leverage"
+              id="bot-leverage"
               value={simulationLeverage}
               onChange={(event) => setSimulationLeverage(event.target.value)}
-              disabled={liveMode}
               style={{
                 ...inputStyle,
-                opacity: liveMode ? 0.55 : 1,
-                cursor: liveMode ? "not-allowed" : "pointer",
               }}
             >
               {[1, 2, 5, 10, 20, 50, 100].map((value) => (
@@ -3216,8 +3484,8 @@ export default function BotPage() {
               }}
             >
               {liveMode
-                ? "Simulation leverage does not change live orders. Live leverage follows your Orderly account's market setting."
-                : "Simulation only. Higher leverage increases both gains and losses and can trigger modeled liquidation. Start at 1x; backtest results are not a profit guarantee."}
+                ? `Live orders set ${simulationLeverage}x leverage for ${symbolDisplay(symbol)} before entry (market max: ${Number.isFinite(maxSymbolLeverage) ? `${maxSymbolLeverage}x` : "loading"}). Orderly leverage is shared by this account and symbol, so changing it can affect other positions. A connected wallet and positive free collateral are required before every order.`
+                : "Simulation only. This leverage is applied to every bot strategy through modeled exposure and liquidation; it does not change an Orderly account. Higher leverage increases risk, and backtest results are not a profit guarantee."}
             </div>
           </div>
 
