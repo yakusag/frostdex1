@@ -1866,7 +1866,7 @@ export default function BotPage() {
             console.warn(
               `FrostDex Sniper skipped ${nextSymbol}: another live bot has an open or running position at a different leverage.`,
             );
-            const blockedUpdate = {
+            const blockedUpdate: BotConfig = {
               ...bot,
               symbol: bot.symbol,
               marketDataStatus: "ready",
@@ -2161,7 +2161,7 @@ export default function BotPage() {
       color: totalPnl >= 0 ? "#0ecb81" : "#f6465d",
     },
     {
-      label: "Free Collateral",
+      label: "Wallet Balance · Free Collateral",
       value: isConnected
         ? availableBalance.toLocaleString("en-US", {
             minimumFractionDigits: 2,
@@ -2560,6 +2560,7 @@ export default function BotPage() {
                 const isRunning = bot.status === "running";
                 const isSniper = bot.strategy === "sniper";
                 const isLive = bot.liveMode;
+                const botLeverage = getBotLeverage(bot);
                 const botLogs = logs.filter((l) => l.botId === bot.id);
                 return (
                   <div key={bot.id} className="bot-card">
@@ -2678,8 +2679,8 @@ export default function BotPage() {
                             }}
                           >
                             {isSniper
-                              ? `${info.label} · Auto market scan · $${bot.investment.toLocaleString()}`
-                              : `${info.label} · ${symbolDisplay(bot.symbol)} · $${bot.investment.toLocaleString()} · ${botLogs.length} trades`}
+                              ? `${info.label} · Auto market scan · ${botLeverage}x · $${bot.investment.toLocaleString()}`
+                              : `${info.label} · ${symbolDisplay(bot.symbol)} · ${botLeverage}x · $${bot.investment.toLocaleString()} · ${botLogs.length} trades`}
                           </div>
                           {isRunning &&
                             isLive &&
@@ -2694,7 +2695,27 @@ export default function BotPage() {
                               >
                                 {!isConnected
                                   ? "Live orders paused — connect your Orderly account."
-                                  : "Live orders paused — deposit supported collateral to continue."}
+                                  : `Live orders paused — $${availableBalance.toFixed(2)} free collateral. Deposit supported collateral to continue.`}
+                                {isConnected && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate("/portfolio/assets")
+                                    }
+                                    style={{
+                                      marginLeft: 8,
+                                      border: 0,
+                                      padding: 0,
+                                      background: "none",
+                                      color: "#38e0f8",
+                                      font: "inherit",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Deposit
+                                  </button>
+                                )}
                               </div>
                             )}
                           {isRunning && isSniper && (
@@ -3113,7 +3134,49 @@ export default function BotPage() {
                 >
                   ⚠ Investment exceeds available balance ($
                   {availableBalance.toFixed(2)} free). Lower the investment or
-                  deposit more collateral.
+                  deposit more collateral.{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/portfolio/assets")}
+                    style={{
+                      border: 0,
+                      padding: 0,
+                      background: "none",
+                      color: "#38e0f8",
+                      font: "inherit",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Deposit
+                  </button>
+                </div>
+              )}
+              {liveMode && isConnected && availableBalance <= 0 && (
+                <div
+                  role="alert"
+                  style={{
+                    fontSize: 11,
+                    color: "#f6465d",
+                    marginTop: 4,
+                  }}
+                >
+                  No free wallet balance is available for live orders.{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/portfolio/assets")}
+                    style={{
+                      border: 0,
+                      padding: 0,
+                      background: "none",
+                      color: "#38e0f8",
+                      font: "inherit",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Deposit collateral
+                  </button>
                 </div>
               )}
             </div>
@@ -3459,7 +3522,7 @@ export default function BotPage() {
 
           <div style={{ marginBottom: 20 }}>
             <label htmlFor="bot-leverage" style={labelStyle}>
-              Bot Leverage
+              Trade Leverage (up to 100x)
             </label>
             <select
               id="bot-leverage"
