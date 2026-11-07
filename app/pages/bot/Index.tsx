@@ -3161,7 +3161,7 @@ export default function BotPage() {
                     marginTop: 4,
                   }}
                 >
-                  No free wallet balance is available for live orders.{" "}
+                  No available balance.{" "}
                   <button
                     type="button"
                     onClick={() => navigate("/portfolio/assets")}
