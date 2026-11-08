@@ -7,7 +7,6 @@ import AIAssistant from "@/components/AIAssistant";
 import FrostTradeWidget from "@/components/FrostTradeWidget";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
 import IOSInstallGuide from "@/components/IOSInstallGuide";
-import LeverageAutoMax from "@/components/LeverageAutoMax";
 import LiqHeatmap from "@/components/LiqHeatmap";
 import MACWidget from "@/components/MACWidget";
 import MarketTickerBar from "@/components/MarketTickerBar";
@@ -64,7 +63,6 @@ export default function App() {
       <ReferralWelcome />
       <MarketTickerBar />
       <OrderlyProvider>
-        <LeverageAutoMax />
         <Outlet />
       </OrderlyProvider>
       {visibility.frost && <FrostTradeWidget onHide={() => toggle("frost")} />}
