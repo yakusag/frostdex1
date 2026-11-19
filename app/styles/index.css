@@ -190,8 +190,8 @@ tr:hover td {
 }
 
 html[data-theme="standard"] .oui-scaffold-topNavbar {
-  background: #fffdf8;
-  box-shadow: 0 2px 12px rgb(83 57 29 / 0.06);
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgb(30 35 41 / 0.06);
 }
 
 html[data-theme="standard"] [role="dialog"],
@@ -199,16 +199,16 @@ html[data-theme="standard"] [data-radix-popper-content-wrapper],
 html[data-theme="standard"] .oui-dialog,
 html[data-theme="standard"] [class*="oui-modal"],
 html[data-theme="standard"] [class*="oui-popover"] {
-  box-shadow: 0 12px 32px rgb(83 57 29 / 0.14) !important;
+  box-shadow: 0 12px 32px rgb(30 35 41 / 0.12) !important;
 }
 
 html[data-theme="standard"] ::-webkit-scrollbar-track {
-  background: #eee5d7;
+  background: #f5f5f5;
 }
 
 html[data-theme="standard"] ::selection {
-  background: rgb(var(--oui-color-primary) / 0.2);
-  color: #352d26;
+  background: rgb(var(--oui-color-primary) / 0.32);
+  color: #1e2329;
 }
 
 /* ─── active tabs ─────────────────────────────────────────────────── */
@@ -332,23 +332,27 @@ main,
 }
 
 html[data-theme="standard"] .market-ticker-bar {
-  background: #fffdf8;
-  border-bottom-color: #e5d9c7;
+  background: #ffffff;
+  border-bottom-color: #eaecef;
 }
 
 html[data-theme="standard"] .ticker-item {
-  border-right-color: #e9dfd0;
+  border-right-color: #eaecef;
 }
 
 html[data-theme="standard"] .ticker-base,
 html[data-theme="standard"] .ticker-item--frost .ticker-base,
 html[data-theme="standard"] .ticker-price {
-  color: #352d26;
+  color: #1e2329;
 }
 
 html[data-theme="standard"] .ticker-item--frost {
-  background: linear-gradient(90deg, #faf7f0, #f2e7d5);
-  border-right-color: #ded1bd;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--oui-color-primary) / 0.08),
+    rgb(var(--oui-color-primary) / 0.18)
+  );
+  border-right-color: #eaecef;
 }
 
 /* ─── push all page content below the 28px ticker bar ───────────────── */
@@ -1004,14 +1008,14 @@ select,
 }
 
 html[data-theme="standard"] .wm-panel {
-  color: #352d26 !important;
+  color: #1e2329 !important;
 }
 html[data-theme="standard"] .wm-title,
 html[data-theme="standard"] .wm-label {
-  color: #526174 !important;
+  color: #707a8a !important;
 }
 html[data-theme="standard"] .wm-row {
-  border-color: #e5d9c7 !important;
+  border-color: #eaecef !important;
 }
 html[data-theme="extra"] .wm-panel {
   min-width: 232px;
