@@ -208,6 +208,29 @@ function getBotLeverage(bot: BotConfig) {
   );
 }
 
+function getBotConfigKey(
+  strategy: BotStrategy,
+  symbol: string,
+  investment: number,
+  params: Record<string, string | number>,
+) {
+  const autoScan = strategy === "sniper" && Number(params.autoScan) !== 0;
+  const strategyParams = Object.fromEntries(
+    Object.entries(params)
+      .filter(([key]) => key !== "leverage" && key !== "simLeverage")
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  return JSON.stringify({
+    strategy,
+    symbol: autoScan ? "auto" : symbol,
+    investment,
+    leverage: normalizeSimulationLeverage(
+      params.leverage ?? params.simLeverage,
+    ),
+    params: strategyParams,
+  });
+}
+
 function getOrderQuantity(
   targetNotional: number,
   price: number,
@@ -1281,11 +1304,18 @@ function BotPaperEngine({
   ) => void;
 }) {
   const feed = useOrderlyFeed(bot.symbol);
+  const symbolInfo = useSymbolInfo(bot.symbol);
+  const symbolRules = symbolInfo?.();
   const simulationLeverage = getBotLeverage(bot);
 
   useEffect(() => {
     if (bot.status !== "running" || feed.loading) return;
-    if (feed.error || !feed.latestPrice || feed.candles.length < 22) {
+    if (
+      feed.error ||
+      !feed.latestPrice ||
+      feed.candles.length < 22 ||
+      !symbolRules
+    ) {
       if (bot.marketDataStatus !== "unavailable") {
         onPaperUpdate(bot.id, { marketDataStatus: "unavailable" });
       }
@@ -1304,10 +1334,7 @@ function BotPaperEngine({
     const newClosedCandle = candleTime !== bot.paperLastCandle;
     let position = bot.paperPosition ?? null;
     let realizedPnl = bot.paperRealizedPnl ?? 0;
-    const remainingBudget = getRemainingBotBudget(
-      bot.investment,
-      realizedPnl,
-    );
+    const remainingBudget = getRemainingBotBudget(bot.investment, realizedPnl);
     let trade: Omit<TradeLog, "id"> | undefined;
 
     if (position) {
@@ -1368,7 +1395,7 @@ function BotPaperEngine({
         };
         position = null;
       }
-    } else if (newClosedCandle) {
+    } else {
       const atr = computeATR(candles, 14);
       const decision = getSignalDecision(
         candles,
@@ -1387,17 +1414,20 @@ function BotPaperEngine({
         const stopDistance =
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
         const riskBudget = remainingBudget * 0.01;
-        const maxNotional = remainingBudget * 0.25 * simulationLeverage;
-        const entryPrice = closedCandle.c;
-        const qty =
+        const marginPerNotional = 1 / simulationLeverage + BOT_TAKER_FEE_RATE;
+        const maxNotional = (remainingBudget * 0.25) / marginPerNotional;
+        const entryPrice = price;
+        const rawQuantity =
           Number.isFinite(stopDistance) && stopDistance > 0
-            ? Math.floor(
-                Math.min(riskBudget / stopDistance, maxNotional / entryPrice) *
-                  1_000_000,
-              ) / 1_000_000
+            ? Math.min(riskBudget / stopDistance, maxNotional / entryPrice)
             : 0;
+        const qty = getOrderQuantityDown(rawQuantity, symbolRules);
+        const minimumOrderNotional = Math.max(
+          symbolRules.min_notional,
+          symbolRules.base_min * entryPrice,
+        );
 
-        if (qty >= 0.001) {
+        if (qty > 0 && qty * entryPrice >= minimumOrderNotional) {
           position = {
             qty,
             entryPrice,
@@ -1450,6 +1480,7 @@ function BotPaperEngine({
     bot.params.emaFast,
     bot.params.ema,
     simulationLeverage,
+    symbolRules,
     bot.paperPosition,
     bot.paperRealizedPnl,
     bot.paperLastCandle,
@@ -1476,38 +1507,36 @@ function BotSimulationEngine({
   onMarketDataStatus: (botId: string, status: "ready" | "unavailable") => void;
 }) {
   const feed = useOrderlyFeed(bot.symbol);
+  const symbolInfo = useSymbolInfo(bot.symbol);
+  const symbolRules = symbolInfo?.();
   const positionRef = useRef<BotPosition | null>(bot.position ?? null);
   const realizedPnlRef = useRef(bot.realizedPnl ?? 0);
-  const lastEvaluationRef = useRef<{
-    price: number;
-    candleTime: number;
-  } | null>(null);
+  const lastEvaluationRef = useRef(0);
   const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
 
   useEffect(() => {
     if (bot.status !== "running" || feed.loading) return;
-    const marketDataUnavailable =
-      !!feed.error || !feed.latestPrice || feed.candles.length < 22;
-    const marketDataStatus = marketDataUnavailable ? "unavailable" : "ready";
-    if (bot.marketDataStatus !== marketDataStatus) {
-      onMarketDataStatus(bot.id, marketDataStatus);
+    if (
+      feed.error ||
+      !feed.latestPrice ||
+      feed.candles.length < 22 ||
+      !symbolRules
+    ) {
+      if (bot.marketDataStatus !== "unavailable") {
+        onMarketDataStatus(bot.id, "unavailable");
+      }
+      return;
     }
-    if (marketDataUnavailable) return;
+    if (bot.marketDataStatus !== "ready") {
+      onMarketDataStatus(bot.id, "ready");
+    }
 
     const candles = feed.candles;
     const lastClosed = getLastClosedTrendCandleIndex(candles);
     if (lastClosed < 21) return;
-    const candleTime = candles[lastClosed].t;
-    const price = candles[lastClosed].c;
-    const lastEvaluation = lastEvaluationRef.current;
-    if (
-      lastEvaluation?.price === price &&
-      lastEvaluation.candleTime === candleTime
-    ) {
-      return;
-    }
-    lastEvaluationRef.current = { price, candleTime };
-
+    const price = feed.latestPrice;
+    const now = Date.now();
+    if (now - lastEvaluationRef.current < 20_000) return;
     const position = positionRef.current;
     const simulationLeverage = getBotLeverage(bot);
     const unrealizedPnl = position
@@ -1518,9 +1547,36 @@ function BotSimulationEngine({
       realizedPnlRef.current,
       unrealizedPnl,
     );
+    lastEvaluationRef.current = now;
+    const marginPerNotional = 1 / simulationLeverage + BOT_TAKER_FEE_RATE;
+    const minimumOrderNotional = Math.max(
+      symbolRules.min_notional,
+      symbolRules.base_min * price,
+    );
+    const currentPosition = positionRef.current;
+    const committedDcaBudget =
+      bot.strategy === "dca" && currentPosition
+        ? currentPosition.entryPrice *
+          currentPosition.quantity *
+          marginPerNotional
+        : 0;
+    const strategyBudget = Math.max(0, remainingBudget - committedDcaBudget);
+    const requestedOrderMargin =
+      bot.strategy === "dca"
+        ? Math.min(
+            Number(bot.params.amount) || bot.investment * 0.5,
+            strategyBudget,
+          )
+        : bot.strategy === "sniper"
+          ? Math.min(remainingBudget * 0.25, strategyBudget)
+          : Math.min(remainingBudget * 0.5, strategyBudget);
+    const buyMarginBudget = Math.min(requestedOrderMargin, strategyBudget);
+    const buyNotional = Math.min(
+      strategyBudget / marginPerNotional,
+      Math.max(minimumOrderNotional, buyMarginBudget / marginPerNotional),
+    );
     let shouldBuy = false;
     let shouldSell = false;
-    let buyNotional = remainingBudget * 0.5;
     let exitPrice = price;
     let wasLiquidated = false;
 
@@ -1552,23 +1608,13 @@ function BotSimulationEngine({
       shouldBuy = decision.buy;
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
-      const committedNotional = position
-        ? position.entryPrice *
-          position.quantity *
-          (1 / simulationLeverage + BOT_TAKER_FEE_RATE)
-        : 0;
-      buyNotional = Math.min(
-        Number(bot.params.amount) || bot.investment * 0.5,
-        Math.max(0, remainingBudget - committedNotional),
-      );
       shouldBuy =
-        buyNotional > 0 &&
+        buyNotional >= minimumOrderNotional &&
         Date.now() - lastDcaBuyRef.current >=
           getDcaIntervalMs(bot.params.interval);
       shouldSell = !!position && price > position.entryPrice * 1.05;
     } else if (bot.strategy === "sniper") {
       const alert = getCurrentSniperAlert(bot, candles, lastClosed);
-      buyNotional = remainingBudget * 0.25;
       shouldBuy = !position && alert?.kind === "PUMP";
       shouldSell = !!position && alert?.kind === "DUMP";
     } else {
@@ -1592,8 +1638,22 @@ function BotSimulationEngine({
     }
 
     let nextPosition = position;
-    if (shouldBuy && buyNotional > 0) {
-      const quantity = (buyNotional * simulationLeverage) / price;
+    if (shouldBuy && buyMarginBudget > 0) {
+      const quantity = getOrderQuantity(buyNotional, price, symbolRules);
+      if (
+        quantity === null ||
+        quantity * price * marginPerNotional > buyMarginBudget
+      ) {
+        onPnlUpdate(bot.id, {
+          pnl:
+            realizedPnlRef.current +
+            (position ? (price - position.entryPrice) * position.quantity : 0),
+          realizedPnl: realizedPnlRef.current,
+          position,
+          markPrice: price,
+        });
+        return;
+      }
       nextPosition =
         bot.strategy === "dca" && position
           ? {
@@ -1605,7 +1665,7 @@ function BotSimulationEngine({
           : { entryPrice: price, quantity };
       positionRef.current = nextPosition;
       realizedPnlRef.current -= quantity * price * BOT_TAKER_FEE_RATE;
-      if (bot.strategy === "dca") lastDcaBuyRef.current = candleTime;
+      if (bot.strategy === "dca") lastDcaBuyRef.current = now;
       onTradeExecuted({
         botId: bot.id,
         side: "BUY",
@@ -1647,6 +1707,7 @@ function BotSimulationEngine({
     });
   }, [
     bot,
+    symbolRules,
     feed.candles,
     feed.latestPrice,
     feed.loading,
@@ -1720,21 +1781,79 @@ export default function BotPage() {
   const [sigEmaFast, setSigEmaFast] = useState("9");
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
+  const selectedLeverage = normalizeSimulationLeverage(simulationLeverage);
+  const currentBotParams: Record<string, string | number> =
+    strategy === "grid"
+      ? {
+          upper: gridUpper || "auto",
+          lower: gridLower || "auto",
+          grids: Number(gridCount),
+          leverage: selectedLeverage,
+        }
+      : strategy === "dca"
+        ? {
+            interval: dcaInterval,
+            amount: Number(dcaAmount),
+            leverage: selectedLeverage,
+          }
+        : strategy === "signal"
+          ? {
+              rsi: Number(sigRsi),
+              rsiOversold: Number(sigRsiOversold),
+              rsiOverbought: Number(sigRsiOverbought),
+              emaFast: Number(sigEmaFast),
+              ema: Number(sigEma),
+              leverage: selectedLeverage,
+            }
+          : strategy === "trend"
+            ? {
+                stopAtr: normalizeTrendParameter(trendStopAtr, 2),
+                rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
+                rsi: Number(sigRsi) || 14,
+                rsiOversold: Number(sigRsiOversold) || 35,
+                rsiOverbought: Number(sigRsiOverbought) || 68,
+                emaFast: Number(sigEmaFast) || 9,
+                ema: Number(sigEma) || 21,
+                leverage: selectedLeverage,
+              }
+            : {
+                autoScan: sniperAutoScan ? 1 : 0,
+                leverage: selectedLeverage,
+              };
   const simulationTradeCount = logs.filter(
     (log) =>
       !log.live &&
-      log.symbol === symbol &&
       bots.some(
         (bot) =>
           bot.id === log.botId &&
           !bot.liveMode &&
-          bot.strategy === strategy,
+          getBotConfigKey(
+            bot.strategy,
+            bot.symbol,
+            bot.investment,
+            bot.params,
+          ) ===
+            getBotConfigKey(
+              strategy,
+              symbol,
+              Number(investment),
+              currentBotParams,
+            ),
       ),
   ).length;
   const hasSimulationExperience = simulationTradeCount > 0;
-  const liveConfigKey = `${strategy}:${symbol}`;
-  const hasLiveAcknowledgment =
-    liveAcknowledgedConfig === liveConfigKey;
+  const liveConfigKey = getBotConfigKey(
+    strategy,
+    symbol,
+    Number(investment),
+    currentBotParams,
+  );
+  const hasLiveAcknowledgment = liveAcknowledgedConfig === liveConfigKey;
+  const canEnableLiveMode =
+    hasSimulationExperience &&
+    hasLiveAcknowledgment &&
+    isConnected &&
+    availableBalance > 0;
   const quoteAsset =
     selectedSymbolInfo?.("quote") ??
     symbol.match(/_(USDC|USDT)(?:_|$)/)?.[1] ??
@@ -2072,7 +2191,6 @@ export default function BotPage() {
       return;
     }
 
-    const selectedLeverage = normalizeSimulationLeverage(simulationLeverage);
     if (liveMode) {
       if (
         !Number.isFinite(maxSymbolLeverage) ||
@@ -2104,38 +2222,6 @@ export default function BotPage() {
     setCreating(true);
     const willUseLive = liveMode;
     setTimeout(() => {
-      const params: Record<string, string | number> =
-        strategy === "grid"
-          ? {
-              upper: gridUpper || "auto",
-              lower: gridLower || "auto",
-              grids: Number(gridCount),
-            }
-          : strategy === "dca"
-            ? { interval: dcaInterval, amount: Number(dcaAmount) }
-            : strategy === "signal"
-              ? {
-                  rsi: Number(sigRsi),
-                  rsiOversold: Number(sigRsiOversold),
-                  rsiOverbought: Number(sigRsiOverbought),
-                  emaFast: Number(sigEmaFast),
-                  ema: Number(sigEma),
-                }
-              : strategy === "trend"
-                ? {
-                    stopAtr: normalizeTrendParameter(trendStopAtr, 2),
-                    rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
-                    rsi: Number(sigRsi) || 14,
-                    rsiOversold: Number(sigRsiOversold) || 35,
-                    rsiOverbought: Number(sigRsiOverbought) || 68,
-                    emaFast: Number(sigEmaFast) || 9,
-                    ema: Number(sigEma) || 21,
-                  }
-                : strategy === "sniper"
-                  ? { autoScan: sniperAutoScan ? 1 : 0 }
-                  : {};
-      params.leverage = selectedLeverage;
-
       const newBot: BotConfig = {
         id: generateId(),
         name:
@@ -2149,7 +2235,7 @@ export default function BotPage() {
         pnlPct: 0,
         trades: 0,
         createdAt: Date.now(),
-        params,
+        params: currentBotParams,
         liveMode: willUseLive,
         realizedPnl: 0,
         position: null,
@@ -2786,8 +2872,7 @@ export default function BotPage() {
                                 fontSize: 11,
                               }}
                             >
-                              Bot allocation exhausted — new entries are
-                              paused.
+                              Bot allocation exhausted — new entries are paused.
                             </div>
                           )}
                           {isRunning &&
@@ -2804,6 +2889,28 @@ export default function BotPage() {
                               >
                                 Market data unavailable — bot entries are
                                 paused.
+                              </div>
+                            )}
+                          {isRunning &&
+                            !isLive &&
+                            bot.strategy !== "trend" &&
+                            bot.strategy !== "sniper" && (
+                              <div
+                                role="status"
+                                style={{
+                                  fontSize: 11,
+                                  color:
+                                    bot.marketDataStatus === "unavailable"
+                                      ? "#f6465d"
+                                      : "rgba(180,190,210,0.55)",
+                                  marginTop: 4,
+                                }}
+                              >
+                                {bot.marketDataStatus === "unavailable"
+                                  ? "Simulation paused — market data or market rules unavailable."
+                                  : bot.marketDataStatus === "ready"
+                                    ? "Simulation active · checking live market prices every 20 seconds. Keep this page open."
+                                    : "Starting simulation and loading market data..."}
                               </div>
                             )}
                           {isRunning && isSniper && (
@@ -3699,6 +3806,30 @@ export default function BotPage() {
                       ? `${simulationTradeCount} simulation fill${simulationTradeCount === 1 ? "" : "s"} found for this strategy and market. Keep testing as long as you need.`
                       : `Run this ${STRATEGY_INFO[strategy].label} on ${symbolDisplay(symbol)} in Simulation and let it trade until you are satisfied.`}
                   </div>
+                  {hasSimulationExperience && !isConnected && (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 11,
+                        color: "#f6a0a9",
+                      }}
+                    >
+                      Connect your Orderly wallet before enabling Live mode.
+                    </div>
+                  )}
+                  {hasSimulationExperience &&
+                    isConnected &&
+                    availableBalance <= 0 && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 11,
+                          color: "#f6a0a9",
+                        }}
+                      >
+                        Deposit collateral before enabling Live mode.
+                      </div>
+                    )}
                   {hasSimulationExperience && (
                     <label
                       style={{
@@ -3721,11 +3852,10 @@ export default function BotPage() {
                           )
                         }
                       />
-                      I ran this strategy in Simulation on this market for
-                      as long as I needed, am satisfied with my testing,
-                      understand that simulation does not guarantee live
-                      performance, and accept that live trading can lose my
-                      funds.
+                      I ran this strategy in Simulation on this market for as
+                      long as I needed, am satisfied with my testing, understand
+                      that simulation does not guarantee live performance, and
+                      accept that live trading can lose my funds.
                     </label>
                   )}
                 </div>
@@ -3736,17 +3866,11 @@ export default function BotPage() {
               onClick={() => {
                 if (liveMode) {
                   setLiveMode(false);
-                } else if (
-                  hasSimulationExperience &&
-                  hasLiveAcknowledgment
-                ) {
+                } else if (canEnableLiveMode) {
                   setLiveMode(true);
                 }
               }}
-              disabled={
-                !liveMode &&
-                (!hasSimulationExperience || !hasLiveAcknowledgment)
-              }
+              disabled={!liveMode && !canEnableLiveMode}
               aria-label={liveMode ? "Disable live mode" : "Enable live mode"}
               style={{
                 flexShrink: 0,
@@ -3755,16 +3879,9 @@ export default function BotPage() {
                 borderRadius: 12,
                 border: "none",
                 background: liveMode ? "#0ecb81" : "rgba(30,36,50,1)",
-                opacity:
-                  !liveMode &&
-                  (!hasSimulationExperience || !hasLiveAcknowledgment)
-                    ? 0.5
-                    : 1,
+                opacity: !liveMode && !canEnableLiveMode ? 0.5 : 1,
                 cursor:
-                  !liveMode &&
-                  (!hasSimulationExperience || !hasLiveAcknowledgment)
-                    ? "not-allowed"
-                    : "pointer",
+                  !liveMode && !canEnableLiveMode ? "not-allowed" : "pointer",
                 position: "relative",
               }}
             >
