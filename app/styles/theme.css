@@ -181,9 +181,13 @@ html[data-theme="standard"] body {
   --oui-color-base-foreground: 30 35 41;
 }
 
-html[data-theme="extra"] img[src$="/logo.webp"] {
+html[data-theme="extra"] img[src$="/logo.webp"],
+html[data-theme="extra"] img[src$="/logo-secondary.webp"] {
   content: url("/logo-extra.webp");
-  filter: drop-shadow(0 0 8px rgb(var(--oui-color-primary) / 0.22));
+  filter:
+    brightness(1.55)
+    saturate(1.2)
+    drop-shadow(0 0 8px rgb(var(--oui-color-primary) / 0.38));
 }
 
 html[data-theme="extra"] #splash-flake {

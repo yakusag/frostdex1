@@ -404,6 +404,12 @@ export const useOrderlyConfig = () => {
         name: t("common.markets"),
         isDefault: true,
       },
+      {
+        id: "Announcements",
+        href: "/announcements",
+        name: "Announcements",
+        isDefault: true,
+      },
       { id: "Swap", href: "/swap", name: t("extend.swap"), isDefault: true },
       {
         id: "Leaderboard",

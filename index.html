@@ -105,6 +105,11 @@
         --splash-brand: linear-gradient(90deg, #f0b90b 0%, #ffe58a 52%, #f0b90b 100%);
         --splash-particle: rgba(240,185,11,0.45);
       }
+      html[data-theme="extra"] #splash .brand-snowflake-crop > img,
+      html[data-theme="extra"] #splash-name > img {
+        content: url("/logo-extra.webp");
+        filter: brightness(1.55) saturate(1.2);
+      }
       #splash.hidden {
         opacity: 0;
         visibility: hidden;
