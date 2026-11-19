@@ -361,16 +361,16 @@ const getColorConfig = (
   if (theme === "standard") {
     return {
       ...customColorConfig,
-      chartBG: "#ffffff",
+      chartBG: "#fffdf8",
       upColor: "#2ebd85",
       downColor: "#f6465d",
       pnlUpColor: "#2ebd85",
       pnlDownColor: "#f6465d",
-      textColor: "#1f2937",
-      qtyTextColor: "#1f2937",
+      textColor: "#352d26",
+      qtyTextColor: "#352d26",
       volumeUpColor: "#2ebd85",
       volumeDownColor: "#f6465d",
-      closeIcon: "rgba(31, 41, 55, 0.8)",
+      closeIcon: "rgba(53, 45, 38, 0.8)",
     };
   }
 
