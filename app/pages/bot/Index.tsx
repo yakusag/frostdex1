@@ -931,7 +931,7 @@ function BotLiveEngine({
   const lastEvalRef = useRef(0);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const balanceAlertedRef = useRef(false);
-  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
+  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? 0);
 
   useEffect(() => {
     if (!feed.latestPrice) return;
@@ -1512,7 +1512,7 @@ function BotSimulationEngine({
   const positionRef = useRef<BotPosition | null>(bot.position ?? null);
   const realizedPnlRef = useRef(bot.realizedPnl ?? 0);
   const lastEvaluationRef = useRef(0);
-  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
+  const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? 0);
 
   useEffect(() => {
     if (bot.status !== "running" || feed.loading) return;
