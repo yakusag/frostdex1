@@ -2452,16 +2452,13 @@ export default function BotPage() {
               marginBottom: 8,
             }}
           >
-            <img
-              src="/pwa-icon-512.png"
-              alt="FROSTAI BOT logo"
-              style={{
-                width: 40,
-                height: 40,
-                objectFit: "contain",
-                flexShrink: 0,
-              }}
-            />
+            <div
+              className="brand-snowflake-crop"
+              style={{ width: 40, height: 40 }}
+              aria-hidden="true"
+            >
+              <img src="/logo.webp" alt="" />
+            </div>
             <h1
               className="bot-hero-title"
               style={{
