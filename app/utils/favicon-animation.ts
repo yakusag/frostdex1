@@ -23,12 +23,19 @@ export function startFaviconAnimation(logoSrc: string) {
   function draw() {
     tick += 0.03;
     const glow = 0.35 + 0.3 * Math.sin(tick);
+    const isExtraTheme =
+      document.documentElement.dataset.theme === "extra";
 
     ctx.clearRect(0, 0, size, size);
 
     ctx.save();
     ctx.shadowBlur = 10 + 8 * Math.sin(tick);
-    ctx.shadowColor = `rgba(60,230,255,${glow})`;
+    ctx.shadowColor = isExtraTheme
+      ? `rgba(240,185,11,${glow})`
+      : `rgba(60,230,255,${glow})`;
+    ctx.filter = isExtraTheme
+      ? "sepia(1) saturate(3) brightness(1.2)"
+      : "none";
     ctx.drawImage(img, 0, 0, size, size);
     ctx.restore();
 
