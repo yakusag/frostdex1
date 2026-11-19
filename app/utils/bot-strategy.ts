@@ -9,6 +9,25 @@ export function normalizeSimulationLeverage(value: unknown) {
   return Math.min(100, Math.max(1, parsed));
 }
 
+export function getRemainingBotBudget(
+  investment: number,
+  realizedPnl: number,
+  unrealizedPnl = 0,
+) {
+  if (
+    !Number.isFinite(investment) ||
+    investment <= 0 ||
+    !Number.isFinite(realizedPnl) ||
+    !Number.isFinite(unrealizedPnl)
+  ) {
+    return 0;
+  }
+  return Math.min(
+    investment,
+    Math.max(0, investment + realizedPnl + unrealizedPnl),
+  );
+}
+
 export function getLongLiquidationPrice(entryPrice: number, leverage: number) {
   if (leverage <= 1) return 0;
   return (entryPrice * (1 - 1 / leverage)) / (1 - BOT_MAINTENANCE_MARGIN_RATE);

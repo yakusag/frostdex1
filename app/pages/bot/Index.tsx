@@ -26,6 +26,7 @@ import {
   computeATR,
   getDcaIntervalMs,
   getLongLiquidationPrice,
+  getRemainingBotBudget,
   getGridDecision,
   getSniperAlert,
   getSignalDecision,
@@ -949,16 +950,24 @@ function BotLiveEngine({
 
     if (!symbolRules) return;
 
-    const availableBudget = Math.min(
+    const currentPosition = positionRef.current;
+    const unrealizedPnl = currentPosition
+      ? (price - currentPosition.entryPrice) * currentPosition.quantity
+      : 0;
+    const remainingBudget = getRemainingBotBudget(
       investment,
+      realizedPnlRef.current,
+      unrealizedPnl,
+    );
+    const availableBudget = Math.min(
+      remainingBudget,
       Number.isFinite(freeCollateral) ? freeCollateral : 0,
     );
-    const currentPosition = positionRef.current;
     const dcaRemainingBudget =
       bot.strategy === "dca"
         ? Math.max(
             0,
-            investment -
+            remainingBudget -
               (currentPosition
                 ? currentPosition.entryPrice *
                   currentPosition.quantity *
@@ -979,8 +988,8 @@ function BotLiveEngine({
             strategyBudget,
           )
         : bot.strategy === "sniper"
-          ? Math.min(investment * 0.25, strategyBudget)
-          : Math.min(investment * 0.5, strategyBudget);
+          ? Math.min(remainingBudget * 0.25, strategyBudget)
+          : Math.min(remainingBudget * 0.5, strategyBudget);
     const buyMarginBudget = Math.min(requestedOrderMargin, strategyBudget);
     const maxAffordableNotional = strategyBudget / marginPerNotional;
     const buyNotional = Math.min(
@@ -1090,10 +1099,10 @@ function BotLiveEngine({
       const stopDistance = atrValue * stopAtr;
 
       if (!pendingOrder && shouldBuy) {
-        const riskBudget = investment * 0.01;
+        const riskBudget = remainingBudget * 0.01;
         const trendMarginBudget = Math.min(
           availableBudget * 0.25,
-          investment * 0.25,
+          remainingBudget * 0.25,
         );
         const maxNotional = trendMarginBudget / marginPerNotional;
         const rawQuantity =
@@ -1148,7 +1157,7 @@ function BotLiveEngine({
           leverage,
         },
         bot.strategy === "sniper"
-          ? Math.min(investment * 0.25, strategyBudget)
+          ? Math.min(remainingBudget * 0.25, strategyBudget)
           : buyMarginBudget,
       );
     } else if (shouldSell && !pendingOrder && positionRef.current) {
@@ -1295,6 +1304,10 @@ function BotPaperEngine({
     const newClosedCandle = candleTime !== bot.paperLastCandle;
     let position = bot.paperPosition ?? null;
     let realizedPnl = bot.paperRealizedPnl ?? 0;
+    const remainingBudget = getRemainingBotBudget(
+      bot.investment,
+      realizedPnl,
+    );
     let trade: Omit<TradeLog, "id"> | undefined;
 
     if (position) {
@@ -1373,8 +1386,8 @@ function BotPaperEngine({
       if (decision.buy) {
         const stopDistance =
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
-        const riskBudget = bot.investment * 0.01;
-        const maxNotional = bot.investment * 0.25 * simulationLeverage;
+        const riskBudget = remainingBudget * 0.01;
+        const maxNotional = remainingBudget * 0.25 * simulationLeverage;
         const entryPrice = closedCandle.c;
         const qty =
           Number.isFinite(stopDistance) && stopDistance > 0
@@ -1455,10 +1468,12 @@ function BotSimulationEngine({
   bot,
   onTradeExecuted,
   onPnlUpdate,
+  onMarketDataStatus,
 }: {
   bot: BotConfig;
   onTradeExecuted: (log: Omit<TradeLog, "id">) => void;
   onPnlUpdate: (botId: string, performance: BotPerformance) => void;
+  onMarketDataStatus: (botId: string, status: "ready" | "unavailable") => void;
 }) {
   const feed = useOrderlyFeed(bot.symbol);
   const positionRef = useRef<BotPosition | null>(bot.position ?? null);
@@ -1470,7 +1485,14 @@ function BotSimulationEngine({
   const lastDcaBuyRef = useRef(bot.dcaLastBuyAt ?? bot.createdAt);
 
   useEffect(() => {
-    if (bot.status !== "running" || feed.loading || !feed.latestPrice) return;
+    if (bot.status !== "running" || feed.loading) return;
+    const marketDataUnavailable =
+      !!feed.error || !feed.latestPrice || feed.candles.length < 22;
+    const marketDataStatus = marketDataUnavailable ? "unavailable" : "ready";
+    if (bot.marketDataStatus !== marketDataStatus) {
+      onMarketDataStatus(bot.id, marketDataStatus);
+    }
+    if (marketDataUnavailable) return;
 
     const candles = feed.candles;
     const lastClosed = getLastClosedTrendCandleIndex(candles);
@@ -1488,9 +1510,17 @@ function BotSimulationEngine({
 
     const position = positionRef.current;
     const simulationLeverage = getBotLeverage(bot);
+    const unrealizedPnl = position
+      ? (price - position.entryPrice) * position.quantity
+      : 0;
+    const remainingBudget = getRemainingBotBudget(
+      bot.investment,
+      realizedPnlRef.current,
+      unrealizedPnl,
+    );
     let shouldBuy = false;
     let shouldSell = false;
-    let buyNotional = Math.min(bot.investment * 0.5, bot.investment);
+    let buyNotional = remainingBudget * 0.5;
     let exitPrice = price;
     let wasLiquidated = false;
 
@@ -1529,7 +1559,7 @@ function BotSimulationEngine({
         : 0;
       buyNotional = Math.min(
         Number(bot.params.amount) || bot.investment * 0.5,
-        Math.max(0, bot.investment - committedNotional),
+        Math.max(0, remainingBudget - committedNotional),
       );
       shouldBuy =
         buyNotional > 0 &&
@@ -1538,7 +1568,7 @@ function BotSimulationEngine({
       shouldSell = !!position && price > position.entryPrice * 1.05;
     } else if (bot.strategy === "sniper") {
       const alert = getCurrentSniperAlert(bot, candles, lastClosed);
-      buyNotional = bot.investment * 0.25;
+      buyNotional = remainingBudget * 0.25;
       shouldBuy = !position && alert?.kind === "PUMP";
       shouldSell = !!position && alert?.kind === "DUMP";
     } else {
@@ -1620,6 +1650,9 @@ function BotSimulationEngine({
     feed.candles,
     feed.latestPrice,
     feed.loading,
+    feed.error,
+    bot.marketDataStatus,
+    onMarketDataStatus,
     onPnlUpdate,
     onTradeExecuted,
   ]);
@@ -2229,6 +2262,7 @@ export default function BotPage() {
             bot={bot}
             onTradeExecuted={handleTradeExecuted}
             onPnlUpdate={handlePnlUpdate}
+            onMarketDataStatus={handleMarketDataStatus}
           />
         ))}
 
@@ -2716,6 +2750,35 @@ export default function BotPage() {
                                     Deposit
                                   </button>
                                 )}
+                              </div>
+                            )}
+                          {isRunning && bot.pnl <= -bot.investment && (
+                            <div
+                              role="status"
+                              style={{
+                                marginTop: 4,
+                                color: "#f6a0a9",
+                                fontSize: 11,
+                              }}
+                            >
+                              Bot allocation exhausted — new entries are
+                              paused.
+                            </div>
+                          )}
+                          {isRunning &&
+                            bot.strategy !== "sniper" &&
+                            bot.strategy !== "trend" &&
+                            bot.marketDataStatus === "unavailable" && (
+                              <div
+                                role="alert"
+                                style={{
+                                  marginTop: 4,
+                                  color: "#f6a0a9",
+                                  fontSize: 11,
+                                }}
+                              >
+                                Market data unavailable — bot entries are
+                                paused.
                               </div>
                             )}
                           {isRunning && isSniper && (
