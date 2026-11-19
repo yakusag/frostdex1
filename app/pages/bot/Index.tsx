@@ -1873,11 +1873,6 @@ export default function BotPage() {
     currentBotParams,
   );
   const hasLiveAcknowledgment = liveAcknowledgedConfig === liveConfigKey;
-  const canEnableLiveMode =
-    hasSimulationExperience &&
-    hasLiveAcknowledgment &&
-    isConnected &&
-    availableBalance > 0;
   const quoteAsset =
     selectedSymbolInfo?.("quote") ??
     symbol.match(/_(USDC|USDT)(?:_|$)/)?.[1] ??
@@ -2458,8 +2453,8 @@ export default function BotPage() {
             }}
           >
             <img
-              src="/frostdex-logo.webp"
-              alt="FrostDex"
+              src="/pwa-icon-512.png"
+              alt="FROSTAI BOT logo"
               style={{
                 width: 40,
                 height: 40,
@@ -3731,7 +3726,10 @@ export default function BotPage() {
 
           <div style={{ marginBottom: 20 }}>
             <label htmlFor="bot-leverage" style={labelStyle}>
-              Trade Leverage (up to 100x)
+              Trade Leverage
+              {Number.isFinite(maxSymbolLeverage) && maxSymbolLeverage >= 1
+                ? ` · ${symbolDisplay(symbol)} max ${maxSymbolLeverage}x`
+                : ""}
             </label>
             <select
               id="bot-leverage"
@@ -3811,7 +3809,7 @@ export default function BotPage() {
               >
                 {liveMode
                   ? isConnected
-                    ? "Real orders will be placed on FrostDex using your portfolio."
+                    ? "Starting a bot in Live Mode places real orders using your Orderly account."
                     : "⚠ Connect your wallet first to use live trading."
                   : strategy === "trend"
                     ? "Paper trades use Orderly market data and the selected strategy. No real orders or funds are used."
@@ -3819,8 +3817,8 @@ export default function BotPage() {
                       ? "Pump signals open simulated positions; dump signals close them. No real orders or funds are used."
                       : "Bot runs in simulation mode — no real orders are placed."}
               </div>
-              {!liveMode && (
-                <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10 }}>
+                {!liveMode && (
                   <div
                     style={{
                       fontSize: 11,
@@ -3833,72 +3831,76 @@ export default function BotPage() {
                       ? `${simulationTradeCount} simulation fill${simulationTradeCount === 1 ? "" : "s"} found for this strategy and market. Keep testing as long as you need.`
                       : `Run this ${STRATEGY_INFO[strategy].label} on ${symbolDisplay(symbol)} in Simulation and let it trade until you are satisfied.`}
                   </div>
-                  {hasSimulationExperience && !isConnected && (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 11,
-                        color: "#f6a0a9",
-                      }}
-                    >
-                      Connect your Orderly wallet before enabling Live mode.
-                    </div>
-                  )}
-                  {hasSimulationExperience &&
-                    isConnected &&
-                    availableBalance <= 0 && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          fontSize: 11,
-                          color: "#f6a0a9",
-                        }}
-                      >
-                        Deposit collateral before enabling Live mode.
-                      </div>
-                    )}
-                  {hasSimulationExperience && (
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 8,
-                        marginTop: 8,
-                        fontSize: 11,
-                        lineHeight: 1.5,
-                        color: "rgba(180,190,210,0.75)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={hasLiveAcknowledgment}
-                        onChange={(event) =>
-                          setLiveAcknowledgedConfig(
-                            event.target.checked ? liveConfigKey : null,
-                          )
-                        }
-                      />
-                      I ran this strategy in Simulation on this market for as
-                      long as I needed, am satisfied with my testing, understand
-                      that simulation does not guarantee live performance, and
-                      accept that live trading can lose my funds.
-                    </label>
-                  )}
-                </div>
-              )}
+                )}
+                {liveMode && !hasSimulationExperience && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      color: "#f6a0a9",
+                    }}
+                  >
+                    Run this strategy in Simulation on this market before
+                    starting a live bot.
+                  </div>
+                )}
+                {liveMode && !isConnected && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      color: "#f6a0a9",
+                    }}
+                  >
+                    Connect your Orderly wallet before starting a live bot.
+                  </div>
+                )}
+                {liveMode && isConnected && availableBalance <= 0 && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      color: "#f6a0a9",
+                    }}
+                  >
+                    Deposit collateral before starting a live bot.
+                  </div>
+                )}
+                {hasSimulationExperience && (
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      marginTop: 8,
+                      fontSize: 11,
+                      lineHeight: 1.5,
+                      color: "rgba(180,190,210,0.75)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hasLiveAcknowledgment}
+                      onChange={(event) =>
+                        setLiveAcknowledgedConfig(
+                          event.target.checked ? liveConfigKey : null,
+                        )
+                      }
+                    />
+                    I ran this strategy in Simulation on this market for as
+                    long as I needed, am satisfied with my testing, understand
+                    that simulation does not guarantee live performance, and
+                    accept that live trading can lose my funds.
+                  </label>
+                )}
+              </div>
             </div>
             <button
               type="button"
-              onClick={() => {
-                if (liveMode) {
-                  setLiveMode(false);
-                } else if (canEnableLiveMode) {
-                  setLiveMode(true);
-                }
-              }}
-              disabled={!liveMode && !canEnableLiveMode}
+              onClick={() => setLiveMode((enabled) => !enabled)}
               aria-label={liveMode ? "Disable live mode" : "Enable live mode"}
+              aria-pressed={liveMode}
               style={{
                 flexShrink: 0,
                 width: 44,
@@ -3906,9 +3908,7 @@ export default function BotPage() {
                 borderRadius: 12,
                 border: "none",
                 background: liveMode ? "#0ecb81" : "rgba(30,36,50,1)",
-                opacity: !liveMode && !canEnableLiveMode ? 0.5 : 1,
-                cursor:
-                  !liveMode && !canEnableLiveMode ? "not-allowed" : "pointer",
+                cursor: "pointer",
                 position: "relative",
               }}
             >
