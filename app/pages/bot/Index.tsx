@@ -1686,6 +1686,9 @@ export default function BotPage() {
   );
   const [allSymbols, setAllSymbols] = useState<string[]>(POPULAR_SYMBOLS);
   const [strategy, setStrategy] = useState<BotStrategy>("grid");
+  const [liveAcknowledgedConfig, setLiveAcknowledgedConfig] = useState<
+    string | null
+  >(null);
   const [symbol, setSymbol] = useState("PERP_BTC_USDC");
   const selectedSymbolInfo = useSymbolInfo(symbol);
   const selectedSymbolRules = selectedSymbolInfo?.();
@@ -1717,6 +1720,21 @@ export default function BotPage() {
   const [sigEmaFast, setSigEmaFast] = useState("9");
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
+  const simulationTradeCount = logs.filter(
+    (log) =>
+      !log.live &&
+      log.symbol === symbol &&
+      bots.some(
+        (bot) =>
+          bot.id === log.botId &&
+          !bot.liveMode &&
+          bot.strategy === strategy,
+      ),
+  ).length;
+  const hasSimulationExperience = simulationTradeCount > 0;
+  const liveConfigKey = `${strategy}:${symbol}`;
+  const hasLiveAcknowledgment =
+    liveAcknowledgedConfig === liveConfigKey;
   const quoteAsset =
     selectedSymbolInfo?.("quote") ??
     symbol.match(/_(USDC|USDT)(?:_|$)/)?.[1] ??
@@ -1995,7 +2013,7 @@ export default function BotPage() {
     );
     setSimulationLeverage(String(getBotLeverage(bot)));
     setSniperAutoScan(bot.params.autoScan !== 0 && bot.params.autoScan !== "0");
-    setLiveMode(true);
+    setLiveMode(false);
     setTab("create");
   };
 
@@ -2031,6 +2049,13 @@ export default function BotPage() {
     if (liveMode && !isConnected) {
       setBalanceMessage(
         "Connect your Orderly account before starting a live bot.",
+      );
+      return;
+    }
+
+    if (liveMode && (!hasSimulationExperience || !hasLiveAcknowledgment)) {
+      setBalanceMessage(
+        "Run this strategy in Simulation on the selected market until you are satisfied, then confirm the live trading risk before launching.",
       );
       return;
     }
@@ -3660,9 +3685,69 @@ export default function BotPage() {
                       ? "Pump signals open simulated positions; dump signals close them. No real orders or funds are used."
                       : "Bot runs in simulation mode — no real orders are placed."}
               </div>
+              {!liveMode && (
+                <div style={{ marginTop: 10 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: hasSimulationExperience
+                        ? "#0ecb81"
+                        : "rgba(180,190,210,0.65)",
+                    }}
+                  >
+                    {hasSimulationExperience
+                      ? `${simulationTradeCount} simulation fill${simulationTradeCount === 1 ? "" : "s"} found for this strategy and market. Keep testing as long as you need.`
+                      : `Run this ${STRATEGY_INFO[strategy].label} on ${symbolDisplay(symbol)} in Simulation and let it trade until you are satisfied.`}
+                  </div>
+                  {hasSimulationExperience && (
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        marginTop: 8,
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                        color: "rgba(180,190,210,0.75)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={hasLiveAcknowledgment}
+                        onChange={(event) =>
+                          setLiveAcknowledgedConfig(
+                            event.target.checked ? liveConfigKey : null,
+                          )
+                        }
+                      />
+                      I ran this strategy in Simulation on this market for
+                      as long as I needed, am satisfied with my testing,
+                      understand that simulation does not guarantee live
+                      performance, and accept that live trading can lose my
+                      funds.
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
             <button
-              onClick={() => setLiveMode((v) => !v)}
+              type="button"
+              onClick={() => {
+                if (liveMode) {
+                  setLiveMode(false);
+                } else if (
+                  hasSimulationExperience &&
+                  hasLiveAcknowledgment
+                ) {
+                  setLiveMode(true);
+                }
+              }}
+              disabled={
+                !liveMode &&
+                (!hasSimulationExperience || !hasLiveAcknowledgment)
+              }
+              aria-label={liveMode ? "Disable live mode" : "Enable live mode"}
               style={{
                 flexShrink: 0,
                 width: 44,
@@ -3670,7 +3755,16 @@ export default function BotPage() {
                 borderRadius: 12,
                 border: "none",
                 background: liveMode ? "#0ecb81" : "rgba(30,36,50,1)",
-                cursor: "pointer",
+                opacity:
+                  !liveMode &&
+                  (!hasSimulationExperience || !hasLiveAcknowledgment)
+                    ? 0.5
+                    : 1,
+                cursor:
+                  !liveMode &&
+                  (!hasSimulationExperience || !hasLiveAcknowledgment)
+                    ? "not-allowed"
+                    : "pointer",
                 position: "relative",
               }}
             >
