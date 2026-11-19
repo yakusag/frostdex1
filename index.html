@@ -84,11 +84,11 @@
       /* ── logo ── */
       #splash-flake {
         display: block;
-        width: auto;
+        width: min(80vw, 320px);
         height: 300px;
         max-width: 320px;
         align-self: center;
-        margin-bottom: 32px;
+        margin-bottom: 0;
         object-fit: contain;
         object-position: center;
         filter: drop-shadow(0 0 40px rgba(56,224,248,0.55))
@@ -105,7 +105,7 @@
         50%      { filter: drop-shadow(0 0 60px rgba(56,224,248,0.85)) drop-shadow(0 0 24px rgba(14,203,129,0.65)); transform: scale(1.05); }
       }
 
-      /* ── brand name (hidden — logo image already has FROSTDEX text) ── */
+      /* ── brand name (included in the vertical logo image) ── */
       #splash-name {
         display: none;
       }
@@ -178,7 +178,7 @@
     <div id="splash">
       <div id="splash-aurora"></div>
       <div id="splash-particles"></div>
-      <img id="splash-flake" src="/logo.webp" alt="FrostDex" />
+      <img id="splash-flake" src="/frostdex-logo.webp" alt="FrostDex" />
       <div id="splash-name">FROSTDEX</div>
       <div id="splash-tag">Decentralized Exchange</div>
       <div id="splash-motto">TRUST &bull; FREEDOM &bull; TRADE</div>

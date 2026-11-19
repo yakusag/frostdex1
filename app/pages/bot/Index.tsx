@@ -1782,6 +1782,30 @@ export default function BotPage() {
   const isConnected = !!accountState?.accountId;
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
   const selectedLeverage = normalizeSimulationLeverage(simulationLeverage);
+  const availableLeverageOptions = (() => {
+    const options = [1, 2, 5, 10, 20, 50, 100];
+    if (
+      !liveMode ||
+      !Number.isFinite(maxSymbolLeverage) ||
+      maxSymbolLeverage < 1
+    ) {
+      return options;
+    }
+
+    const marketOptions = options.filter(
+      (value) => value <= maxSymbolLeverage,
+    );
+    if (!marketOptions.includes(maxSymbolLeverage)) {
+      marketOptions.push(maxSymbolLeverage);
+    }
+    if (
+      selectedLeverage > maxSymbolLeverage &&
+      !marketOptions.includes(selectedLeverage)
+    ) {
+      marketOptions.push(selectedLeverage);
+    }
+    return marketOptions.sort((a, b) => a - b);
+  })();
   const currentBotParams: Record<string, string | number> =
     strategy === "grid"
       ? {
@@ -2433,7 +2457,16 @@ export default function BotPage() {
               marginBottom: 8,
             }}
           >
-            <span style={{ fontSize: 32 }}>🤖</span>
+            <img
+              src="/frostdex-logo.webp"
+              alt="FrostDex"
+              style={{
+                width: 40,
+                height: 40,
+                objectFit: "contain",
+                flexShrink: 0,
+              }}
+            />
             <h1
               className="bot-hero-title"
               style={{
@@ -2447,27 +2480,8 @@ export default function BotPage() {
                 margin: 0,
               }}
             >
-              AI Trading Bot
+              FROSTAI BOT
             </h1>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "1.5px solid rgba(46,204,113,0.55)",
-                borderRadius: 8,
-                padding: "2px 8px",
-                background: "rgba(56,224,248,0.05)",
-                boxShadow:
-                  "0 0 14px rgba(56,224,248,0.22), 0 0 6px rgba(14,203,129,0.18)",
-              }}
-            >
-              <img
-                src="/frostdex-badge.webp"
-                alt="FrostDex"
-                style={{ height: 28, objectFit: "contain", display: "block" }}
-              />
-            </div>
           </div>
           <div
             style={{
@@ -3727,9 +3741,22 @@ export default function BotPage() {
                 ...inputStyle,
               }}
             >
-              {[1, 2, 5, 10, 20, 50, 100].map((value) => (
-                <option key={value} value={value}>
+              {availableLeverageOptions.map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                  disabled={
+                    liveMode &&
+                    Number.isFinite(maxSymbolLeverage) &&
+                    value > maxSymbolLeverage
+                  }
+                >
                   {value}x
+                  {liveMode &&
+                  Number.isFinite(maxSymbolLeverage) &&
+                  value > maxSymbolLeverage
+                    ? " — above market max"
+                    : ""}
                 </option>
               ))}
             </select>
