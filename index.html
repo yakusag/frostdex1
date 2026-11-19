@@ -46,6 +46,14 @@
     <style>
       /* ── base ── */
       #splash {
+        --splash-logo-shadow: drop-shadow(0 0 40px rgba(56,224,248,0.55))
+                              drop-shadow(0 0 16px rgba(14,203,129,0.45));
+        --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(56,224,248,0.85))
+                                     drop-shadow(0 0 24px rgba(14,203,129,0.65));
+        --splash-aurora: rgba(56,224,248,0.07);
+        --splash-tag: rgba(60,230,255,0.35);
+        --splash-brand: linear-gradient(90deg, #38e0f8 0%, #0ecb81 100%);
+        --splash-particle: rgba(60,230,255,0.55);
         position: fixed;
         inset: 0;
         z-index: 99999;
@@ -57,6 +65,27 @@
         gap: 0;
         transition: opacity 0.6s ease, visibility 0.6s ease;
         overflow: hidden;
+      }
+      html[data-theme="standard"] #splash {
+        --splash-logo-shadow: drop-shadow(0 0 40px rgba(57,122,165,0.4))
+                              drop-shadow(0 0 16px rgba(102,171,210,0.3));
+        --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(57,122,165,0.65))
+                                     drop-shadow(0 0 24px rgba(102,171,210,0.5));
+        --splash-aurora: rgba(57,122,165,0.08);
+        --splash-tag: rgba(57,122,165,0.55);
+        --splash-brand: linear-gradient(90deg, #397aa5 0%, #66abd2 100%);
+        --splash-particle: rgba(57,122,165,0.42);
+        background: radial-gradient(ellipse at 50% 40%, #ffffff 0%, #f1f5f9 70%);
+      }
+      html[data-theme="extra"] #splash {
+        --splash-logo-shadow: drop-shadow(0 0 40px rgba(240,185,11,0.42))
+                              drop-shadow(0 0 16px rgba(255,229,138,0.3));
+        --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(240,185,11,0.7))
+                                     drop-shadow(0 0 24px rgba(255,229,138,0.5));
+        --splash-aurora: rgba(240,185,11,0.08);
+        --splash-tag: rgba(240,185,11,0.5);
+        --splash-brand: linear-gradient(90deg, #f0b90b 0%, #ffe58a 52%, #f0b90b 100%);
+        --splash-particle: rgba(240,185,11,0.45);
       }
       #splash.hidden {
         opacity: 0;
@@ -78,20 +107,20 @@
         top: 50%; left: 50%;
         transform: translate(-50%, -50%);
         border-radius: 50%;
-        background: radial-gradient(ellipse, rgba(56,224,248,0.07) 0%, transparent 70%);
+        background: radial-gradient(ellipse, var(--splash-aurora) 0%, transparent 70%);
       }
 
       /* ── logo ── */
       #splash-flake {
         display: block;
-        width: min(30vw, 120px);
-        height: min(30vw, 120px);
-        max-width: 120px;
+        width: auto;
+        height: 300px;
+        max-width: 320px;
         align-self: center;
+        margin-bottom: 32px;
         object-fit: contain;
         object-position: center;
-        filter: drop-shadow(0 0 40px rgba(56,224,248,0.55))
-                drop-shadow(0 0 16px rgba(14,203,129,0.45));
+        filter: var(--splash-logo-shadow);
         animation: flake-appear 0.7s cubic-bezier(0.34,1.56,0.64,1) both,
                    flake-pulse 3.5s ease-in-out 0.7s infinite;
       }
@@ -100,26 +129,17 @@
         to   { opacity: 1; transform: scale(1) rotate(0deg); }
       }
       @keyframes flake-pulse {
-        0%, 100% { filter: drop-shadow(0 0 32px rgba(56,224,248,0.5)) drop-shadow(0 0 12px rgba(14,203,129,0.4)); transform: scale(1); }
-        50%      { filter: drop-shadow(0 0 60px rgba(56,224,248,0.85)) drop-shadow(0 0 24px rgba(14,203,129,0.65)); transform: scale(1.05); }
+        0%, 100% { filter: var(--splash-logo-shadow); transform: scale(1); }
+        50%      { filter: var(--splash-logo-shadow-strong); transform: scale(1.05); }
       }
       @keyframes name-appear {
         from { opacity: 0; transform: translateY(8px); }
         to   { opacity: 1; transform: translateY(0); }
       }
 
-      /* ── brand name ── */
+      /* ── brand name (included in the logo image) ── */
       #splash-name {
-        margin-top: 16px;
-        font-family: 'Manrope', 'Segoe UI', sans-serif;
-        font-size: clamp(24px, 6vw, 34px);
-        font-weight: 800;
-        letter-spacing: 3px;
-        background: linear-gradient(90deg, #38e0f8 0%, #0ecb81 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: name-appear 0.6s ease 0.4s both;
+        display: none;
       }
 
       /* ── tagline ── */
@@ -130,7 +150,7 @@
         font-weight: 500;
         letter-spacing: 3px;
         text-transform: uppercase;
-        color: rgba(60, 230, 255, 0.35);
+        color: var(--splash-tag);
         animation: name-appear 0.6s ease 0.6s both;
       }
       #splash-motto {
@@ -140,7 +160,7 @@
         font-weight: 800;
         letter-spacing: 4px;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #38e0f8 0%, #0ecb81 100%);
+        background: var(--splash-brand);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -148,14 +168,7 @@
       }
       html[data-theme="extra"] #splash-motto,
       html[data-theme="extra"] #splash-tag {
-        background: linear-gradient(
-          90deg,
-          #815500 0%,
-          #d99a08 18%,
-          #fff0a3 50%,
-          #d99a08 82%,
-          #815500 100%
-        );
+        background: var(--splash-brand);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -172,7 +185,7 @@
       #splash-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
       .sp {
         position: absolute;
-        color: rgba(60,230,255,0.55);
+        color: var(--splash-particle);
         font-size: 14px;
         user-select: none;
         animation: sp-fall linear infinite;
@@ -190,7 +203,7 @@
     <div id="splash">
       <div id="splash-aurora"></div>
       <div id="splash-particles"></div>
-      <img id="splash-flake" src="/pwa-icon-512.png" alt="FrostDex logo" />
+      <img id="splash-flake" src="/logo.webp" alt="FrostDex" />
       <div id="splash-name">FROSTDEX</div>
       <div id="splash-tag">Decentralized Exchange</div>
       <div id="splash-motto">TRUST &bull; FREEDOM &bull; TRADE</div>
