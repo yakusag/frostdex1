@@ -50,7 +50,6 @@
                               drop-shadow(0 0 16px rgba(14,203,129,0.45));
         --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(56,224,248,0.85))
                                      drop-shadow(0 0 24px rgba(14,203,129,0.65));
-        --splash-aurora: rgba(56,224,248,0.07);
         --splash-tag: rgba(60,230,255,0.35);
         --splash-brand: linear-gradient(90deg, #38e0f8 0%, #0ecb81 100%);
         --splash-particle: rgba(60,230,255,0.55);
@@ -92,7 +91,6 @@
                               drop-shadow(0 0 16px rgba(252,213,53,0.24));
         --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(240,185,11,0.55))
                                      drop-shadow(0 0 24px rgba(252,213,53,0.4));
-        --splash-aurora: rgba(240,185,11,0.08);
         --splash-tag: rgba(112,122,138,0.8);
         --splash-brand: linear-gradient(90deg, #c99400 0%, #f0b90b 100%);
         --splash-particle: rgba(201,148,0,0.42);
@@ -103,7 +101,6 @@
                               drop-shadow(0 0 16px rgba(255,229,138,0.3));
         --splash-logo-shadow-strong: drop-shadow(0 0 60px rgba(240,185,11,0.7))
                                      drop-shadow(0 0 24px rgba(255,229,138,0.5));
-        --splash-aurora: rgba(240,185,11,0.08);
         --splash-tag: rgba(240,185,11,0.5);
         --splash-brand: linear-gradient(90deg, #f0b90b 0%, #ffe58a 52%, #f0b90b 100%);
         --splash-particle: rgba(240,185,11,0.45);
@@ -112,23 +109,6 @@
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-      }
-
-      /* ── background glow ── */
-      #splash-aurora {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        overflow: hidden;
-      }
-      #splash-aurora::before {
-        content: '';
-        position: absolute;
-        width: 400px; height: 400px;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(ellipse, var(--splash-aurora) 0%, transparent 70%);
       }
 
       /* ── logo ── */
@@ -230,7 +210,6 @@
   <body>
     <!-- splash screen -->
     <div id="splash">
-      <div id="splash-aurora"></div>
       <div id="splash-particles"></div>
       <div id="splash-brand">
         <div id="splash-flake" class="brand-snowflake-crop" aria-hidden="true">
