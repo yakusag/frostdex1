@@ -29,6 +29,7 @@
     "@orderly.network/trading-points": "1.4.4",
     "@orderly.network/types": "2.12.4",
     "@orderly.network/ui": "2.12.4",
+    "@orderly.network/ui-notification": "2.12.4",
     "@orderly.network/ui-scaffold": "2.12.4",
     "@orderly.network/vaults": "2.12.4",
     "@orderly.network/wallet-connector": "2.12.4",

@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, type MouseEvent } from "react";
 import { Helmet } from "react-helmet-async";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import AIAssistant from "@/components/AIAssistant";
@@ -26,10 +26,27 @@ import { startFaviconAnimation } from "./utils/favicon-animation";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
 
 export default function App() {
+  const navigate = useNavigate();
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
   const { visibility, toggle, showAll, hideAll, allVisible } =
     useWidgetVisibility();
+
+  const handleAnnouncementClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element)) return;
+
+    const target = event.target;
+    if (
+      !target.closest(".orderly-notification") ||
+      target.closest("button, a")
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    navigate("/announcements");
+  };
 
   useEffect(() => {
     window.__hideSplash?.();
@@ -62,9 +79,11 @@ export default function App() {
       <ReferralHandler />
       <ReferralWelcome />
       <MarketTickerBar />
-      <OrderlyProvider>
-        <Outlet />
-      </OrderlyProvider>
+      <div onClickCapture={handleAnnouncementClick}>
+        <OrderlyProvider>
+          <Outlet />
+        </OrderlyProvider>
+      </div>
       {visibility.frost && <FrostTradeWidget onHide={() => toggle("frost")} />}
       {visibility.ai && <AIAssistant onHide={() => toggle("ai")} />}
       {visibility.whale && <WhaleAlerts onHide={() => toggle("whale")} />}

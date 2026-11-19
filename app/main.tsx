@@ -24,6 +24,8 @@ const PortfolioHistory = lazy(() => import("./pages/portfolio/History"));
 const PortfolioSetting = lazy(() => import("./pages/portfolio/Setting"));
 const MarketsLayout = lazy(() => import("./pages/markets/Layout"));
 const MarketsIndex = lazy(() => import("./pages/markets/Index"));
+const AnnouncementsLayout = lazy(() => import("./pages/announcements/Layout"));
+const AnnouncementsIndex = lazy(() => import("./pages/announcements/Index"));
 const LeaderboardLayout = lazy(() => import("./pages/leaderboard/Layout"));
 const LeaderboardIndex = lazy(() => import("./pages/leaderboard/Index"));
 const RewardsLayout = lazy(() => import("./pages/rewards/Layout"));
@@ -124,6 +126,11 @@ const router = createBrowserRouter(
           children: [{ index: true, element: <MarketsIndex /> }],
         },
         {
+          path: "announcements",
+          element: <AnnouncementsLayout />,
+          children: [{ index: true, element: <AnnouncementsIndex /> }],
+        },
+        {
           path: "leaderboard",
           element: <LeaderboardLayout />,
           children: [{ index: true, element: <LeaderboardIndex /> }],
@@ -203,6 +210,11 @@ const routePrefetchers: Record<string, () => Promise<unknown>> = {
     Promise.all([
       import("./pages/markets/Layout"),
       import("./pages/markets/Index"),
+    ]),
+  "/announcements": () =>
+    Promise.all([
+      import("./pages/announcements/Layout"),
+      import("./pages/announcements/Index"),
     ]),
   "/leaderboard": () =>
     Promise.all([
