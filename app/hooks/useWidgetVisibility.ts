@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 
-const STORAGE_KEY = "frost-widget-visibility";
+const STORAGE_KEY = "frost-widget-visibility-v2";
 
 interface Visibility {
   ai: boolean;
@@ -18,28 +18,28 @@ function load(): Visibility {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved)
       return {
-        ai: true,
-        whale: true,
-        sentiment: true,
-        frost: true,
-        smartmoney: true,
-        liq: true,
-        mac: true,
-        palert: true,
+        ai: false,
+        whale: false,
+        sentiment: false,
+        frost: false,
+        smartmoney: false,
+        liq: false,
+        mac: false,
+        palert: false,
         ...JSON.parse(saved),
       };
   } catch (error) {
     console.warn("Failed to restore widget visibility:", error);
   }
   return {
-    ai: true,
-    whale: true,
-    sentiment: true,
-    frost: true,
-    smartmoney: true,
-    liq: true,
-    mac: true,
-    palert: true,
+    ai: false,
+    whale: false,
+    sentiment: false,
+    frost: false,
+    smartmoney: false,
+    liq: false,
+    mac: false,
+    palert: false,
   };
 }
 
