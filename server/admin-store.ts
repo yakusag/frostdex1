@@ -4,44 +4,16 @@ import {
   type SitePageFlags,
   type SitePageId,
 } from "../shared/site-pages.js";
+import {
+  redisCommand,
+  RedisSetupError as AdminSetupError,
+  RedisStoreError as AdminStoreError,
+} from "./redis.js";
 
 const PAGE_FLAGS_KEY = "frostdex:site-page-flags:v1";
 const ADMIN_NONCE_PREFIX = "frostdex:admin-nonce:";
 
-export class AdminSetupError extends Error {}
-
-export class AdminStoreError extends Error {}
-
-async function redisCommand(...command: string[]): Promise<unknown> {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/+$/, "");
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    throw new AdminSetupError("Admin storage is not configured.");
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(command),
-  });
-
-  let result: { result?: unknown; error?: string };
-  try {
-    result = (await response.json()) as { result?: unknown; error?: string };
-  } catch (error) {
-    throw new AdminStoreError("Admin storage returned an invalid response.", {
-      cause: error,
-    });
-  }
-
-  if (!response.ok || result.error) {
-    throw new AdminStoreError("Admin storage request failed.");
-  }
-  return result.result;
-}
+export { AdminSetupError, AdminStoreError };
 
 function isPageFlags(value: unknown): value is SitePageFlags {
   if (!value || typeof value !== "object") return false;
