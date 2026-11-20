@@ -382,7 +382,7 @@ const getColorConfig = (
 export const useOrderlyConfig = () => {
   const { t } = useTranslation();
   const { isMobile } = useScreen();
-  const { flags: sitePageFlags, error: sitePagesError } = useSitePages();
+  const { flags: sitePageFlags } = useSitePages();
   const [theme, setTheme] = useState<ThemeMode>(getThemeMode);
 
   useEffect(() => {
@@ -457,7 +457,7 @@ export const useOrderlyConfig = () => {
     ).filter(
       (menu) =>
         !isSitePageId(menu.id) ||
-        (!sitePagesError && sitePageFlags[menu.id]),
+        sitePageFlags[menu.id],
     );
     const customMenus = getCustomMenuItems();
 
@@ -638,5 +638,5 @@ export const useOrderlyConfig = () => {
         },
       },
     };
-  }, [t, isMobile, theme, sitePageFlags, sitePagesError]);
+  }, [t, isMobile, theme, sitePageFlags]);
 };

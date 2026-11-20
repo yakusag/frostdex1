@@ -35,11 +35,7 @@ export default function App() {
   const location = useLocation();
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
-  const {
-    flags: sitePageFlags,
-    loading: sitePagesLoading,
-    error: sitePagesError,
-  } = useSitePages();
+  const { flags: sitePageFlags } = useSitePages();
   const { visibility, toggle, showAll, hideAll, allVisible } =
     useWidgetVisibility();
   const currentPageId = getSitePageIdForPath(location.pathname);
@@ -103,23 +99,7 @@ export default function App() {
       <ReferralWelcome />
       <MarketTickerBar />
       <OrderlyProvider>
-        {sitePagesLoading && currentPageId ? (
-          <div className="oui-flex oui-min-h-[50vh] oui-items-center oui-justify-center">
-            <span className="oui-text-base-contrast-54">
-              Loading site settings...
-            </span>
-          </div>
-        ) : sitePagesError && currentPageId ? (
-          <main className="oui-flex oui-min-h-[60vh] oui-flex-col oui-items-center oui-justify-center oui-gap-3 oui-p-6 oui-text-center">
-            <h1 className="oui-text-2xl oui-font-bold oui-text-base-contrast-80">
-              Site settings are unavailable
-            </h1>
-            <p className="oui-max-w-lg oui-text-base-contrast-54">
-              This page cannot be opened until page availability settings can
-              be loaded.
-            </p>
-          </main>
-        ) : isCurrentPageDisabled ? (
+        {isCurrentPageDisabled ? (
           <main className="oui-flex oui-min-h-[60vh] oui-flex-col oui-items-center oui-justify-center oui-gap-3 oui-p-6 oui-text-center">
             <h1 className="oui-text-2xl oui-font-bold oui-text-base-contrast-80">
               Page temporarily unavailable

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { stringToHex } from "viem";
 import { useWalletConnector } from "@orderly.network/hooks";
 import { useSitePages } from "@/contexts/SitePagesContext";
@@ -40,6 +40,7 @@ export default function AdminIndex() {
   const [savingPage, setSavingPage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const autoLoginAttemptedForAddress = useRef<string | null>(null);
 
   const loadPages = useCallback(async () => {
     const response = await fetch("/api/admin/pages", {
@@ -101,7 +102,7 @@ export default function AdminIndex() {
     }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = useCallback(async () => {
     const address = wallet?.accounts[0]?.address;
     if (!address || !/^0x[0-9a-f]{40}$/i.test(address)) {
       setError("Connect the EVM wallet registered as this broker's admin.");
@@ -157,7 +158,26 @@ export default function AdminIndex() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [loadPages, wallet]);
+
+  useEffect(() => {
+    const address = wallet?.accounts[0]?.address;
+    if (!address) {
+      autoLoginAttemptedForAddress.current = null;
+      return;
+    }
+    if (
+      checkingSession ||
+      authenticated ||
+      busy ||
+      autoLoginAttemptedForAddress.current === address
+    ) {
+      return;
+    }
+
+    autoLoginAttemptedForAddress.current = address;
+    void handleLogin();
+  }, [authenticated, busy, checkingSession, handleLogin, wallet]);
 
   const handleLogout = async () => {
     setBusy(true);

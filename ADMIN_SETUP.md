@@ -25,8 +25,10 @@ Open `/admin`, connect the registered EVM wallet, and approve the clearly
 labelled sign-in message. This is a message signature only: no transaction,
 private key, or seed phrase is requested. Page settings are stored in Redis and
 apply to navigation and direct FrostDex routes. If page settings cannot be
-loaded, FrostDex routes remain unavailable until the settings service recovers;
-`/admin` remains available for troubleshooting.
+loaded, public routes remain available using the default enabled settings;
+`/admin` remains available for troubleshooting. The admin panel is not linked
+in public navigation, and its settings require the registered owner wallet to
+sign in.
 
 These controls cover FrostDex routes. Links that open external Orderly pages
 are managed by those external services, not by this panel.
