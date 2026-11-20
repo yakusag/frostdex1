@@ -55,6 +55,15 @@ export default async function handler(
   }
 
   if (req.method === "GET") {
+    const walletAddress = new URL(
+      req.url ?? "/",
+      "http://localhost",
+    ).searchParams.get("walletAddress");
+    if (walletAddress !== null) {
+      return sendJson(res, 200, {
+        authorized: isValidAdminAddress(walletAddress),
+      });
+    }
     return sendJson(res, 200, {
       authenticated: Boolean(getAdminSessionAddress(req)),
     });

@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useWalletConnector } from "@orderly.network/hooks";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
@@ -29,6 +30,59 @@ const SentimentDashboard = lazy(
 );
 const SmartMoney = lazy(() => import("@/components/SmartMoney"));
 const WhaleAlerts = lazy(() => import("@/components/WhaleAlerts"));
+
+function AdminWalletRedirect() {
+  const { wallet } = useWalletConnector();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const checkedAddress = useRef<string | null>(null);
+
+  useEffect(() => {
+    const address = wallet?.accounts[0]?.address;
+    if (!address) {
+      checkedAddress.current = null;
+      return;
+    }
+    if (location.pathname === "/admin" || checkedAddress.current === address) {
+      return;
+    }
+
+    checkedAddress.current = address;
+    let active = true;
+
+    fetch(
+      `/api/admin/auth?walletAddress=${encodeURIComponent(address)}`,
+      { headers: { Accept: "application/json" } },
+    )
+      .then(async (response) => {
+        const body: unknown = await response.json();
+        if (!response.ok) {
+          throw new Error("Unable to check admin wallet access.");
+        }
+        return body;
+      })
+      .then((body) => {
+        if (
+          active &&
+          body &&
+          typeof body === "object" &&
+          "authorized" in body &&
+          body.authorized === true
+        ) {
+          navigate("/admin");
+        }
+      })
+      .catch((cause: unknown) => {
+        console.error("Unable to check connected wallet admin access:", cause);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location.pathname, navigate, wallet]);
+
+  return null;
+}
 
 export default function App() {
   const navigate = useNavigate();
@@ -99,6 +153,7 @@ export default function App() {
       <ReferralWelcome />
       <MarketTickerBar />
       <OrderlyProvider>
+        <AdminWalletRedirect />
         {isCurrentPageDisabled ? (
           <main className="oui-flex oui-min-h-[60vh] oui-flex-col oui-items-center oui-justify-center oui-gap-3 oui-p-6 oui-text-center">
             <h1 className="oui-text-2xl oui-font-bold oui-text-base-contrast-80">
