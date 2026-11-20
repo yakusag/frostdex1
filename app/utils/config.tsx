@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { useAccount } from "@orderly.network/hooks";
 import { Link } from "react-router-dom";
 import { useTranslation } from "@orderly.network/i18n";
 import { AppLogos } from "@orderly.network/react-app";
@@ -75,6 +82,29 @@ export type OrderlyConfig = {
     tradingViewConfig: TradingPageProps["tradingViewConfig"];
     sharePnLConfig: TradingPageProps["sharePnLConfig"];
   };
+};
+
+type WalletConnectStyle = CSSProperties & {
+  "--frost-wallet-address-label": string;
+};
+
+const WalletConnectSlot = ({ children }: { children: ReactNode }) => {
+  const { state } = useAccount();
+  const address = state.address;
+  const label = address ? `${address.slice(0, 2)}…${address.slice(-2)}` : "";
+
+  return (
+    <div
+      className={`frost-wallet-connect${address ? " is-connected" : ""}`}
+      style={
+        {
+          "--frost-wallet-address-label": JSON.stringify(label),
+        } as WalletConnectStyle
+      }
+    >
+      {children}
+    </div>
+  );
 };
 
 const getCustomMenuItems = (): MainNavItem[] => {
@@ -570,7 +600,7 @@ export const useOrderlyConfig = () => {
             {components.languageSwitcher}
             {components.subAccount}
             {components.chainMenu}
-            {components.walletConnect}
+            <WalletConnectSlot>{components.walletConnect}</WalletConnectSlot>
           </Flex>
         </Flex>
       );

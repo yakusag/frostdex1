@@ -370,6 +370,35 @@ body {
   }
 }
 
+.frost-wallet-connect.is-connected {
+  display: inline-flex;
+  flex: 0 0 72px;
+  justify-content: center;
+}
+
+.frost-wallet-connect.is-connected
+  button[data-testid="oui-testid-nav-bar-address-btn"] {
+  position: relative;
+  width: 72px;
+  min-width: 72px;
+  justify-content: center;
+}
+
+.frost-wallet-connect.is-connected
+  button[data-testid="oui-testid-nav-bar-address-btn"]
+  > * {
+  visibility: hidden;
+}
+
+.frost-wallet-connect.is-connected
+  button[data-testid="oui-testid-nav-bar-address-btn"]::after {
+  position: absolute;
+  visibility: visible;
+  color: white;
+  font-size: 12px;
+  content: var(--frost-wallet-address-label, "");
+}
+
 /* Any OUI element that is sticky or fixed at top:0 must shift down */
 .oui-sticky.oui-top-0,
 .oui-fixed.oui-top-0,
