@@ -1,7 +1,10 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getAddress, isAddress, isHex, verifyMessage, type Hex } from "viem";
-import { consumeAdminChallenge, saveAdminChallenge } from "./admin-store";
+import {
+  consumeAdminChallenge,
+  saveAdminChallenge,
+} from "./admin-store.js";
 
 const SESSION_COOKIE = "__Host-frostdex-admin";
 const SESSION_TTL_SECONDS = 4 * 60 * 60;

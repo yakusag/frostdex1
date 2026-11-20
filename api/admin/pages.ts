@@ -2,21 +2,21 @@ import type { ServerResponse } from "node:http";
 import {
   assertAdminAuthConfigured,
   getAdminSessionAddress,
-} from "../../server/admin-auth";
+} from "../../server/admin-auth.js";
 import {
   assertJsonRequest,
   isAllowedOrigin,
   readJsonBody,
   sendJson,
   type AdminApiRequest,
-} from "../../server/admin-http";
+} from "../../server/admin-http.js";
 import {
   AdminSetupError,
   AdminStoreError,
   getSitePageFlags,
   setSitePageEnabled,
-} from "../../server/admin-store";
-import { isSitePageId } from "../../shared/site-pages";
+} from "../../server/admin-store.js";
+import { isSitePageId } from "../../shared/site-pages.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

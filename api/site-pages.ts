@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../server/admin-http";
-import { getSitePageFlags } from "../server/admin-store";
+import { sendJson } from "../server/admin-http.js";
+import { getSitePageFlags } from "../server/admin-store.js";
 
 export default async function handler(
   req: IncomingMessage,

@@ -8,7 +8,7 @@ import {
   setAdminSessionCookie,
   clearAdminSessionCookie,
   verifyAdminLogin,
-} from "../../server/admin-auth";
+} from "../../server/admin-auth.js";
 import {
   assertJsonRequest,
   getClientIp,
@@ -16,12 +16,12 @@ import {
   readJsonBody,
   sendJson,
   type AdminApiRequest,
-} from "../../server/admin-http";
+} from "../../server/admin-http.js";
 import {
   AdminSetupError,
   AdminStoreError,
   consumeAdminRateLimit,
-} from "../../server/admin-store";
+} from "../../server/admin-store.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

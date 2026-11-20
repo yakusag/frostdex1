@@ -3,7 +3,7 @@ import {
   SITE_PAGES,
   type SitePageFlags,
   type SitePageId,
-} from "../shared/site-pages";
+} from "../shared/site-pages.js";
 
 const PAGE_FLAGS_KEY = "frostdex:site-page-flags:v1";
 const ADMIN_NONCE_PREFIX = "frostdex:admin-nonce:";
