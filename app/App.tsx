@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { HttpsRequiredWarning } from "@/components/HttpsRequiredWarning";
@@ -13,9 +13,11 @@ import ReferralWelcome from "@/components/ReferralWelcome";
 import WidgetManager from "@/components/WidgetManager";
 import OrderlyProvider from "@/components/orderlyProvider";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
+import { useSitePages } from "@/contexts/SitePagesContext";
 import { withBasePath } from "./utils/base-path";
 import { startFaviconAnimation } from "./utils/favicon-animation";
 import { getSEOConfig, getUserLanguage } from "./utils/seo";
+import { getSitePageIdForPath } from "../shared/site-pages";
 
 const AIAssistant = lazy(() => import("@/components/AIAssistant"));
 const FrostTradeWidget = lazy(() => import("@/components/FrostTradeWidget"));
@@ -30,10 +32,19 @@ const WhaleAlerts = lazy(() => import("@/components/WhaleAlerts"));
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
+  const {
+    flags: sitePageFlags,
+    loading: sitePagesLoading,
+    error: sitePagesError,
+  } = useSitePages();
   const { visibility, toggle, showAll, hideAll, allVisible } =
     useWidgetVisibility();
+  const currentPageId = getSitePageIdForPath(location.pathname);
+  const isCurrentPageDisabled =
+    currentPageId !== undefined && !sitePageFlags[currentPageId];
 
   useEffect(() => {
     window.__hideSplash?.();
@@ -54,7 +65,11 @@ export default function App() {
       if (!(event.target instanceof Element)) return;
 
       const target = event.target;
+      const isAnnouncementsPage =
+        location.pathname === "/announcements" ||
+        location.pathname.startsWith("/announcements/");
       if (
+        isAnnouncementsPage ||
         !target.closest(".orderly-notification") ||
         target.closest("button, a")
       ) {
@@ -68,7 +83,7 @@ export default function App() {
     return () => {
       document.removeEventListener("click", handleAnnouncementClick);
     };
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   return (
     <>
@@ -88,7 +103,37 @@ export default function App() {
       <ReferralWelcome />
       <MarketTickerBar />
       <OrderlyProvider>
-        <Outlet />
+        {sitePagesLoading && currentPageId ? (
+          <div className="oui-flex oui-min-h-[50vh] oui-items-center oui-justify-center">
+            <span className="oui-text-base-contrast-54">
+              Loading site settings...
+            </span>
+          </div>
+        ) : sitePagesError && currentPageId ? (
+          <main className="oui-flex oui-min-h-[60vh] oui-flex-col oui-items-center oui-justify-center oui-gap-3 oui-p-6 oui-text-center">
+            <h1 className="oui-text-2xl oui-font-bold oui-text-base-contrast-80">
+              Site settings are unavailable
+            </h1>
+            <p className="oui-max-w-lg oui-text-base-contrast-54">
+              This page cannot be opened until page availability settings can
+              be loaded.
+            </p>
+          </main>
+        ) : isCurrentPageDisabled ? (
+          <main className="oui-flex oui-min-h-[60vh] oui-flex-col oui-items-center oui-justify-center oui-gap-3 oui-p-6 oui-text-center">
+            <h1 className="oui-text-2xl oui-font-bold oui-text-base-contrast-80">
+              Page temporarily unavailable
+            </h1>
+            <p className="oui-max-w-lg oui-text-base-contrast-54">
+              This page is currently disabled by the site administrator.
+            </p>
+            <Link to="/" className="oui-text-primary">
+              Return to trading
+            </Link>
+          </main>
+        ) : (
+          <Outlet />
+        )}
       </OrderlyProvider>
       {visibility.frost && (
         <Suspense fallback={null}>

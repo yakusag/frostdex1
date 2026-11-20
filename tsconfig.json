@@ -3,6 +3,8 @@
     "app/**/*.ts",
     "app/**/*.tsx",
     "api/**/*.ts",
+    "server/**/*.ts",
+    "shared/**/*.ts",
     "scripts/**/*.ts",
     "build.ts",
     "vite.config.ts",
@@ -10,7 +12,7 @@
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "isolatedModules": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",

@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { withBasePath } from "./utils/base-path";
 import { getRuntimeConfig } from "./utils/runtime-config";
+import { SitePagesProvider } from "./contexts/SitePagesContext";
 import "./styles/index.css";
 
 const IndexPage = lazy(() => import("./pages/Index"));
@@ -47,6 +48,7 @@ const ReferralLayout = lazy(() => import("./pages/referral/Layout"));
 const ReferralIndex = lazy(() => import("./pages/referral/Index"));
 const WhitepaperLayout = lazy(() => import("./pages/whitepaper/Layout"));
 const WhitepaperIndex = lazy(() => import("./pages/whitepaper/Index"));
+const AdminIndex = lazy(() => import("./pages/admin/Index"));
 
 async function loadRuntimeConfig() {
   return new Promise<void>((resolve) => {
@@ -183,6 +185,7 @@ const router = createBrowserRouter(
           element: <WhitepaperLayout />,
           children: [{ index: true, element: <WhitepaperIndex /> }],
         },
+        { path: "admin", element: <AdminIndex /> },
       ],
     },
   ],
@@ -312,9 +315,11 @@ loadRuntimeConfig().then(() => {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <HelmetProvider>
-        <Suspense fallback={<LoadingSpinner />}>
-          <RouterProvider router={router} />
-        </Suspense>
+        <SitePagesProvider>
+          <Suspense fallback={<LoadingSpinner />}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </SitePagesProvider>
       </HelmetProvider>
     </React.StrictMode>,
   );

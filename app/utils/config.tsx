@@ -27,6 +27,8 @@ import CustomLeftNav from "@/components/CustomLeftNav";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { OrderlyActiveIcon, OrderlyIcon } from "../components/icons/orderly";
 import { withBasePath } from "./base-path";
+import { useSitePages } from "@/contexts/SitePagesContext";
+import { isSitePageId } from "../../shared/site-pages";
 import {
   getRuntimeConfig,
   getRuntimeConfigBoolean,
@@ -380,6 +382,7 @@ const getColorConfig = (
 export const useOrderlyConfig = () => {
   const { t } = useTranslation();
   const { isMobile } = useScreen();
+  const { flags: sitePageFlags, error: sitePagesError } = useSitePages();
   const [theme, setTheme] = useState<ThemeMode>(getThemeMode);
 
   useEffect(() => {
@@ -448,7 +451,14 @@ export const useOrderlyConfig = () => {
 
     const defaultEnabledMenus = allMenuItems.filter((menu) => menu.isDefault);
 
-    const enabledMenus = getEnabledMenus(allMenuItems, defaultEnabledMenus);
+    const enabledMenus = getEnabledMenus(
+      allMenuItems,
+      defaultEnabledMenus,
+    ).filter(
+      (menu) =>
+        !isSitePageId(menu.id) ||
+        (!sitePagesError && sitePageFlags[menu.id]),
+    );
     const customMenus = getCustomMenuItems();
 
     const translatedEnabledMenus = enabledMenus.map((menu) => ({
@@ -628,5 +638,5 @@ export const useOrderlyConfig = () => {
         },
       },
     };
-  }, [t, isMobile, theme]);
+  }, [t, isMobile, theme, sitePageFlags, sitePagesError]);
 };
