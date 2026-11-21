@@ -3,6 +3,76 @@ import type { Candle } from "@/components/BotChart";
 export const BOT_TAKER_FEE_RATE = 0.0005;
 export const BOT_MAINTENANCE_MARGIN_RATE = 0.005;
 
+export interface BotOrderRules {
+  base_dp: number;
+  base_tick: number;
+  base_min: number;
+  min_notional: number;
+}
+
+export function getAffordableOrderQuantity(
+  targetNotional: number,
+  price: number,
+  rules: BotOrderRules,
+  maxMargin: number,
+  marginPerNotional: number,
+): number | null {
+  if (
+    !Number.isFinite(targetNotional) ||
+    targetNotional <= 0 ||
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    !Number.isFinite(maxMargin) ||
+    maxMargin <= 0 ||
+    !Number.isFinite(marginPerNotional) ||
+    marginPerNotional <= 0 ||
+    !Number.isInteger(rules.base_dp) ||
+    rules.base_dp < 0 ||
+    rules.base_dp > 100 ||
+    !Number.isFinite(rules.base_min) ||
+    rules.base_min < 0 ||
+    !Number.isFinite(rules.min_notional) ||
+    rules.min_notional < 0
+  ) {
+    return null;
+  }
+
+  const step = rules.base_tick || 10 ** -rules.base_dp;
+  if (!Number.isFinite(step) || step <= 0) return null;
+
+  const minimumQuantity = Math.max(rules.base_min, rules.min_notional / price);
+  const affordableQuantity = maxMargin / (price * marginPerNotional);
+  const targetQuantity = Math.max(targetNotional / price, minimumQuantity);
+  const minimumUnits = Math.ceil(minimumQuantity / step);
+  const requestedUnits = Math.ceil(targetQuantity / step);
+  const affordableUnits = Math.floor(affordableQuantity / step);
+  if (
+    !Number.isFinite(minimumUnits) ||
+    !Number.isFinite(requestedUnits) ||
+    !Number.isFinite(affordableUnits)
+  ) {
+    return null;
+  }
+
+  for (
+    let units = Math.min(requestedUnits, affordableUnits);
+    units >= minimumUnits;
+    units -= 1
+  ) {
+    const quantity = Number((units * step).toFixed(rules.base_dp));
+    if (
+      Number.isFinite(quantity) &&
+      quantity > 0 &&
+      quantity >= minimumQuantity &&
+      quantity * price * marginPerNotional <= maxMargin
+    ) {
+      return quantity;
+    }
+  }
+
+  return null;
+}
+
 export function normalizeSimulationLeverage(value: unknown) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 1;

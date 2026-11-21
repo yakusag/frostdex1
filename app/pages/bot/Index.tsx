@@ -24,6 +24,7 @@ import {
   BOT_MAINTENANCE_MARGIN_RATE,
   BOT_TAKER_FEE_RATE,
   computeATR,
+  getAffordableOrderQuantity,
   getDcaIntervalMs,
   getLongLiquidationPrice,
   getRemainingBotBudget,
@@ -229,31 +230,6 @@ function getBotConfigKey(
     ),
     params: strategyParams,
   });
-}
-
-function getOrderQuantity(
-  targetNotional: number,
-  price: number,
-  rules: SymbolOrderRules,
-) {
-  if (
-    !Number.isFinite(targetNotional) ||
-    targetNotional <= 0 ||
-    !Number.isFinite(price) ||
-    price <= 0
-  ) {
-    return null;
-  }
-
-  const step = rules.base_tick || 10 ** -rules.base_dp;
-  const minimumQuantity = Math.max(rules.base_min, rules.min_notional / price);
-  const quantity =
-    Math.ceil(Math.max(targetNotional / price, minimumQuantity) / step) * step;
-  const roundedQuantity = Number(quantity.toFixed(rules.base_dp));
-
-  return Number.isFinite(roundedQuantity) && roundedQuantity > 0
-    ? roundedQuantity
-    : null;
 }
 
 function getOrderQuantityDown(quantity: number, rules: SymbolOrderRules) {
@@ -1026,10 +1002,12 @@ function BotLiveEngine({
     ) => {
       order.leverage = leverage;
       if (order.side === "BUY") {
-        const quantity = getOrderQuantity(
+        const quantity = getAffordableOrderQuantity(
           Number(order.qty) * order.triggerPrice,
           order.triggerPrice,
           symbolRules,
+          maxOrderMargin,
+          marginPerNotional,
         );
         if (quantity === null) return;
         const orderNotional = quantity * order.triggerPrice;
@@ -1639,7 +1617,13 @@ function BotSimulationEngine({
 
     let nextPosition = position;
     if (shouldBuy && buyMarginBudget > 0) {
-      const quantity = getOrderQuantity(buyNotional, price, symbolRules);
+      const quantity = getAffordableOrderQuantity(
+        buyNotional,
+        price,
+        symbolRules,
+        buyMarginBudget,
+        marginPerNotional,
+      );
       if (
         quantity === null ||
         quantity * price * marginPerNotional > buyMarginBudget
@@ -1792,9 +1776,7 @@ export default function BotPage() {
       return options;
     }
 
-    const marketOptions = options.filter(
-      (value) => value <= maxSymbolLeverage,
-    );
+    const marketOptions = options.filter((value) => value <= maxSymbolLeverage);
     if (!marketOptions.includes(maxSymbolLeverage)) {
       marketOptions.push(maxSymbolLeverage);
     }
@@ -3889,10 +3871,10 @@ export default function BotPage() {
                         )
                       }
                     />
-                    I ran this strategy in Simulation on this market for as
-                    long as I needed, am satisfied with my testing, understand
-                    that simulation does not guarantee live performance, and
-                    accept that live trading can lose my funds.
+                    I ran this strategy in Simulation on this market for as long
+                    as I needed, am satisfied with my testing, understand that
+                    simulation does not guarantee live performance, and accept
+                    that live trading can lose my funds.
                   </label>
                 )}
               </div>
