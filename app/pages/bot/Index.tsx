@@ -41,7 +41,7 @@ import {
 
 const BotBacktest = lazy(() => import("@/components/BotBacktest"));
 
-type BotStrategy = "grid" | "dca" | "signal" | "trend" | "sniper";
+type BotStrategy = "rotation" | "grid" | "dca" | "signal" | "trend" | "sniper";
 type BotStatus = "running" | "stopped" | "paused";
 
 interface SniperMarketSnapshot {
@@ -74,6 +74,7 @@ interface BotConfig {
   sniperAlert?: SniperAlert | null;
   sniperLastCandle?: number;
   sniperMarketCount?: number;
+  rotationScore?: number;
 }
 
 interface BotPosition {
@@ -215,7 +216,7 @@ function getBotConfigKey(
   investment: number,
   params: Record<string, string | number>,
 ) {
-  const autoScan = strategy === "sniper" && Number(params.autoScan) !== 0;
+  const autoScan = (strategy === "sniper" || strategy === "rotation") && Number(params.autoScan) !== 0;
   const strategyParams = Object.fromEntries(
     Object.entries(params)
       .filter(([key]) => key !== "leverage" && key !== "simLeverage")
@@ -404,6 +405,12 @@ const STRATEGY_INFO: Record<
   BotStrategy,
   { label: string; desc: string; icon: string; color: string }
 > = {
+  rotation: {
+    label: "AI Capital Rotation Desk",
+    desc: "Scans active perpetual markets, ranks trend and momentum, and rotates into the strongest confirmed setup with ATR risk controls.",
+    icon: "◉",
+    color: "#38e0f8",
+  },
   grid: {
     label: "Grid Bot",
     desc: "Range-aware grid entries with RSI recovery and a trend-strength filter.",
@@ -454,6 +461,138 @@ function getCurrentSniperAlert(
     alert.candleTime === candles[index]?.t
     ? alert
     : null;
+}
+
+interface RotationMarketSnapshot {
+  symbol: string | null;
+  score: number;
+  marketsScanned: number;
+  candleTime: number;
+}
+
+const ROTATION_SCAN_CACHE_MS = 2 * 60 * 1000;
+let rotationMarketSnapshotCache:
+  | { snapshot: RotationMarketSnapshot; expiresAt: number }
+  | undefined;
+let rotationMarketScanInFlight: Promise<RotationMarketSnapshot> | undefined;
+
+async function scanOrderlyRotationMarkets(): Promise<RotationMarketSnapshot> {
+  const cached = rotationMarketSnapshotCache;
+  if (cached && cached.expiresAt > Date.now()) return cached.snapshot;
+  if (rotationMarketScanInFlight) return rotationMarketScanInFlight;
+
+  const scan = (async () => {
+    const marketsResponse = await fetch("https://api.orderly.org/v1/public/futures", { cache: "no-store" });
+    if (!marketsResponse.ok) throw new Error(`Unable to load Orderly markets (${marketsResponse.status})`);
+    const marketBody = (await marketsResponse.json()) as { data?: { rows?: unknown[] } };
+    const symbols = [...new Set((marketBody.data?.rows ?? [])
+      .filter((row): row is Record<string, unknown> =>
+        !!row && typeof row === "object" &&
+        typeof (row as Record<string, unknown>).symbol === "string" &&
+        /^PERP_.+_(USDC|USDT)(?:_|$)/.test(String((row as Record<string, unknown>).symbol)) &&
+        (row as Record<string, unknown>).status !== "DELISTING")
+      .map((row) => String(row.symbol)))].slice(0, 40);
+    if (!symbols.length) throw new Error("No active Orderly USDC/USDT perpetual markets found");
+
+    const to = Math.floor(Date.now() / 1000);
+    const from = to - 30 * 60 * 60;
+    let nextIndex = 0;
+    let marketsScanned = 0;
+    let candleTime = 0;
+    const candidates: { symbol: string; score: number }[] = [];
+    const worker = async () => {
+      while (nextIndex < symbols.length) {
+        const market = symbols[nextIndex++];
+        try {
+          const response = await fetch(
+            `https://api.orderly.org/v1/tv/history?symbol=${encodeURIComponent(market)}&resolution=15&from=${from}&to=${to}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) continue;
+          const data = (await response.json()) as OrderlyHistory;
+          const length = Math.min(data.t?.length ?? 0, data.o?.length ?? 0, data.h?.length ?? 0,
+            data.l?.length ?? 0, data.c?.length ?? 0, data.v?.length ?? 0);
+          if (data.s !== "ok" || length < 55) continue;
+          const candles: Candle[] = Array.from({ length }, (_, index) => ({
+            t: (data.t![index] ?? 0) * 1000, o: data.o![index] ?? 0,
+            h: data.h![index] ?? 0, l: data.l![index] ?? 0,
+            c: data.c![index] ?? 0, v: data.v![index] ?? 0,
+          })).filter((candle) => candle.t > 0 && candle.c > 0);
+          const last = getLastClosedTrendCandleIndex(candles);
+          if (last < 50) continue;
+          marketsScanned++;
+          candleTime = Math.max(candleTime, candles[last].t);
+          const decision = getSignalDecision(candles, last, {
+            rsiPeriod: 14, rsiOversold: 42, rsiOverbought: 68, emaFast: 9, emaSlow: 21,
+          }, false);
+          if (!decision.buy) continue;
+          const close = candles[last].c;
+          const momentum = ((close / candles[last - 4].c) - 1) * 100;
+          const averageVolume = candles.slice(last - 20, last)
+            .reduce((sum, candle) => sum + Math.max(0, candle.v), 0) / 20;
+          const volumeRatio = averageVolume > 0 ? candles[last].v / averageVolume : 0;
+          if (!Number.isFinite(momentum) || momentum <= 0.05 || momentum > 4 || volumeRatio < 0.65) continue;
+          candidates.push({ symbol: market, score: momentum * 4 + Math.min(volumeRatio, 3) });
+        } catch (error) {
+          console.warn(`AI Capital Rotation could not scan ${market}:`, error);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, symbols.length) }, worker));
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    const snapshot: RotationMarketSnapshot = {
+      symbol: best?.symbol ?? null,
+      score: best?.score ?? 0,
+      marketsScanned,
+      candleTime,
+    };
+    rotationMarketSnapshotCache = { snapshot, expiresAt: Date.now() + ROTATION_SCAN_CACHE_MS };
+    return snapshot;
+  })();
+
+  rotationMarketScanInFlight = scan;
+  try { return await scan; } finally { rotationMarketScanInFlight = undefined; }
+}
+
+function BotRotationEngine({
+  bot,
+  onUpdate,
+}: {
+  bot: BotConfig;
+  onUpdate: (
+    botId: string,
+    update: Partial<Pick<BotConfig, "symbol" | "marketDataStatus" | "sniperLastCandle" | "sniperMarketCount" | "rotationScore">>,
+  ) => void;
+}) {
+  const hasPosition = bot.liveMode
+    ? !!bot.position?.quantity
+    : !!bot.paperPosition;
+  useEffect(() => {
+    if (bot.status !== "running" || hasPosition) return;
+    let active = true;
+    const scan = async () => {
+      try {
+        const snapshot = await scanOrderlyRotationMarkets();
+        if (!active) return;
+        onUpdate(bot.id, {
+          symbol: snapshot.symbol ?? bot.symbol,
+          marketDataStatus: snapshot.marketsScanned > 0 ? "ready" : "unavailable",
+          sniperLastCandle: snapshot.candleTime,
+          sniperMarketCount: snapshot.marketsScanned,
+          rotationScore: snapshot.score,
+        });
+      } catch (error) {
+        if (!active) return;
+        console.error("AI Capital Rotation scan failed:", error);
+        onUpdate(bot.id, { marketDataStatus: "unavailable" });
+      }
+    };
+    void scan();
+    const interval = window.setInterval(() => void scan(), ROTATION_SCAN_CACHE_MS);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [bot.id, bot.status, bot.symbol, hasPosition, onUpdate]);
+  return null;
 }
 
 async function scanOrderlyMarkets(): Promise<SniperMarketSnapshot> {
@@ -917,7 +1056,7 @@ function BotLiveEngine({
     });
   const historicalPerformance = getHistoricalPerformance(tradeLogs);
   const initialPosition =
-    bot.strategy === "trend" && managedPosition
+    (bot.strategy === "trend" || bot.strategy === "rotation") && managedPosition
       ? {
           entryPrice: managedPosition.entryPrice,
           quantity: managedPosition.qty,
@@ -938,7 +1077,7 @@ function BotLiveEngine({
     if (!feed.latestPrice) return;
 
     const position =
-      bot.strategy === "trend" && managedPosition
+      (bot.strategy === "trend" || bot.strategy === "rotation") && managedPosition
         ? {
             entryPrice: managedPosition.entryPrice,
             quantity: managedPosition.qty,
@@ -1099,7 +1238,7 @@ function BotLiveEngine({
       );
       shouldBuy = decision.buy && buyNotional >= minimumOrderNotional;
       shouldSell = decision.sell;
-    } else if (bot.strategy === "trend") {
+    } else if (bot.strategy === "trend" || bot.strategy === "rotation") {
       const atr = computeATR(candles, 14);
       const atrValue = atr[lastClosed];
       const stopAtr = normalizeTrendParameter(bot.params.stopAtr, 2);
@@ -1249,7 +1388,7 @@ function BotLiveEngine({
               if (bot.strategy === "dca") {
                 lastDcaBuyRef.current = Date.now();
               }
-              if (bot.strategy === "trend") {
+              if (bot.strategy === "trend" || bot.strategy === "rotation") {
                 const nextPosition = pendingOrder.position ?? null;
                 setManagedPosition(nextPosition);
                 if (nextPosition) {
@@ -1270,7 +1409,7 @@ function BotLiveEngine({
                 remainingQty > 0
                   ? { ...position, quantity: remainingQty }
                   : null;
-              if (bot.strategy === "trend" && !positionRef.current) {
+              if ((bot.strategy === "trend" || bot.strategy === "rotation") && !positionRef.current) {
                 setManagedPosition(null);
                 localStorage.removeItem(`frostdex_bot_position_${bot.id}`);
               }
@@ -1778,7 +1917,7 @@ export default function BotPage() {
     "bots",
   );
   const [allSymbols, setAllSymbols] = useState<string[]>(POPULAR_SYMBOLS);
-  const [strategy, setStrategy] = useState<BotStrategy>("grid");
+  const [strategy, setStrategy] = useState<BotStrategy>("rotation");
   const [liveAcknowledgedConfig, setLiveAcknowledgedConfig] = useState<
     string | null
   >(null);
@@ -1839,7 +1978,19 @@ export default function BotPage() {
     return marketOptions.sort((a, b) => a - b);
   })();
   const currentBotParams: Record<string, string | number> =
-    strategy === "grid"
+    strategy === "rotation"
+      ? {
+          autoScan: 1,
+          stopAtr: normalizeTrendParameter(trendStopAtr, 2),
+          rewardRisk: normalizeTrendParameter(trendRewardRisk, 2.5),
+          rsi: Number(sigRsi) || 14,
+          rsiOversold: Number(sigRsiOversold) || 42,
+          rsiOverbought: Number(sigRsiOverbought) || 68,
+          emaFast: Number(sigEmaFast) || 9,
+          ema: Number(sigEma) || 21,
+          leverage: selectedLeverage,
+        }
+      : strategy === "grid"
       ? {
           upper: gridUpper || "auto",
           lower: gridLower || "auto",
@@ -2051,6 +2202,7 @@ export default function BotPage() {
           | "sniperAlert"
           | "sniperLastCandle"
           | "sniperMarketCount"
+          | "rotationScore"
         >
       >,
     ) => {
@@ -2070,9 +2222,11 @@ export default function BotPage() {
           const nextCandle = update.sniperLastCandle ?? bot.sniperLastCandle;
           const nextMarketCount =
             update.sniperMarketCount ?? bot.sniperMarketCount;
+          const nextRotationScore = update.rotationScore ?? bot.rotationScore;
+          const isAutoMarketSwitch = bot.strategy === "rotation" && nextSymbol !== bot.symbol;
           const leverageConflict =
             bot.liveMode &&
-            update.sniperAlert?.kind === "PUMP" &&
+            (update.sniperAlert?.kind === "PUMP" || isAutoMarketSwitch) &&
             nextSymbol !== bot.symbol &&
             prev.some(
               (otherBot) =>
@@ -2099,7 +2253,8 @@ export default function BotPage() {
               blockedUpdate.sniperAlert === bot.sniperAlert &&
               blockedUpdate.sniperLastCandle === bot.sniperLastCandle &&
               blockedUpdate.sniperMarketCount === bot.sniperMarketCount &&
-              blockedUpdate.marketDataStatus === bot.marketDataStatus
+              blockedUpdate.marketDataStatus === bot.marketDataStatus &&
+              nextRotationScore === bot.rotationScore
             ) {
               return bot;
             }
@@ -2111,7 +2266,8 @@ export default function BotPage() {
             nextStatus === bot.marketDataStatus &&
             nextSymbol === bot.symbol &&
             nextCandle === bot.sniperLastCandle &&
-            nextMarketCount === bot.sniperMarketCount
+            nextMarketCount === bot.sniperMarketCount &&
+            nextRotationScore === bot.rotationScore
           ) {
             return bot;
           }
@@ -2377,6 +2533,12 @@ export default function BotPage() {
         margin: "0 auto",
       }}
     >
+      {/* AI Capital Rotation ranks markets and never switches away from an open position. */}
+      {bots
+        .filter((bot) => bot.status === "running" && bot.strategy === "rotation")
+        .map((bot) => (
+          <BotRotationEngine key={bot.id} bot={bot} onUpdate={handleSniperUpdate} />
+        ))}
       {/* Sniper signals are displayed in both simulation and live mode. */}
       {bots
         .filter((bot) => bot.status === "running" && bot.strategy === "sniper")
@@ -2404,7 +2566,7 @@ export default function BotPage() {
       {bots
         .filter(
           (b) =>
-            b.status === "running" && !b.liveMode && b.strategy === "trend",
+            b.status === "running" && !b.liveMode && (b.strategy === "trend" || b.strategy === "rotation"),
         )
         .map((bot) => (
           <BotPaperEngine
@@ -2416,7 +2578,7 @@ export default function BotPage() {
       {bots
         .filter(
           (b) =>
-            b.status === "running" && !b.liveMode && b.strategy !== "trend",
+            b.status === "running" && !b.liveMode && b.strategy !== "trend" && b.strategy !== "rotation",
         )
         .map((bot) => (
           <BotSimulationEngine
@@ -2980,6 +3142,15 @@ export default function BotPage() {
                                     : `Scanning ${bot.sniperMarketCount ?? "all"} active markets · waiting for an 8% pump or 5% drop with 3× volume. Keep this page open.`}
                             </div>
                           )}
+                          {isRunning && bot.strategy === "rotation" && (
+                            <div style={{ fontSize: 11, color: bot.marketDataStatus === "unavailable" ? "#f6465d" : "rgba(180,190,210,0.55)", marginTop: 4 }}>
+                              {bot.marketDataStatus === "unavailable"
+                                ? "Market scan unavailable — no new entries will be opened."
+                                : bot.marketDataStatus === "ready"
+                                  ? `Scanned ${bot.sniperMarketCount ?? 0} markets · ${bot.rotationScore ? `top setup score ${bot.rotationScore.toFixed(2)}` : "waiting for a qualified trend"} · ${bot.paperPosition || bot.position?.quantity ? "holding current market" : "auto-rotating"}`
+                                  : "Scanning active markets for the strongest trend..."}
+                            </div>
+                          )}
                           {isRunning && !isLive && bot.strategy === "trend" && (
                             <div
                               style={{
@@ -3166,7 +3337,7 @@ export default function BotPage() {
               }}
             >
               {(
-                ["grid", "dca", "signal", "trend", "sniper"] as BotStrategy[]
+                ["rotation", "grid", "dca", "signal", "trend", "sniper"] as BotStrategy[]
               ).map((s) => {
                 const info = STRATEGY_INFO[s];
                 const selected = strategy === s;
@@ -3235,7 +3406,24 @@ export default function BotPage() {
               marginBottom: 20,
             }}
           >
-            {strategy === "sniper" ? (
+            {strategy === "rotation" ? (
+              <>
+                <div>
+                  <label htmlFor="bot-name" style={labelStyle}>Bot Name (optional)</label>
+                  <input id="bot-name" value={botName} onChange={(e) => setBotName(e.target.value)}
+                    placeholder="AI Capital Rotation Desk" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Market Universe</label>
+                  <div style={{ ...inputStyle, minHeight: 42, display: "flex", alignItems: "center", color: "#38e0f8" }}>
+                    Auto-scan active Orderly USDC/USDT perpetuals
+                  </div>
+                  <div style={{ marginTop: 7, color: "rgba(180,190,210,0.65)", fontSize: 12, lineHeight: 1.5 }}>
+                    Ranks up to 40 markets every 2 minutes. Opens only after a confirmed 15-minute trend/momentum signal; keeps the current market while a position is open.
+                  </div>
+                </div>
+              </>
+            ) : strategy === "sniper" ? (
               <div>
                 <label htmlFor="sniper-market-selection" style={labelStyle}>
                   Sniper Market Selection
@@ -3872,7 +4060,9 @@ export default function BotPage() {
                     ? "Paper trades use Orderly market data and the selected strategy. No real orders or funds are used."
                     : strategy === "sniper"
                       ? "Pump signals open simulated positions; dump signals close them. No real orders or funds are used."
-                      : "Bot runs in simulation mode — no real orders are placed."}
+                      : strategy === "rotation"
+                        ? "Simulation ranks markets and paper-trades the strongest confirmed long trend. No real orders or funds are used."
+                        : "Bot runs in simulation mode — no real orders are placed."}
               </div>
               <div style={{ marginTop: 10 }}>
                 {!liveMode && (
@@ -3997,8 +4187,10 @@ export default function BotPage() {
             }}
           >
             {strategy === "sniper"
-              ? "⚠️ Sniper signals can be noisy or delayed. Live trades use 25% of the bot allocation per entry and can lose money; alerts are not a guarantee."
-              : "⚠️ Trading bots involve financial risk. Only invest what you can afford to lose. Past performance does not guarantee future results."}
+              ? "⚠️ Sniper signals can be noisy or delayed. Live trades use up to 10% of the bot allocation per entry and can lose money; alerts are not a guarantee."
+              : strategy === "rotation"
+                ? "⚠️ Rotation is long-only on the current Orderly bot engine. It may stay in cash when no market qualifies. Live trading can lose funds; no profit is guaranteed."
+                : "⚠️ Trading bots involve financial risk. Only invest what you can afford to lose. Past performance does not guarantee future results."}
           </div>
 
           <button
