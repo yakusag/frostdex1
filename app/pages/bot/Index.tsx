@@ -1264,10 +1264,11 @@ function BotLiveEngine({
       const stopDistance = atrValue * stopAtr;
 
       if (!pendingOrder && shouldBuy) {
-        const riskBudget = remainingBudget * 0.01;
+        const riskBudget = remainingBudget * (bot.strategy === "rotation" ? 0.005 : 0.01);
+        const marginCap = bot.strategy === "rotation" ? 0.15 : 0.25;
         const trendMarginBudget = Math.min(
-          availableBudget * 0.25,
-          remainingBudget * 0.25,
+          availableBudget * marginCap,
+          remainingBudget * marginCap,
         );
         const maxNotional = trendMarginBudget / marginPerNotional;
         const rawQuantity =
@@ -1569,9 +1570,10 @@ function BotPaperEngine({
       if (decision.buy) {
         const stopDistance =
           atr[last] * normalizeTrendParameter(bot.params.stopAtr, 2);
-        const riskBudget = remainingBudget * 0.01;
+        const riskBudget = remainingBudget * (bot.strategy === "rotation" ? 0.005 : 0.01);
+        const marginCap = bot.strategy === "rotation" ? 0.15 : 0.25;
         const marginPerNotional = 1 / simulationLeverage + BOT_TAKER_FEE_RATE;
-        const maxNotional = (remainingBudget * 0.25) / marginPerNotional;
+        const maxNotional = (remainingBudget * marginCap) / marginPerNotional;
         const entryPrice = price;
         const rawQuantity =
           Number.isFinite(stopDistance) && stopDistance > 0
