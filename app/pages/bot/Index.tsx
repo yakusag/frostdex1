@@ -1942,7 +1942,7 @@ export default function BotPage() {
   const [gridUpper, setGridUpper] = useState("");
   const [gridLower, setGridLower] = useState("");
   const [gridCount, setGridCount] = useState("10");
-  const [dcaInterval, setDcaInterval] = useState("1h");
+  const [dcaInterval, setDcaInterval] = useState("15m");
   const [dcaAmount, setDcaAmount] = useState("10");
   const [sigRsi, setSigRsi] = useState("14");
   const [sigEma, setSigEma] = useState("21");

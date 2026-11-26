@@ -51,9 +51,11 @@ export interface SniperAlert {
 }
 
 export const SNIPER_DEFAULT_THRESHOLDS = {
-  pumpPct: 8,
-  dumpPct: 5,
-  volumeMultiplier: 3,
+  // Use a meaningful 1-hour impulse and relative-volume confirmation.
+  // The previous 8% / 3x thresholds rarely fired on 15-minute candles.
+  pumpPct: 2.5,
+  dumpPct: 2,
+  volumeMultiplier: 1.5,
 };
 
 export function getSniperAlert(
@@ -211,13 +213,13 @@ export function getSignalDecisionFromIndicators(
   const priceBelowTrend = !!closes && closes[index] < emaTrend[index] * 0.995;
   const bullishMomentum =
     rsi[index] > rsi[index - 1] &&
-    rsi[index - 1] <= Math.max(55, oversold + 15) &&
-    rsi[index] <= 65;
+    rsi[index - 1] <= Math.max(62, oversold + 20) &&
+    rsi[index] <= 70;
   return {
     buy:
       !hasPosition && emaFast[index] > emaSlow[index] &&
-      emaSlow[index] >= emaSlow[index - 3] && trendWasRising &&
-      priceAboveTrend && bullishMomentum,
+      emaSlow[index] >= emaSlow[index - 3] * 0.999 &&
+      trendWasRising && priceAboveTrend && bullishMomentum,
     sell:
       hasPosition &&
       (rsi[index] >= overbought || emaFast[index] < emaSlow[index] || priceBelowTrend),
@@ -246,11 +248,15 @@ export function getGridDecision(
   const currentLevel = Math.floor((candles[index].c - lower) / step);
   const rsi = computeRSI(candles, 14);
   const ema50 = computeEMA(candles, 50);
-  const mildOrPositiveTrend = ema50[index] >= ema50[index - 5] * 0.995;
+  const mildOrPositiveTrend = ema50[index] >= ema50[index - 5] * 0.99;
+  const gridTouchAndReclaim =
+    candles[index].l <= lower + range * 0.7 &&
+    candles[index].c > candles[index].o &&
+    candles[index].c >= candles[index - 1].c;
   return {
     buy:
-      !hasPosition && currentLevel < previousLevel &&
-      candles[index].c <= lower + range * 0.7 && rsi[index] <= 48 &&
+      !hasPosition && (currentLevel < previousLevel || gridTouchAndReclaim) &&
+      candles[index].c <= lower + range * 0.8 && rsi[index] <= 56 &&
       rsi[index] > rsi[index - 1] && mildOrPositiveTrend,
     sell:
       hasPosition && currentLevel > previousLevel &&
@@ -271,11 +277,20 @@ export function getDcaDecision(
   const ema50 = computeEMA(candles, 50);
   const current = candles[index];
   const previous = candles[index - 1];
-  const trendConfirmed = ema20[index] > ema50[index] && ema50[index] >= ema50[index - 4] * 0.998;
-  const controlledPullback = current.c <= ema20[index] * 1.003 && current.c >= ema50[index] * 0.985;
-  const bullishReclaim = current.c > current.o && current.c >= previous.c;
+  const trendConfirmed = ema20[index] > ema50[index] && ema50[index] >= ema50[index - 4] * 0.995;
+  const touchedFastAverage = current.l <= ema20[index] * 1.006;
+  const controlledPullback =
+    current.c <= ema20[index] * 1.012 &&
+    current.c >= ema50[index] * 0.975;
+  const bullishReclaim =
+    current.c > current.o &&
+    current.c >= previous.c &&
+    current.c >= ema20[index] * 0.99;
   return {
-    buy: intervalElapsed && trendConfirmed && controlledPullback && bullishReclaim && rsi[index] >= 35 && rsi[index] <= 55,
+    buy:
+      intervalElapsed && trendConfirmed &&
+      (touchedFastAverage || controlledPullback) &&
+      bullishReclaim && rsi[index] >= 32 && rsi[index] <= 62,
     sell: hasPosition && entryPrice > 0 &&
       (current.c >= entryPrice * 1.03 || rsi[index] >= 68 || ema20[index] < ema50[index]),
   };
