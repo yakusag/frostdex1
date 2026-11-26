@@ -126,6 +126,92 @@ interface ManagedPosition {
   targetPrice: number;
 }
 
+function isValidSymbolOrderRules(value: unknown): value is SymbolOrderRules {
+  if (!value || typeof value !== "object") return false;
+  const rules = value as Record<string, unknown>;
+  return Number.isFinite(Number(rules.base_dp)) &&
+    Number.isFinite(Number(rules.base_tick)) && Number(rules.base_tick) > 0 &&
+    Number.isFinite(Number(rules.base_min)) && Number(rules.base_min) >= 0 &&
+    Number.isFinite(Number(rules.min_notional)) && Number(rules.min_notional) >= 0;
+}
+
+function useOrderlySymbolRules(
+  symbol: string,
+  sdkRules?: SymbolOrderRules,
+): SymbolOrderRules | undefined {
+  const [apiRules, setApiRules] = useState<SymbolOrderRules | undefined>();
+
+  useEffect(() => {
+    if (isValidSymbolOrderRules(sdkRules)) {
+      setApiRules(undefined);
+      return;
+    }
+
+    let active = true;
+    let fetching = false;
+    const loadRules = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const response = await fetch(
+          `https://api.orderly.org/v1/public/info/${encodeURIComponent(symbol)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          throw new Error(`Orderly rules unavailable (${response.status})`);
+        }
+        const body = (await response.json()) as {
+          data?: unknown;
+          success?: boolean;
+        };
+        const data = body.data ?? body;
+        const record = data && typeof data === "object"
+          ? data as Record<string, unknown>
+          : {};
+        const candidate = Array.isArray(record.rows)
+          ? record.rows[0]
+          : record.info && typeof record.info === "object"
+            ? record.info
+            : record;
+        if (!isValidSymbolOrderRules(candidate)) {
+          throw new Error("Orderly returned incomplete order rules");
+        }
+        if (active) {
+          const rules = candidate as Record<string, unknown>;
+          setApiRules({
+            base_dp: Number(rules.base_dp),
+            base_tick: Number(rules.base_tick),
+            base_min: Number(rules.base_min),
+            min_notional: Number(rules.min_notional),
+          });
+        }
+      } catch (error) {
+        if (active) {
+          console.warn(`FrostDex could not load order rules for ${symbol}:`, error);
+        }
+      } finally {
+        fetching = false;
+      }
+    };
+
+    setApiRules(undefined);
+    void loadRules();
+    const interval = window.setInterval(() => void loadRules(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [
+    symbol,
+    sdkRules?.base_dp,
+    sdkRules?.base_tick,
+    sdkRules?.base_min,
+    sdkRules?.min_notional,
+  ]);
+
+  return isValidSymbolOrderRules(sdkRules) ? sdkRules : apiRules;
+}
+
 type PaperBotUpdate = Partial<
   Pick<
     BotConfig,
@@ -1023,7 +1109,7 @@ function BotLiveEngine({
   const { state: accountState } = useAccount();
   const { freeCollateral } = useCollateral();
   const symbolInfo = useSymbolInfo(bot.symbol);
-  const symbolRules = symbolInfo?.();
+  const symbolRules = useOrderlySymbolRules(bot.symbol, symbolInfo?.());
   const feed = useOrderlyFeed(bot.symbol);
 
   useEffect(() => {
@@ -1460,7 +1546,7 @@ function BotPaperEngine({
 }) {
   const feed = useOrderlyFeed(bot.symbol);
   const symbolInfo = useSymbolInfo(bot.symbol);
-  const symbolRules = symbolInfo?.();
+  const symbolRules = useOrderlySymbolRules(bot.symbol, symbolInfo?.());
   const simulationLeverage = getBotLeverage(bot);
 
   useEffect(() => {
@@ -1666,7 +1752,7 @@ function BotSimulationEngine({
 }) {
   const feed = useOrderlyFeed(bot.symbol);
   const symbolInfo = useSymbolInfo(bot.symbol);
-  const symbolRules = symbolInfo?.();
+  const symbolRules = useOrderlySymbolRules(bot.symbol, symbolInfo?.());
   const positionRef = useRef<BotPosition | null>(bot.position ?? null);
   const realizedPnlRef = useRef(bot.realizedPnl ?? 0);
   const lastEvaluationRef = useRef(0);
