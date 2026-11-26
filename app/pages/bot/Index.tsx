@@ -28,6 +28,7 @@ import {
   getLongLiquidationPrice,
   getRemainingBotBudget,
   getGridDecision,
+  getDcaDecision,
   getSniperAlert,
   getSignalDecision,
   normalizeSimulationLeverage,
@@ -405,31 +406,31 @@ const STRATEGY_INFO: Record<
 > = {
   grid: {
     label: "Grid Bot",
-    desc: "Buys low, sells high inside a price range. Best for sideways markets.",
+    desc: "Range-aware grid entries with RSI recovery and a trend-strength filter.",
     icon: "⊞",
     color: "#38e0f8",
   },
   dca: {
     label: "DCA Bot",
-    desc: "Invests a fixed amount at regular intervals to average entry price.",
+    desc: "Adds on scheduled pullbacks only when the broader trend is healthy; exits on target or trend failure.",
     icon: "↻",
     color: "#0ecb81",
   },
   signal: {
     label: "Signal Bot",
-    desc: "Trades on RSI + EMA crossover signals for momentum-based entries.",
+    desc: "Waits for RSI momentum to turn up inside a rising EMA trend; exits on momentum or trend failure.",
     icon: "◈",
     color: "#f0b90b",
   },
   trend: {
     label: "Risk-Managed Trend",
-    desc: "Uses RSI/EMA entries with 1% risk sizing, an ATR stop, and a configurable reward target.",
+    desc: "Uses trend-confirmed RSI/EMA entries, ATR-based position sizing, a protective stop, and a reward target.",
     icon: "↗",
     color: "#ff8a65",
   },
   sniper: {
     label: "FrostDex Sniper",
-    desc: "Trades pump/dump signals in simulation or live mode, with a 25% allocation cap per entry.",
+    desc: "Scans for volume-confirmed momentum with EMA alignment and candle-close confirmation; avoids weak pump wicks.",
     icon: "◎",
     color: "#ff5b73",
   },
@@ -1011,8 +1012,8 @@ function BotLiveEngine({
             strategyBudget,
           )
         : bot.strategy === "sniper"
-          ? Math.min(remainingBudget * 0.25, strategyBudget)
-          : Math.min(remainingBudget * 0.5, strategyBudget);
+          ? Math.min(remainingBudget * 0.1, strategyBudget)
+          : Math.min(remainingBudget * 0.15, strategyBudget);
     const buyMarginBudget = Math.min(requestedOrderMargin, strategyBudget);
     const maxAffordableNotional = strategyBudget / marginPerNotional;
     const buyNotional = Math.min(
@@ -1089,12 +1090,15 @@ function BotLiveEngine({
       shouldBuy = decision.buy;
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
-      shouldBuy =
-        buyNotional >= minimumOrderNotional &&
-        Date.now() - lastDcaBuyRef.current >=
-          getDcaIntervalMs(bot.params.interval);
-      shouldSell =
-        !!positionRef.current && price > positionRef.current.entryPrice * 1.05;
+      const decision = getDcaDecision(
+        candles,
+        lastClosed,
+        Date.now() - lastDcaBuyRef.current >= getDcaIntervalMs(bot.params.interval),
+        !!positionRef.current,
+        positionRef.current?.entryPrice ?? 0,
+      );
+      shouldBuy = decision.buy && buyNotional >= minimumOrderNotional;
+      shouldSell = decision.sell;
     } else if (bot.strategy === "trend") {
       const atr = computeATR(candles, 14);
       const atrValue = atr[lastClosed];
@@ -1167,6 +1171,18 @@ function BotLiveEngine({
       const alert = getCurrentSniperAlert(bot, candles, lastClosed);
       shouldBuy = !positionRef.current && alert?.kind === "PUMP";
       shouldSell = !!positionRef.current && alert?.kind === "DUMP";
+    }
+
+    if (positionRef.current) {
+      const protectiveStopDistance = computeATR(candles, 14)[lastClosed] * 2;
+      if (
+        Number.isFinite(protectiveStopDistance) &&
+        protectiveStopDistance > 0 &&
+        price <= positionRef.current.entryPrice - protectiveStopDistance
+      ) {
+        shouldSell = true;
+        shouldBuy = false;
+      }
     }
 
     if (shouldBuy && !pendingOrder) {
@@ -1568,8 +1584,8 @@ function BotSimulationEngine({
             strategyBudget,
           )
         : bot.strategy === "sniper"
-          ? Math.min(remainingBudget * 0.25, strategyBudget)
-          : Math.min(remainingBudget * 0.5, strategyBudget);
+          ? Math.min(remainingBudget * 0.1, strategyBudget)
+          : Math.min(remainingBudget * 0.15, strategyBudget);
     const buyMarginBudget = Math.min(requestedOrderMargin, strategyBudget);
     const buyNotional = Math.min(
       strategyBudget / marginPerNotional,
@@ -1608,17 +1624,33 @@ function BotSimulationEngine({
       shouldBuy = decision.buy;
       shouldSell = decision.sell;
     } else if (bot.strategy === "dca") {
-      shouldBuy =
-        buyNotional >= minimumOrderNotional &&
-        Date.now() - lastDcaBuyRef.current >=
-          getDcaIntervalMs(bot.params.interval);
-      shouldSell = !!position && price > position.entryPrice * 1.05;
+      const decision = getDcaDecision(
+        candles,
+        lastClosed,
+        now - lastDcaBuyRef.current >= getDcaIntervalMs(bot.params.interval),
+        !!position,
+        position?.entryPrice ?? 0,
+      );
+      shouldBuy = decision.buy && buyNotional >= minimumOrderNotional;
+      shouldSell = decision.sell;
     } else if (bot.strategy === "sniper") {
       const alert = getCurrentSniperAlert(bot, candles, lastClosed);
       shouldBuy = !position && alert?.kind === "PUMP";
       shouldSell = !!position && alert?.kind === "DUMP";
     } else {
       return;
+    }
+
+    if (position) {
+      const protectiveStopDistance = computeATR(candles, 14)[lastClosed] * 2;
+      if (
+        Number.isFinite(protectiveStopDistance) &&
+        protectiveStopDistance > 0 &&
+        price <= position.entryPrice - protectiveStopDistance
+      ) {
+        shouldSell = true;
+        shouldBuy = false;
+      }
     }
 
     if (position && simulationLeverage > 1) {
@@ -1760,7 +1792,7 @@ export default function BotPage() {
     Number(selectedSymbolRules?.base_min ?? 0) * Number(selectedMarkPrice ?? 0),
   );
   const symbolsInfo = useSymbolsInfo();
-  const [investment, setInvestment] = useState("500");
+  const [investment, setInvestment] = useState("100");
   const [botName, setBotName] = useState("");
   const [liveMode, setLiveMode] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -1769,7 +1801,7 @@ export default function BotPage() {
   const [gridLower, setGridLower] = useState("");
   const [gridCount, setGridCount] = useState("10");
   const [dcaInterval, setDcaInterval] = useState("1h");
-  const [dcaAmount, setDcaAmount] = useState("50");
+  const [dcaAmount, setDcaAmount] = useState("10");
   const [sigRsi, setSigRsi] = useState("14");
   const [sigEma, setSigEma] = useState("21");
   const [trendStopAtr, setTrendStopAtr] = useState("2");
@@ -1783,7 +1815,7 @@ export default function BotPage() {
   const availableBalance = Number.isFinite(freeCollateral) ? freeCollateral : 0;
   const selectedLeverage = normalizeSimulationLeverage(simulationLeverage);
   const availableLeverageOptions = (() => {
-    const options = [1, 2, 5, 10, 20, 50, 100];
+    const options = [1, 2, 3, 5, 10];
     if (
       !liveMode ||
       !Number.isFinite(maxSymbolLeverage) ||
@@ -2139,7 +2171,7 @@ export default function BotPage() {
     );
     setGridCount(String(bot.params.grids ?? 10));
     setDcaInterval(String(bot.params.interval ?? "1h"));
-    setDcaAmount(String(bot.params.amount ?? 50));
+    setDcaAmount(String(bot.params.amount ?? 10));
     setSigRsi(String(bot.params.rsi ?? 14));
     setSigEma(String(bot.params.ema ?? 21));
     setSigRsiOversold(String(bot.params.rsiOversold ?? 35));
@@ -2172,8 +2204,8 @@ export default function BotPage() {
       return;
     }
 
-    if (!Number.isFinite(Number(investment)) || Number(investment) <= 0) {
-      setBalanceMessage("Investment must be a positive amount.");
+    if (!Number.isFinite(Number(investment)) || Number(investment) < 10) {
+      setBalanceMessage("Minimum bot allocation is 10 USDT.");
       return;
     }
     if (
@@ -2263,7 +2295,7 @@ export default function BotPage() {
       saveBots([newBot, ...bots]);
       setCreating(false);
       setBotName("");
-      setInvestment("500");
+      setInvestment("100");
       setTab("bots");
     }, 1200);
   };
@@ -2293,7 +2325,7 @@ export default function BotPage() {
   ).length;
   const investmentNum = Number(investment);
   const balanceWarning =
-    isConnected && investmentNum > 0 && investmentNum > availableBalance;
+    liveMode && isConnected && investmentNum > 0 && investmentNum > availableBalance;
 
   const stats = [
     {
@@ -3308,11 +3340,35 @@ export default function BotPage() {
                 type="number"
                 value={investment}
                 onChange={(e) => setInvestment(e.target.value)}
-                placeholder="500"
-                min="0.01"
-                step="any"
+                placeholder="100"
+                min="10"
+                step="1"
                 style={inputStyle}
               />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                {[10, 25, 50, 100, 250, 500].map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => setInvestment(String(amount))}
+                    aria-pressed={Number(investment) === amount}
+                    style={{
+                      border: `1px solid ${Number(investment) === amount ? "#38e0f8" : "rgba(30,36,50,1)"}`,
+                      borderRadius: 7,
+                      padding: "6px 11px",
+                      background: Number(investment) === amount ? "rgba(56,224,248,0.12)" : "rgb(20,24,30)",
+                      color: Number(investment) === amount ? "#38e0f8" : "#aab4c5",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    $ {amount}
+                  </button>
+                ))}
+              </div>
+              <div style={{ marginTop: 5, fontSize: 11, color: "rgba(180,190,210,0.55)" }}>
+                Minimum 10 USDT. Enter any amount above the minimum; each bot uses its own allocation.
+              </div>
               {liveMode &&
                 strategy !== "dca" &&
                 strategy !== "sniper" &&
@@ -3769,7 +3825,7 @@ export default function BotPage() {
             >
               {liveMode
                 ? `Live orders set ${simulationLeverage}x leverage for ${symbolDisplay(symbol)} before entry (market max: ${Number.isFinite(maxSymbolLeverage) ? `${maxSymbolLeverage}x` : "loading"}). Orderly leverage is shared by this account and symbol, so changing it can affect other positions. A connected wallet and positive free collateral are required before every order.`
-                : "Simulation only. This leverage is applied to every bot strategy through modeled exposure and liquidation; it does not change an Orderly account. Higher leverage increases risk, and backtest results are not a profit guarantee."}
+                : "Simulation only. Leverage is capped at 10x for this bot desk. Higher leverage magnifies losses; backtest results are not a profit guarantee."}
             </div>
           </div>
 
@@ -3951,7 +4007,8 @@ export default function BotPage() {
             disabled={
               creating ||
               !investment ||
-              Number(investment) <= 0 ||
+              !Number.isFinite(Number(investment)) ||
+              Number(investment) < 10 ||
               (liveMode &&
                 (!isConnected || availableBalance <= 0 || balanceWarning))
             }

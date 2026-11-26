@@ -6,7 +6,7 @@ export const BOT_MAINTENANCE_MARGIN_RATE = 0.005;
 export function normalizeSimulationLeverage(value: unknown) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 1;
-  return Math.min(100, Math.max(1, parsed));
+  return Math.min(10, Math.max(1, parsed));
 }
 
 export function getRemainingBotBudget(
@@ -62,54 +62,29 @@ export function getSniperAlert(
   index: number,
   thresholds = SNIPER_DEFAULT_THRESHOLDS,
 ): SniperAlert | null {
-  if (index < 20 || index >= candles.length) return null;
-
+  if (index < 50 || index >= candles.length) return null;
   const current = candles[index];
   const baseline = candles[index - 4]?.c;
   const averageVolume =
-    candles
-      .slice(index - 20, index)
-      .reduce((total, candle) => total + Math.max(0, candle.v), 0) / 20;
-  if (
-    !Number.isFinite(baseline) ||
-    baseline <= 0 ||
-    !Number.isFinite(current.v) ||
-    averageVolume <= 0
-  ) {
-    return null;
-  }
-
+    candles.slice(index - 20, index).reduce((total, candle) => total + Math.max(0, candle.v), 0) / 20;
+  const candleRange = current.h - current.l;
+  if (!Number.isFinite(baseline) || baseline <= 0 || !Number.isFinite(current.v) || averageVolume <= 0 || candleRange <= 0) return null;
   const volumeRatio = current.v / averageVolume;
   if (volumeRatio < thresholds.volumeMultiplier) return null;
-
   const changePct = ((current.c - baseline) / baseline) * 100;
-  const recentHigh = Math.max(
-    ...candles.slice(index - 4, index + 1).map((candle) => candle.h),
-  );
+  const recentHigh = Math.max(...candles.slice(index - 4, index + 1).map((c) => c.h));
   const drawdownPct = ((current.c - recentHigh) / recentHigh) * 100;
-
-  if (drawdownPct <= -thresholds.dumpPct && current.c < candles[index - 1].c) {
-    return {
-      kind: "DUMP",
-      symbol,
-      price: current.c,
-      changePct: drawdownPct,
-      volumeRatio,
-      candleTime: current.t,
-    };
+  const ema20 = computeEMA(candles, 20);
+  const ema50 = computeEMA(candles, 50);
+  const closeLocation = (current.c - current.l) / candleRange;
+  const risingTrend = ema20[index] > ema50[index] && ema20[index] >= ema20[index - 3];
+  const fallingTrend = ema20[index] < ema50[index] && ema20[index] <= ema20[index - 3];
+  if (changePct >= thresholds.pumpPct && risingTrend && current.c > current.o && closeLocation >= 0.65) {
+    return { kind: "PUMP", symbol, price: current.c, changePct, volumeRatio, candleTime: current.t };
   }
-
-  if (changePct >= thresholds.pumpPct) {
-    return {
-      kind: "PUMP",
-      symbol,
-      price: current.c,
-      changePct,
-      volumeRatio,
-      candleTime: current.t,
-    };
+  if (drawdownPct <= -thresholds.dumpPct && fallingTrend && current.c < current.o && closeLocation <= 0.35 && current.c < candles[index - 1].c) {
+    return { kind: "DUMP", symbol, price: current.c, changePct: drawdownPct, volumeRatio, candleTime: current.t };
   }
-
   return null;
 }
 
@@ -176,23 +151,14 @@ export function getSignalDecision(
   const rsiPeriod = parameters.rsiPeriod ?? 14;
   const emaFastPeriod = parameters.emaFast ?? 9;
   const emaSlowPeriod = parameters.emaSlow ?? 21;
-  if (
-    index < Math.max(rsiPeriod, emaFastPeriod, emaSlowPeriod) ||
-    index >= candles.length
-  ) {
-    return { buy: false, sell: false };
-  }
-
+  if (index < Math.max(rsiPeriod, emaFastPeriod, emaSlowPeriod, 50) || index >= candles.length) return { buy: false, sell: false };
   const rsi = computeRSI(candles, rsiPeriod);
   const emaFast = computeEMA(candles, emaFastPeriod);
   const emaSlow = computeEMA(candles, emaSlowPeriod);
+  const emaTrend = computeEMA(candles, 50);
   return getSignalDecisionFromIndicators(
-    index,
-    parameters,
-    hasPosition,
-    rsi,
-    emaFast,
-    emaSlow,
+    index, parameters, hasPosition, rsi, emaFast, emaSlow, emaTrend,
+    candles.map((candle) => candle.c),
   );
 }
 
@@ -203,31 +169,31 @@ export function getSignalDecisionFromIndicators(
   rsi: number[],
   emaFast: number[],
   emaSlow: number[],
+  emaTrend: number[] = emaSlow,
+  closes?: number[],
 ) {
   if (
-    index < 0 ||
-    index >= rsi.length ||
-    index >= emaFast.length ||
-    index >= emaSlow.length ||
-    index <
-      Math.max(
-        parameters.rsiPeriod ?? 14,
-        parameters.emaFast ?? 9,
-        parameters.emaSlow ?? 21,
-      )
-  ) {
-    return { buy: false, sell: false };
-  }
-
+    index < 1 || index >= rsi.length || index >= emaFast.length ||
+    index >= emaSlow.length || index >= emaTrend.length ||
+    index < Math.max(parameters.rsiPeriod ?? 14, parameters.emaFast ?? 9, parameters.emaSlow ?? 21, 50)
+  ) return { buy: false, sell: false };
+  const oversold = parameters.rsiOversold ?? 35;
+  const overbought = parameters.rsiOverbought ?? 68;
+  const trendWasRising = emaTrend[index] >= emaTrend[index - 3];
+  const priceAboveTrend = !closes || closes[index] >= emaTrend[index];
+  const priceBelowTrend = !!closes && closes[index] < emaTrend[index] * 0.995;
+  const bullishMomentum =
+    rsi[index] > rsi[index - 1] &&
+    rsi[index - 1] <= Math.max(55, oversold + 15) &&
+    rsi[index] <= 65;
   return {
     buy:
-      !hasPosition &&
-      rsi[index] < (parameters.rsiOversold ?? 35) &&
-      emaFast[index] > emaSlow[index],
+      !hasPosition && emaFast[index] > emaSlow[index] &&
+      emaSlow[index] >= emaSlow[index - 3] && trendWasRising &&
+      priceAboveTrend && bullishMomentum,
     sell:
       hasPosition &&
-      (rsi[index] > (parameters.rsiOverbought ?? 68) ||
-        emaFast[index] < emaSlow[index]),
+      (rsi[index] >= overbought || emaFast[index] < emaSlow[index] || priceBelowTrend),
   };
 }
 
@@ -239,47 +205,52 @@ export function getGridDecision(
   lowerBound?: number,
   upperBound?: number,
 ) {
-  if (index < 1 || index >= candles.length || gridCount < 1) {
-    return { buy: false, sell: false };
-  }
-
+  if (index < 50 || index >= candles.length || gridCount < 2) return { buy: false, sell: false };
   const history = candles.slice(Math.max(0, index - 100), index);
-  const hasConfiguredRange =
-    lowerBound !== undefined &&
-    upperBound !== undefined &&
-    Number.isFinite(lowerBound) &&
-    Number.isFinite(upperBound) &&
-    lowerBound < upperBound;
-  const lower =
-    hasConfiguredRange && lowerBound !== undefined
-      ? lowerBound
-      : Math.min(...history.map((candle) => candle.l));
-  const upper =
-    hasConfiguredRange && upperBound !== undefined
-      ? upperBound
-      : Math.max(...history.map((candle) => candle.h));
-  const step = (upper - lower) / gridCount;
-  if (!Number.isFinite(step) || step <= 0) return { buy: false, sell: false };
-
-  const previous = candles[index - 1].c;
-  const current = candles[index].c;
+  const hasConfiguredRange = lowerBound !== undefined && upperBound !== undefined &&
+    Number.isFinite(lowerBound) && Number.isFinite(upperBound) && lowerBound < upperBound;
+  const lower = hasConfiguredRange && lowerBound !== undefined ? lowerBound : Math.min(...history.map((c) => c.l));
+  const upper = hasConfiguredRange && upperBound !== undefined ? upperBound : Math.max(...history.map((c) => c.h));
+  const range = upper - lower;
+  const step = range / gridCount;
+  if (!Number.isFinite(step) || step <= 0 || candles[index].c < lower || candles[index].c > upper ||
+      candles[index - 1].c < lower || candles[index - 1].c > upper) return { buy: false, sell: false };
+  const previousLevel = Math.floor((candles[index - 1].c - lower) / step);
+  const currentLevel = Math.floor((candles[index].c - lower) / step);
+  const rsi = computeRSI(candles, 14);
+  const ema50 = computeEMA(candles, 50);
+  const mildOrPositiveTrend = ema50[index] >= ema50[index - 5] * 0.995;
   return {
     buy:
-      !hasPosition &&
-      previous >= lower &&
-      current >= lower &&
-      previous <= upper &&
-      current <= upper &&
-      Math.floor((current - lower) / step) <
-        Math.floor((previous - lower) / step),
+      !hasPosition && currentLevel < previousLevel &&
+      candles[index].c <= lower + range * 0.7 && rsi[index] <= 48 &&
+      rsi[index] > rsi[index - 1] && mildOrPositiveTrend,
     sell:
-      hasPosition &&
-      previous >= lower &&
-      current >= lower &&
-      previous <= upper &&
-      current <= upper &&
-      Math.floor((current - lower) / step) >
-        Math.floor((previous - lower) / step),
+      hasPosition && currentLevel > previousLevel &&
+      candles[index].c >= lower + range * 0.3 && rsi[index] >= 52,
+  };
+}
+
+export function getDcaDecision(
+  candles: Candle[],
+  index: number,
+  intervalElapsed: boolean,
+  hasPosition: boolean,
+  entryPrice = 0,
+) {
+  if (index < 50 || index >= candles.length) return { buy: false, sell: false };
+  const rsi = computeRSI(candles, 14);
+  const ema20 = computeEMA(candles, 20);
+  const ema50 = computeEMA(candles, 50);
+  const current = candles[index];
+  const previous = candles[index - 1];
+  const trendConfirmed = ema20[index] > ema50[index] && ema50[index] >= ema50[index - 4] * 0.998;
+  const controlledPullback = current.c <= ema20[index] * 1.003 && current.c >= ema50[index] * 0.985;
+  const bullishReclaim = current.c > current.o && current.c >= previous.c;
+  return {
+    buy: intervalElapsed && trendConfirmed && controlledPullback && bullishReclaim && rsi[index] >= 35 && rsi[index] <= 55,
+    sell: hasPosition && entryPrice > 0 &&
+      (current.c >= entryPrice * 1.03 || rsi[index] >= 68 || ema20[index] < ema50[index]),
   };
 }
 
