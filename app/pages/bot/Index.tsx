@@ -29,6 +29,7 @@ import {
   getRemainingBotBudget,
   getGridDecision,
   getDcaDecision,
+  getRotationDecision,
   getSniperAlert,
   getSignalDecision,
   normalizeSimulationLeverage,
@@ -522,9 +523,7 @@ async function scanOrderlyRotationMarkets(): Promise<RotationMarketSnapshot> {
           if (last < 50) continue;
           marketsScanned++;
           candleTime = Math.max(candleTime, candles[last].t);
-          const decision = getSignalDecision(candles, last, {
-            rsiPeriod: 14, rsiOversold: 42, rsiOverbought: 68, emaFast: 9, emaSlow: 21,
-          }, false);
+          const decision = getRotationDecision(candles, last, false);
           if (!decision.buy) continue;
           const close = candles[last].c;
           const momentum = ((close / candles[last - 4].c) - 1) * 100;
@@ -1244,7 +1243,7 @@ function BotLiveEngine({
       const stopAtr = normalizeTrendParameter(bot.params.stopAtr, 2);
       const rewardRisk = normalizeTrendParameter(bot.params.rewardRisk, 2.5);
       const position = managedPosition;
-      const decision = getSignalDecision(
+      const decision = bot.strategy === "rotation" ? getRotationDecision(candles, lastClosed, !!position) : getSignalDecision(
         candles,
         lastClosed,
         {
@@ -1552,18 +1551,20 @@ function BotPaperEngine({
       }
     } else {
       const atr = computeATR(candles, 14);
-      const decision = getSignalDecision(
-        candles,
-        last,
-        {
-          rsiPeriod: Number(bot.params.rsi) || 14,
-          rsiOversold: Number(bot.params.rsiOversold) || 35,
-          rsiOverbought: Number(bot.params.rsiOverbought) || 68,
-          emaFast: Number(bot.params.emaFast) || 9,
-          emaSlow: Number(bot.params.ema) || 21,
-        },
-        false,
-      );
+      const decision = bot.strategy === "rotation"
+        ? getRotationDecision(candles, last, false)
+        : getSignalDecision(
+            candles,
+            last,
+            {
+              rsiPeriod: Number(bot.params.rsi) || 14,
+              rsiOversold: Number(bot.params.rsiOversold) || 35,
+              rsiOverbought: Number(bot.params.rsiOverbought) || 68,
+              emaFast: Number(bot.params.emaFast) || 9,
+              emaSlow: Number(bot.params.ema) || 21,
+            },
+            false,
+          );
 
       if (decision.buy) {
         const stopDistance =

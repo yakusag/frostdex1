@@ -162,6 +162,33 @@ export function getSignalDecision(
   );
 }
 
+
+export function getRotationDecision(
+  candles: Candle[],
+  index: number,
+  hasPosition: boolean,
+) {
+  const decision = getSignalDecision(
+    candles,
+    index,
+    { rsiPeriod: 14, rsiOversold: 42, rsiOverbought: 68, emaFast: 9, emaSlow: 21 },
+    hasPosition,
+  );
+  if (hasPosition || !decision.buy || index < 50 || index >= candles.length) {
+    return decision;
+  }
+  const close = candles[index].c;
+  const previousClose = candles[index - 4]?.c ?? 0;
+  const momentum = previousClose > 0 ? ((close / previousClose) - 1) * 100 : 0;
+  const averageVolume = candles.slice(index - 20, index)
+    .reduce((sum, candle) => sum + Math.max(0, candle.v), 0) / 20;
+  const volumeRatio = averageVolume > 0 ? candles[index].v / averageVolume : 0;
+  return {
+    buy: Number.isFinite(momentum) && momentum > 0.05 && momentum <= 4 && volumeRatio >= 0.65,
+    sell: decision.sell,
+  };
+}
+
 export function getSignalDecisionFromIndicators(
   index: number,
   parameters: SignalParameters,
