@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAccount, useWalletConnector } from "@orderly.network/hooks";
+import { getPublicKey } from "@noble/ed25519";
 
 type Network = "testnet" | "mainnet";
 const TITLE = "AI Bot Frostdex Capital Rotation";
@@ -51,7 +52,7 @@ export default function RotationPage() {
   const { wallet } = useWalletConnector();
   const address = account.address;
 
-  const [network, setNetwork] = useState<Network>("testnet");
+  const [network, setNetwork] = useState<Network>("mainnet");
   const [live, setLive] = useState(false);
   const [capital, setCapital] = useState(100);
   const [leverage, setLeverage] = useState(5);
@@ -70,7 +71,6 @@ export default function RotationPage() {
   const [universe, setUniverse] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [keyForm, setKeyForm] = useState({ orderlyKey: "", secretKey: "" });
 
   const capitalOk = Number.isFinite(capital) && capital >= MIN_CAPITAL;
 
@@ -165,17 +165,107 @@ export default function RotationPage() {
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
 
-  const saveKey = async () => {
+  const authorizeOrderlyKey = async () => {
     setBusy(true); setMsg(null);
+    let secretKey = "";
+    let seed: Uint8Array | null = null;
     try {
+      if (!authed || !address) throw new Error("Sign in with your EVM wallet first.");
+      if (network !== "mainnet") throw new Error("FrostDex live bot currently supports Mainnet only.");
+      if (!account.accountId) throw new Error("Your Orderly account is not ready yet. Open the Orderly trading page and complete account setup first.");
+      const provider = wallet?.provider as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | undefined;
+      if (!provider || typeof provider.request !== "function") throw new Error("No connected EVM wallet provider found.");
+      const connectedAddress = wallet?.accounts?.[0]?.address;
+      if (!connectedAddress || connectedAddress.toLowerCase() !== address.toLowerCase()) {
+        throw new Error("The connected wallet does not match the signed-in Orderly account.");
+      }
+      const chainHex = await provider.request({ method: "eth_chainId" });
+      const chainId = typeof chainHex === "string" ? Number.parseInt(chainHex, 16) : Number(chainHex);
+      if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error("Unable to read the connected wallet chain.");
+      const chainInfoResponse = await fetch("https://api.orderly.org/v1/public/chain_info?broker_id=frostdex");
+      const chainInfo = await chainInfoResponse.json() as { data?: { chains?: { chain_id?: number | string }[] } };
+      const supportedChainIds = (chainInfo.data?.chains ?? []).map((item) => Number(item.chain_id)).filter(Number.isSafeInteger);
+      if (!chainInfoResponse.ok || !supportedChainIds.includes(chainId)) {
+        throw new Error("Switch your wallet to a chain supported by FrostDex on Orderly Mainnet, then try again.");
+      }
+      seed = crypto.getRandomValues(new Uint8Array(32));
+      const publicKey = getPublicKey(seed);
+      const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      const toBase58 = (bytes: Uint8Array) => {
+        let value = 0n;
+        for (const byte of bytes) value = (value << 8n) | BigInt(byte);
+        let encoded = "";
+        while (value > 0n) { encoded = alphabet[Number(value % 58n)] + encoded; value /= 58n; }
+        for (const byte of bytes) { if (byte !== 0) break; encoded = "1" + encoded; }
+        return encoded;
+      };
+      const orderlyKey = `ed25519:${toBase58(publicKey)}`;
+      secretKey = `ed25519:${toBase58(seed)}`;
+      const timestamp = Date.now();
+      const message = {
+        brokerId: "frostdex",
+        chainId,
+        orderlyKey,
+        scope: "read,trading",
+        timestamp,
+        expiration: timestamp + 365 * 24 * 60 * 60 * 1000,
+      };
+      const typedData = {
+        types: {
+          EIP712Domain: [
+            { name: "name", type: "string" },
+            { name: "version", type: "string" },
+            { name: "chainId", type: "uint256" },
+            { name: "verifyingContract", type: "address" },
+          ],
+          AddOrderlyKey: [
+            { name: "brokerId", type: "string" },
+            { name: "chainId", type: "uint256" },
+            { name: "orderlyKey", type: "string" },
+            { name: "scope", type: "string" },
+            { name: "timestamp", type: "uint64" },
+            { name: "expiration", type: "uint64" },
+          ],
+        },
+        primaryType: "AddOrderlyKey",
+        domain: {
+          name: "Orderly",
+          version: "1",
+          chainId,
+          verifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+        },
+        message,
+      };
+      const signature = await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [address, JSON.stringify(typedData)],
+      });
+      if (typeof signature !== "string" || !signature.startsWith("0x")) {
+        throw new Error("The wallet did not return a valid EIP-712 signature.");
+      }
+      const orderlyResponse = await fetch("https://api.orderly.org/v1/orderly_key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, signature, userAddress: address }),
+      });
+      const orderlyResult = await orderlyResponse.json() as { success?: boolean; message?: string; error?: string };
+      if (!orderlyResponse.ok || orderlyResult.success !== true) {
+        throw new Error(orderlyResult.message || orderlyResult.error || "Orderly rejected the new trading key.");
+      }
       await api("/api/bots/keys", {
         method: "PUT",
-        body: JSON.stringify({ network, accountId: account.accountId, scope: "read,trading", orderlyKey: keyForm.orderlyKey.trim(), secretKey: keyForm.secretKey.trim() }),
+        body: JSON.stringify({ network, accountId: account.accountId, scope: "read,trading", orderlyKey, secretKey }),
       });
-      setKeyForm({ orderlyKey: "", secretKey: "" });
       await refreshAccount();
-      setMsg("Trading key saved (encrypted).");
-    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+      setMsg("Orderly trading key authorized and stored encrypted. You can now enable Live mode.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      seed?.fill(0);
+      seed = null;
+      secretKey = "";
+      setBusy(false);
+    }
   };
 
   const save = async (status: "running" | "stopped" | "paused", fresh = false) => {
@@ -244,12 +334,11 @@ export default function RotationPage() {
       {authed && live && (
         <section className={`${card} space-y-3`}>
           <h2 className="font-semibold">2 · Trading key (live mode)</h2>
-          {keyConfigured ? <p className="text-sm text-emerald-400">A read+trading key is stored encrypted on the server. It cannot withdraw funds.</p> : (
+          {keyConfigured ? <p className="text-sm text-emerald-400">Orderly read+trading key is authorized and stored encrypted. Withdrawals are not permitted.</p> : (
             <>
-              <p className="text-sm text-white/60">Paste a dedicated Orderly key with scope read,trading. Account: {account.accountId?.slice(0, 10)}…</p>
-              <input className={input} placeholder="ed25519:… (public key)" value={keyForm.orderlyKey} onChange={(e) => setKeyForm({ ...keyForm, orderlyKey: e.target.value })} />
-              <input className={input} type="password" placeholder="secret key" value={keyForm.secretKey} onChange={(e) => setKeyForm({ ...keyForm, secretKey: e.target.value })} />
-              <button className={`${btn} bg-sky-500`} disabled={busy || !keyForm.orderlyKey || !keyForm.secretKey} onClick={saveKey}>Save key</button>
+              <p className="text-sm text-white/60">Authorize FrostDex with your connected wallet. A dedicated Ed25519 key is generated in this browser, signed through Orderly, then encrypted before server storage. No key or secret needs to be pasted.</p>
+              <p className="text-xs text-amber-300">This grants the bot permission to read account data and place/cancel trades. It does not grant withdrawal permission. Only authorize if you accept live-trading risk.</p>
+              <button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address || !account.accountId} onClick={authorizeOrderlyKey}>{busy ? "Authorizing…" : "Authorize FrostDex"}</button>
             </>
           )}
         </section>
