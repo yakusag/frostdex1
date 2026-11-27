@@ -83,7 +83,7 @@ export default function RotationPage() {
       .catch(() => undefined);
   }, []);
 
-  const refreshAccount = useCallback(async () => {
+  const refreshAccount = useCallback(async (targetNetwork: Network = network) => {
     try {
       const a = await api<{ authenticated: boolean; address: string | null; guest?: boolean }>("/api/bots/auth");
       const isGuest = Boolean(a.authenticated && a.guest);
@@ -92,8 +92,8 @@ export default function RotationPage() {
       setAuthed(ok);
       if (!ok) { setBot(null); setKeyConfigured(false); return; }
       const [k, c] = await Promise.all([
-        isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${network}`),
-        api<{ bots: BotConfig[] }>(`/api/bots/config?network=${network}`),
+        isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${targetNetwork}`),
+        api<{ bots: BotConfig[] }>(`/api/bots/config?network=${targetNetwork}`),
       ]);
       setKeyConfigured(k.configured);
       const mine = c.bots.filter((b) => b.strategy === "rotation").sort((a2, b2) => b2.updatedAt - a2.updatedAt)[0] ?? null;
@@ -128,6 +128,7 @@ export default function RotationPage() {
     try {
       await api("/api/bots/auth", { method: "POST", body: JSON.stringify({ action: "guest" }) });
       setNetwork("testnet");
+      await refreshAccount("testnet");
       setMsg("Private guest simulation session created. No wallet or real funds are used.");
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
