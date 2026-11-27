@@ -207,10 +207,25 @@ async function runBot(r: Run) {
   const md = markets[r.config.network];
   const params = normalizeParams(r.config.params);
   const running = r.config.status === "running";
+  const stopped = r.config.status === "stopped";
   const prices = new Map(md.prices);
 
-  if (!running && r.state.positions.length) {
-    // user pressed Stop/Pause: flatten, then idle
+  // A user-requested single-position close is queued by the authenticated API.
+  const commandKey = `frostdex:rotation:command:${r.config.network}:${r.config.ownerAddress.toLowerCase()}:${r.config.id}`;
+  const rawCommand = await redisCommand("GETDEL", commandKey);
+  if (typeof rawCommand === "string") {
+    try {
+      const command = JSON.parse(rawCommand) as { action?: string; positionId?: string };
+      if (command.action === "close" && typeof command.positionId === "string") {
+        const pos = r.state.positions.find((p) => p.id === command.positionId);
+        if (pos) await closePosition(r.state, pos, prices.get(pos.symbol) ?? pos.entry, "user_closed", r.broker, Date.now());
+      }
+    } catch (e) { log("invalid rotation command", (e as Error).message); }
+  }
+
+  // Stop is the only status that flattens the whole portfolio. Pause keeps
+  // positions open and continues managing their exits without opening entries.
+  if (stopped && r.state.positions.length) {
     for (const p of [...r.state.positions]) {
       try { await closePosition(r.state, p, prices.get(p.symbol) ?? p.entry, "bot_stopped", r.broker, Date.now()); }
       catch (e) { log("flatten failed", p.symbol, (e as Error).message); }
@@ -220,8 +235,7 @@ async function runBot(r: Run) {
     // live broker needs the freshest rules for sizing
     (r.live as any).rules = md.rules;
   }
-  const paused = !running;
-  await tick(r.state, params, prices, md.inputs(), r.broker, { tradingEnabled: !paused });
+  await tick(r.state, params, prices, md.inputs(), r.broker, { tradingEnabled: running });
   await saveState(r);
 }
 

@@ -349,6 +349,10 @@ export interface Position {
   peak: number; // best favorable price seen
   score: number;
   live: boolean;
+  markPrice?: number;
+  unrealizedPnl?: number;
+  recommendation?: "HOLD" | "CLOSE" | "PAUSE" | "STOP";
+  recommendationReason?: string;
 }
 
 export const dirOf = (side: "LONG" | "SHORT") => (side === "LONG" ? 1 : -1);
