@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson } from "../../server/admin-http.js";
-import { getBotSessionAddress } from "../../server/bot-auth.js";
+import { getBotSessionOwner } from "../../server/bot-auth.js";
 import { redisCommand, RedisSetupError, RedisStoreError } from "../../server/redis.js";
 
 /**
@@ -9,8 +9,8 @@ import { redisCommand, RedisSetupError, RedisStoreError } from "../../server/red
  * plus how old its heartbeat is so the page can show "worker offline".
  */
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  const owner = getBotSessionAddress(req);
-  if (!owner) return sendJson(res, 401, { error: "Wallet sign-in is required." });
+  const owner = getBotSessionOwner(req);
+  if (!owner) return sendJson(res, 401, { error: "Start a guest simulation or sign in with a wallet." });
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return sendJson(res, 405, { error: "Method not allowed." });
