@@ -6,7 +6,7 @@ type Network = "testnet" | "mainnet";
 const TITLE = "AI Bot Frostdex Capital Rotation";
 const MIN_CAPITAL = 10; // USDC
 
-interface Position { id: string; symbol: string; side: "LONG" | "SHORT"; entry: number; qty: number; margin: number; openedAt: number; slDist: number; tpDist: number; score: number }
+interface Position { id: string; symbol: string; side: "LONG" | "SHORT"; entry: number; qty: number; margin: number; openedAt: number; slDist: number; tpDist: number; score: number; markPrice?: number; unrealizedPnl?: number; recommendation?: "HOLD" | "CLOSE" | "PAUSE" | "STOP"; recommendationReason?: string }
 interface Trade { id: string; symbol: string; side: string; pnl: number; reason: string; closedAt: number; entry: number; exit: number }
 interface Candidate { symbol: string; side: string; pTP: number; score: number; tauMin: number; expectedNet: number }
 interface RotationState {
@@ -83,7 +83,7 @@ export default function RotationPage() {
       .catch(() => undefined);
   }, []);
 
-  const refreshAccount = useCallback(async () => {
+  const refreshAccount = useCallback(async (targetNetwork: Network = network) => {
     try {
       const a = await api<{ authenticated: boolean; address: string | null; guest?: boolean }>("/api/bots/auth");
       const isGuest = Boolean(a.authenticated && a.guest);
@@ -92,8 +92,8 @@ export default function RotationPage() {
       setAuthed(ok);
       if (!ok) { setBot(null); setKeyConfigured(false); return; }
       const [k, c] = await Promise.all([
-        isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${network}`),
-        api<{ bots: BotConfig[] }>(`/api/bots/config?network=${network}`),
+        isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${targetNetwork}`),
+        api<{ bots: BotConfig[] }>(`/api/bots/config?network=${targetNetwork}`),
       ]);
       setKeyConfigured(k.configured);
       const mine = c.bots.filter((b) => b.strategy === "rotation").sort((a2, b2) => b2.updatedAt - a2.updatedAt)[0] ?? null;
@@ -128,7 +128,7 @@ export default function RotationPage() {
     try {
       await api("/api/bots/auth", { method: "POST", body: JSON.stringify({ action: "guest" }) });
       setNetwork("testnet");
-      await refreshAccount();
+      await refreshAccount("testnet");
       setMsg("Private guest simulation session created. No wallet or real funds are used.");
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
@@ -160,7 +160,7 @@ export default function RotationPage() {
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
 
-  const save = async (status: "running" | "stopped", fresh = false) => {
+  const save = async (status: "running" | "stopped" | "paused", fresh = false) => {
     if (!capitalOk) return setMsg(`Minimum capital is ${MIN_CAPITAL} USDC.`);
     if (live && !keyConfigured) return setMsg("Live mode needs a trading key (see step 2).");
     setBusy(true); setMsg(null);
@@ -178,6 +178,18 @@ export default function RotationPage() {
   };
 
   const running = bot?.status === "running";
+  const paused = bot?.status === "paused";
+  const control = async (action: "pause" | "resume" | "stop" | "close", positionId?: string) => {
+    if (!bot) return;
+    setBusy(true); setMsg(null);
+    try {
+      const result = await api<{ queued?: boolean; status?: string }>(`/api/bots/rotation?network=${network}&id=${bot.id}`, {
+        method: "POST", body: JSON.stringify({ action, ...(positionId ? { positionId } : {}) }),
+      });
+      if (action === "close") setMsg(result.queued ? "Close request queued; the worker will execute it on its next cycle." : "Close request submitted.");
+      await refreshAccount();
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
   const winRate = useMemo(() => {
     const s = rot?.stats; const n = (s?.wins ?? 0) + (s?.losses ?? 0);
     return n ? `${((s!.wins / n) * 100).toFixed(1)}%` : "—";
@@ -205,7 +217,7 @@ export default function RotationPage() {
           : <div className="flex flex-wrap gap-2"><button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address} onClick={signIn}>Sign in with wallet</button><button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={startGuest}>Start guest simulation</button></div>}
         <div className="flex gap-2 text-sm">
           {(["testnet", "mainnet"] as Network[]).map((n) => (
-            <button key={n} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
+            <button key={n} disabled={guest && n === "mainnet"} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
           ))}
         </div>
       </section>
@@ -244,15 +256,17 @@ export default function RotationPage() {
             ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
           ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
             <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} value={v} disabled={running} onChange={(e) => set(Number(e.target.value))} />
+              <input className={`${input} mt-1`} type="number" step={step} min={label === "Max positions" ? 1 : undefined} max={label === "Max positions" ? 8 : undefined} value={v} disabled={running || paused} onChange={(e) => set(label === "Max positions" ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
             </label>
           ))}
         </div>
         {!capitalOk && <p className="text-xs text-rose-400">Minimum capital is {MIN_CAPITAL} USDC.</p>}
         <div className="flex flex-wrap gap-2">
-          {running ? <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => save("stopped")}>Stop &amp; close positions</button>
-            : <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot && (bot.liveMode !== live || bot.investment !== capital))}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
-          {bot && !running && <button className={`${btn} bg-white/10`} disabled={busy} onClick={() => save("stopped", true)}>Reset (new run)</button>}
+          {running && <button className={`${btn} bg-amber-500 text-black`} disabled={busy} onClick={() => control("pause")}>Ⅱ Pause (keep positions)</button>}
+          {paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={() => control("resume")}>▶ Resume</button>}
+          {(running || paused) && <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => control("stop")}>■ Stop &amp; close all</button>}
+          {!running && !paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot && (bot.liveMode !== live || bot.investment !== capital))}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
+          {bot && !running && !paused && <button className={`${btn} bg-white/10`} disabled={busy} onClick={() => save("stopped", true)}>Reset (new run)</button>}
         </div>
         {msg && <p className="text-sm text-amber-300">{msg}</p>}
         {bot && !workerOnline && running && <p className="text-sm text-rose-300">Worker offline — trading is paused until the 24/7 worker is running.</p>}
@@ -273,12 +287,23 @@ export default function RotationPage() {
 
           <section className={card}>
             <h2 className="mb-2 font-semibold">Open positions</h2>
-            {rot.positions.length === 0 ? <p className="text-sm text-white/50">Flat.</p> : (
-              <table className="w-full text-sm"><tbody>
-                {rot.positions.map((p) => (
-                  <tr key={p.id} className="border-t border-white/5"><td className="py-1">{p.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td className={p.side === "LONG" ? "text-emerald-400" : "text-rose-400"}>{p.side}</td><td>@ {p.entry.toPrecision(6)}</td><td>${p.margin.toFixed(2)}</td><td>TP {(p.tpDist * 100).toFixed(2)}% / SL {(p.slDist * 100).toFixed(2)}%</td></tr>
-                ))}
-              </tbody></table>
+            {paused && <p className="mb-2 text-xs text-amber-300">Paused: no new entries. Existing positions remain monitored for TP/SL and time exits.</p>}
+            {rot.positions.length === 0 ? <p className="text-sm text-white/50">No open positions.</p> : (
+              <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-xs md:text-sm"><thead><tr className="text-left text-white/50"><th className="py-2">Market</th><th>Side</th><th>Entry → Mark</th><th>Unrealized PnL</th><th>Margin / Qty</th><th>Opened</th><th>TP / SL</th><th>AI guidance</th><th>Action</th></tr></thead><tbody>
+                {rot.positions.map((p) => {
+                  const pnl = Number(p.unrealizedPnl ?? 0);
+                  return <tr key={p.id} className="border-t border-white/5 align-top"><td className="py-2 font-semibold">{p.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td className={p.side === "LONG" ? "text-emerald-400" : "text-rose-400"}>{p.side}</td><td>{p.entry.toPrecision(6)}<br/><span className="text-white/50">{p.markPrice ? p.markPrice.toPrecision(6) : "Waiting for price"}</span></td><td className={pnl >= 0 ? "text-emerald-400" : "text-rose-400"}>{usd(pnl)}</td><td>${p.margin.toFixed(2)}<br/><span className="text-white/50">{p.qty}</span></td><td>{new Date(p.openedAt).toLocaleString()}</td><td>TP {(p.tpDist * 100).toFixed(2)}%<br/>SL {(p.slDist * 100).toFixed(2)}%</td><td><span className={p.recommendation === "CLOSE" || p.recommendation === "STOP" ? "text-rose-300" : p.recommendation === "PAUSE" ? "text-amber-300" : "text-emerald-300"}>{p.recommendation ?? "HOLD"}</span><br/><span className="text-white/50">{p.recommendationReason ?? "Awaiting next worker tick"}</span></td><td><button className={`${btn} bg-rose-500/80 px-2 py-1`} disabled={busy} onClick={() => control("close", p.id)}>Close</button></td></tr>;
+                })}
+              </tbody></table></div>
+            )}
+          </section>
+
+          <section className={card}>
+            <h2 className="mb-2 font-semibold">Closed trade history</h2>
+            {rot.trades.length === 0 ? <p className="text-sm text-white/50">No closed trades yet.</p> : (
+              <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-xs md:text-sm"><thead><tr className="text-left text-white/50"><th className="py-2">Market</th><th>Side</th><th>Entry → Exit</th><th>Realized PnL</th><th>Result / reason</th><th>Closed</th></tr></thead><tbody>
+                {[...rot.trades].reverse().map((t) => <tr key={t.id + t.closedAt} className="border-t border-white/5"><td className="py-2">{t.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{t.side}</td><td>{t.entry.toPrecision(6)} → {t.exit.toPrecision(6)}</td><td className={t.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}>{usd(t.pnl)}</td><td>{t.pnl >= 0 ? "Profit" : "Loss"} · {t.reason.replace(/_/g, " ")}</td><td>{new Date(t.closedAt).toLocaleString()}</td></tr>)}
+              </tbody></table></div>
             )}
           </section>
 

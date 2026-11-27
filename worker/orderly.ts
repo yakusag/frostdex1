@@ -156,16 +156,24 @@ export class OrderlyBroker implements Broker {
   }
 
   async open(symbol: string, side: "LONG" | "SHORT", qty: number, ref: number) {
+    // Fail closed: never submit a new live order without a fresh collateral check.
+    const holding = await this.client.request("GET", "/v1/positions");
+    const freeCollateral = Number(holding?.data?.free_collateral);
+    const requiredMargin = (qty * ref) / this.leverage;
+    const feeBuffer = qty * ref * this.feeRate * 2;
+    if (!Number.isFinite(freeCollateral) || freeCollateral <= 0) {
+      throw new Error("Unable to verify Orderly free_collateral; live entry blocked.");
+    }
+    if (freeCollateral < requiredMargin + feeBuffer) {
+      throw new Error(`Insufficient free collateral: available ${freeCollateral.toFixed(2)}, required ${(requiredMargin + feeBuffer).toFixed(2)} USDC.`);
+    }
     if (Math.abs(await this.positionQty(symbol)) > 0) {
       throw new Error("existing position on this symbol (not opened by the bot)");
     }
     if (!this.levSet.has(symbol)) {
-      try {
-        await this.client.request("POST", "/v1/client/leverage", { symbol, leverage: this.leverage });
-        this.levSet.add(symbol);
-      } catch (e) {
-        console.warn(`[orderly] leverage not set for ${symbol}:`, (e as Error).message);
-      }
+      // Do not risk placing an order at an unknown/stale leverage setting.
+      await this.client.request("POST", "/v1/client/leverage", { symbol, leverage: this.leverage });
+      this.levSet.add(symbol);
     }
     const r = await this.client.request("POST", "/v1/order", {
       symbol, order_type: "MARKET", side: side === "LONG" ? "BUY" : "SELL", order_quantity: qty,

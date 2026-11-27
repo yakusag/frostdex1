@@ -88,6 +88,32 @@ test("tick: opens best entry, exits on take-profit, frees capital", async () => 
   assert.ok(s.trades[0].reason === "take_profit" && s.trades[0].pnl > 0);
 });
 
+
+test("paused tick keeps existing positions managed but opens no new positions", async () => {
+  const params = normalizeParams({ maxPositions: 2, leverage: 2, slPct: 1, timeStopMin: 240 });
+  const s = newState("paper", 1000, 0);
+  const broker = new PaperBroker(params);
+  const first = [{ symbol: "X", price: 100, pUp: 0.95, sigma: 0.0005 }];
+  await tick(s, params, new Map([["X", 100]]), first, broker, { tradingEnabled: true, now: 60_000 });
+  assert.equal(s.positions.length, 1);
+  const heldId = s.positions[0].id;
+
+  await tick(
+    s, params, new Map([["X", 100], ["Y", 50]]),
+    [{ symbol: "Y", price: 50, pUp: 0.99, sigma: 0.0005 }],
+    broker, { tradingEnabled: false, now: 120_000 },
+  );
+  assert.equal(s.positions.length, 1);
+  assert.equal(s.positions[0].id, heldId);
+  assert.equal(s.positions[0].markPrice, 100);
+  assert.equal(s.positions[0].recommendation, "HOLD");
+
+  const tp = s.positions[0].tpDist;
+  await tick(s, params, new Map([["X", 100 * (1 + tp + 0.001)]]), [], broker, { tradingEnabled: false, now: 180_000 });
+  assert.equal(s.positions.length, 0);
+  assert.equal(s.trades[0].reason, "take_profit");
+});
+
 test("daily loss limit halts and flattens", async () => {
   const params = normalizeParams({ maxPositions: 1, dailyLossPct: 1, slPct: 5, leverage: 10 });
   const s = newState("paper", 1000, 0);
