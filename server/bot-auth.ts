@@ -111,7 +111,7 @@ export function clearBotSessionCookie(res: ServerResponse): void {
   );
 }
 
-export function getBotSessionAddress(req: IncomingMessage): string | null {
+export function getBotSessionOwner(req: IncomingMessage): string | null {
   const token = getCookieValue(req, SESSION_COOKIE);
   if (!token) return null;
 
@@ -149,9 +149,21 @@ export function getBotSessionAddress(req: IncomingMessage): string | null {
     typeof session.address !== "string" ||
     typeof session.expiresAt !== "number" ||
     session.expiresAt <= Math.floor(Date.now() / 1000) ||
-    !isAddress(session.address)
+    !(isAddress(session.address) || /^guest_[a-f0-9]{32}$/.test(session.address))
   ) {
     return null;
   }
-  return getAddress(session.address);
+  return isAddress(session.address) ? getAddress(session.address) : session.address;
+}
+
+export function getBotSessionAddress(req: IncomingMessage): string | null {
+  const owner = getBotSessionOwner(req);
+  return owner && isAddress(owner) ? getAddress(owner) : null;
+}
+
+export function setBotGuestSessionCookie(res: ServerResponse): string {
+  const owner = `guest_${randomBytes(16).toString("hex")}`;
+  const token = createSessionToken(owner);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}`);
+  return owner;
 }
