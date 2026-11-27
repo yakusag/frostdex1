@@ -189,7 +189,7 @@ export default function RotationPage() {
         throw new Error("Switch your wallet to a chain supported by FrostDex on Orderly Mainnet, then try again.");
       }
       seed = crypto.getRandomValues(new Uint8Array(32));
-      const publicKey = getPublicKey(seed);
+      const publicKey = await getPublicKey(seed);
       const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
       const toBase58 = (bytes: Uint8Array) => {
         let value = 0n;
