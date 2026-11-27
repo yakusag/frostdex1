@@ -336,16 +336,16 @@ loadRuntimeConfig().then(() => {
     </React.StrictMode>,
   );
 
+  // Warm the destination before a user commits to navigation. This is
+  // especially important on touch devices where hover intent is unreliable.
   document.addEventListener("pointerover", prefetchOnNavigationIntent, {
     passive: true,
   });
+  document.addEventListener("pointerdown", prefetchOnNavigationIntent, {
+    passive: true,
+    capture: true,
+  });
   document.addEventListener("focusin", prefetchOnNavigationIntent);
-
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(() => prefetchRoute("/markets"), {
-      timeout: 5000,
-    });
-  }
 });
 
 if ("serviceWorker" in navigator) {
