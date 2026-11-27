@@ -299,6 +299,15 @@ export default function RotationPage() {
           </section>
 
           <section className={card}>
+            <h2 className="mb-2 font-semibold">Closed trade history</h2>
+            {rot.trades.length === 0 ? <p className="text-sm text-white/50">No closed trades yet.</p> : (
+              <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-xs md:text-sm"><thead><tr className="text-left text-white/50"><th className="py-2">Market</th><th>Side</th><th>Entry → Exit</th><th>Realized PnL</th><th>Result / reason</th><th>Closed</th></tr></thead><tbody>
+                {[...rot.trades].reverse().map((t) => <tr key={t.id + t.closedAt} className="border-t border-white/5"><td className="py-2">{t.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{t.side}</td><td>{t.entry.toPrecision(6)} → {t.exit.toPrecision(6)}</td><td className={t.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}>{usd(t.pnl)}</td><td>{t.pnl >= 0 ? "Profit" : "Loss"} · {t.reason.replace(/_/g, " ")}</td><td>{new Date(t.closedAt).toLocaleString()}</td></tr>)}
+              </tbody></table></div>
+            )}
+          </section>
+
+          <section className={card}>
             <h2 className="mb-2 font-semibold">Ranked entries (score = $ per $ per minute)</h2>
             <table className="w-full text-sm"><tbody>
               {rot.ranked.map((c) => (

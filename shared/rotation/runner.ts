@@ -145,7 +145,7 @@ export async function tick(
     const dir = dirOf(pos.side);
     if ((price - pos.peak) * dir > 0) pos.peak = price;
     pos.markPrice = price;
-    pos.unrealizedPnl = unrealized(pos, price) - pos.entryFee;
+    pos.unrealizedPnl = unrealized(pos, price) - pos.entryFee - price * pos.qty * params.feeRate;
     const reason = evaluateExit(pos, price, now, params);
     if (reason) {
       pos.recommendation = "CLOSE";
@@ -154,9 +154,9 @@ export async function tick(
     } else {
       const move = ((price - pos.entry) / pos.entry) * dir;
       const riskUsed = move / Math.max(pos.slDist, 1e-9);
-      pos.recommendation = "HOLD";
+      pos.recommendation = riskUsed <= -0.7 ? "PAUSE" : "HOLD";
       pos.recommendationReason = riskUsed <= -0.7
-        ? "Near stop-loss; monitor closely"
+        ? "Near stop-loss; no new entries recommended"
         : riskUsed >= 1.5
           ? "Profit developing; protect gains"
           : "Exit rules not triggered";

@@ -157,7 +157,7 @@ export class OrderlyBroker implements Broker {
 
   async open(symbol: string, side: "LONG" | "SHORT", qty: number, ref: number) {
     // Fail closed: never submit a new live order without a fresh collateral check.
-    const holding = await this.client.request("GET", "/v1/client/holding");
+    const holding = await this.client.request("GET", "/v1/positions");
     const freeCollateral = Number(holding?.data?.free_collateral);
     const requiredMargin = (qty * ref) / this.leverage;
     const feeBuffer = qty * ref * this.feeRate * 2;
