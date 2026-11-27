@@ -256,7 +256,7 @@ export default function RotationPage() {
             ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
           ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
             <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} value={v} disabled={running} onChange={(e) => set(Number(e.target.value))} />
+              <input className={`${input} mt-1`} type="number" step={step} min={label === "Max positions" ? 1 : undefined} max={label === "Max positions" ? 8 : undefined} value={v} disabled={running || paused} onChange={(e) => set(label === "Max positions" ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
             </label>
           ))}
         </div>

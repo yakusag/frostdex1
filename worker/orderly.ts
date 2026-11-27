@@ -171,12 +171,9 @@ export class OrderlyBroker implements Broker {
       throw new Error("existing position on this symbol (not opened by the bot)");
     }
     if (!this.levSet.has(symbol)) {
-      try {
-        await this.client.request("POST", "/v1/client/leverage", { symbol, leverage: this.leverage });
-        this.levSet.add(symbol);
-      } catch (e) {
-        console.warn(`[orderly] leverage not set for ${symbol}:`, (e as Error).message);
-      }
+      // Do not risk placing an order at an unknown/stale leverage setting.
+      await this.client.request("POST", "/v1/client/leverage", { symbol, leverage: this.leverage });
+      this.levSet.add(symbol);
     }
     const r = await this.client.request("POST", "/v1/order", {
       symbol, order_type: "MARKET", side: side === "LONG" ? "BUY" : "SELL", order_quantity: qty,
