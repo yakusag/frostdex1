@@ -133,6 +133,24 @@ export default function RotationPage() {
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
 
+  const switchToWallet = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await api("/api/bots/auth", { method: "DELETE" });
+      setGuest(false);
+      setAuthed(false);
+      setBot(null);
+      setRot(null);
+      setWorkerOnline(false);
+      setKeyConfigured(false);
+      setMsg("Guest session ended. Connect your wallet and sign in to access live mode.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const signIn = async () => {
     if (!address) return setMsg("Connect your wallet first.");
     setBusy(true); setMsg(null);
@@ -212,7 +230,7 @@ export default function RotationPage() {
       {/* 1. account */}
       <section className={`${card} space-y-3`}>
         <h2 className="font-semibold">1 · Sign in</h2>
-        {guest ? <p className="text-sm text-emerald-400">Isolated guest simulation · no wallet · no real trades</p>
+        {guest ? <div className="flex flex-wrap items-center gap-3"><p className="text-sm text-emerald-400">Isolated guest simulation · no wallet · no real trades</p><button className={`${btn} bg-sky-500 text-white`} disabled={busy} onClick={switchToWallet}>Switch to wallet sign-in</button></div>
           : address && authed ? <p className="text-sm text-emerald-400">Signed in as {address.slice(0, 6)}…{address.slice(-4)}</p>
           : <div className="flex flex-wrap gap-2"><button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address} onClick={signIn}>Sign in with wallet</button><button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={startGuest}>Start guest simulation</button></div>}
         <div className="flex gap-2 text-sm">
@@ -240,10 +258,11 @@ export default function RotationPage() {
       {/* 3. config */}
       <section className={`${card} space-y-3`}>
         <h2 className="font-semibold">3 · Configure</h2>
-        {guest && <p className="text-xs text-emerald-300">Guest sessions are isolated, testnet-only simulations with up to 1,000 virtual USDC. Live trading is disabled.</p>}
+        {guest && <p className="text-xs text-emerald-300">Guest sessions are isolated, testnet-only simulations with up to 1,000 virtual USDC. Use “Switch to wallet sign-in” above to leave guest mode before enabling live trading.</p>}
+        {!guest && !live && <p className="text-xs text-white/50">Live mode requires wallet sign-in, Mainnet selection, an enabled Mainnet bot network, and a dedicated Orderly read,trading key.</p>}
         <div className="flex gap-2 text-sm">
           <button className={`${btn} ${!live ? "bg-emerald-500/30" : "bg-white/5"}`} disabled={running} onClick={() => setLive(false)}>Simulation</button>
-          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={running || guest} onClick={() => setLive(true)}>Live</button>
+          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={running || guest || !authed || network !== "mainnet"} onClick={() => setLive(true)}>Live</button>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {([
