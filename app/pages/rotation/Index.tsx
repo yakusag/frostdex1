@@ -62,6 +62,7 @@ export default function RotationPage() {
   const [dailyLossPct, setDailyLossPct] = useState(5);
 
   const [authed, setAuthed] = useState(false);
+  const [guest, setGuest] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [bot, setBot] = useState<BotConfig | null>(null);
   const [rot, setRot] = useState<RotationState | null>(null);
@@ -84,12 +85,14 @@ export default function RotationPage() {
 
   const refreshAccount = useCallback(async () => {
     try {
-      const a = await api<{ authenticated: boolean; address: string | null }>("/api/bots/auth");
-      const ok = a.authenticated && !!address && a.address?.toLowerCase() === address.toLowerCase();
+      const a = await api<{ authenticated: boolean; address: string | null; guest?: boolean }>("/api/bots/auth");
+      const isGuest = Boolean(a.authenticated && a.guest);
+      const ok = isGuest || (a.authenticated && !!address && a.address?.toLowerCase() === address.toLowerCase());
+      setGuest(isGuest);
       setAuthed(ok);
-      if (!ok) { setBot(null); return; }
+      if (!ok) { setBot(null); setKeyConfigured(false); return; }
       const [k, c] = await Promise.all([
-        api<{ configured: boolean }>(`/api/bots/keys?network=${network}`),
+        isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${network}`),
         api<{ bots: BotConfig[] }>(`/api/bots/config?network=${network}`),
       ]);
       setKeyConfigured(k.configured);
@@ -119,6 +122,16 @@ export default function RotationPage() {
     const t = setInterval(poll, 5000);
     return () => { alive = false; clearInterval(t); };
   }, [authed, bot, network]);
+
+  const startGuest = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await api("/api/bots/auth", { method: "POST", body: JSON.stringify({ action: "guest" }) });
+      setNetwork("testnet");
+      await refreshAccount();
+      setMsg("Private guest simulation session created. No wallet or real funds are used.");
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
 
   const signIn = async () => {
     if (!address) return setMsg("Connect your wallet first.");
@@ -187,9 +200,9 @@ export default function RotationPage() {
       {/* 1. account */}
       <section className={`${card} space-y-3`}>
         <h2 className="font-semibold">1 · Sign in</h2>
-        {!address ? <p className="text-sm text-white/60">Connect your wallet (top right) to continue.</p>
-          : authed ? <p className="text-sm text-emerald-400">Signed in as {address.slice(0, 6)}…{address.slice(-4)}</p>
-          : <button className={`${btn} bg-sky-500 text-white`} disabled={busy} onClick={signIn}>Sign in with wallet (no transaction)</button>}
+        {guest ? <p className="text-sm text-emerald-400">Isolated guest simulation · no wallet · no real trades</p>
+          : address && authed ? <p className="text-sm text-emerald-400">Signed in as {address.slice(0, 6)}…{address.slice(-4)}</p>
+          : <div className="flex flex-wrap gap-2"><button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address} onClick={signIn}>Sign in with wallet</button><button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={startGuest}>Start guest simulation</button></div>}
         <div className="flex gap-2 text-sm">
           {(["testnet", "mainnet"] as Network[]).map((n) => (
             <button key={n} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
@@ -215,9 +228,10 @@ export default function RotationPage() {
       {/* 3. config */}
       <section className={`${card} space-y-3`}>
         <h2 className="font-semibold">3 · Configure</h2>
+        {guest && <p className="text-xs text-emerald-300">Guest sessions are isolated, testnet-only simulations with up to 1,000 virtual USDC. Live trading is disabled.</p>}
         <div className="flex gap-2 text-sm">
           <button className={`${btn} ${!live ? "bg-emerald-500/30" : "bg-white/5"}`} disabled={running} onClick={() => setLive(false)}>Simulation</button>
-          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={running} onClick={() => setLive(true)}>Live</button>
+          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={running || guest} onClick={() => setLive(true)}>Live</button>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {([
@@ -237,7 +251,7 @@ export default function RotationPage() {
         {!capitalOk && <p className="text-xs text-rose-400">Minimum capital is {MIN_CAPITAL} USDC.</p>}
         <div className="flex flex-wrap gap-2">
           {running ? <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => save("stopped")}>Stop &amp; close positions</button>
-            : <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || !authed || !capitalOk} onClick={() => save("running", !!bot && (bot.liveMode !== live || bot.investment !== capital))}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
+            : <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot && (bot.liveMode !== live || bot.investment !== capital))}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
           {bot && !running && <button className={`${btn} bg-white/10`} disabled={busy} onClick={() => save("stopped", true)}>Reset (new run)</button>}
         </div>
         {msg && <p className="text-sm text-amber-300">{msg}</p>}

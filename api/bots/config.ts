@@ -5,7 +5,7 @@ import {
   readJsonBody,
   sendJson,
 } from "../../server/admin-http.js";
-import { getBotSessionAddress } from "../../server/bot-auth.js";
+import { getBotSessionOwner } from "../../server/bot-auth.js";
 import {
   getOrderlyKey,
   listBotConfigs,
@@ -69,10 +69,11 @@ function handleError(res: ServerResponse, error: unknown) {
 }
 
 export default async function handler(req: BotApiRequest, res: ServerResponse) {
-  const ownerAddress = getBotSessionAddress(req);
+  const ownerAddress = getBotSessionOwner(req);
   if (!ownerAddress) {
-    return sendJson(res, 401, { error: "Wallet sign-in is required." });
+    return sendJson(res, 401, { error: "Start a guest simulation or sign in with a wallet." });
   }
+  const guest = ownerAddress.startsWith("guest_");
 
   if (req.method === "GET") {
     const network = new URL(
@@ -113,6 +114,9 @@ export default async function handler(req: BotApiRequest, res: ServerResponse) {
   }
   if (!isBotConfig(body) || !isNetworkEnabled(body.network)) {
     return sendJson(res, 400, { error: "Invalid or disabled bot settings." });
+  }
+  if (guest && (body.strategy !== "rotation" || body.liveMode || body.network !== "testnet" || body.investment > 1000)) {
+    return sendJson(res, 403, { error: "Guest sessions are limited to testnet rotation simulations up to 1,000 virtual USDC." });
   }
 
   try {
