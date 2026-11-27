@@ -336,6 +336,10 @@ loadRuntimeConfig().then(() => {
     </React.StrictMode>,
   );
 
+  // Do not keep the full-screen splash over the app's loading fallback.
+  // The Orderly wallet connector is lazy-loaded and may take time to initialize.
+  window.__hideSplash?.();
+
   // Warm the destination before a user commits to navigation. This is
   // especially important on touch devices where hover intent is unreliable.
   document.addEventListener("pointerover", prefetchOnNavigationIntent, {
