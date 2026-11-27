@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate, useNavigation } from "react-router-dom";
 import { useWalletConnector } from "@orderly.network/hooks";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -87,6 +87,8 @@ function AdminWalletRedirect() {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const navigation = useNavigation();
+  const isNavigating = navigation.state !== "idle";
   const seoConfig = getSEOConfig();
   const defaultLanguage = getUserLanguage();
   const { flags: sitePageFlags } = useSitePages();
@@ -137,6 +139,33 @@ export default function App() {
 
   return (
     <>
+      {isNavigating && (
+        <div
+          role="status"
+          aria-label="Loading page"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            zIndex: 100000,
+            overflow: "hidden",
+            background: "rgba(56,224,248,0.16)",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              width: "38%",
+              height: "100%",
+              background: "linear-gradient(90deg, #38e0f8, #0ecb81)",
+              animation: "frostdex-route-progress 1.1s ease-in-out infinite",
+            }}
+          />
+          <style>{`@keyframes frostdex-route-progress { 0% { transform: translateX(-110%); } 100% { transform: translateX(290%); } }`}</style>
+        </div>
+      )}
       <Helmet>
         <html lang={defaultLanguage || seoConfig.language || "en"} />
         <meta charSet="utf-8" />
