@@ -2,7 +2,13 @@ import type { EncryptedOrderlyKey } from "./bot-key-vault.js";
 import { redisCommand, RedisStoreError } from "./redis.js";
 
 export type BotNetwork = "testnet" | "mainnet";
-export type BotWorkerStrategy = "grid" | "dca" | "signal" | "trend" | "sniper";
+export type BotWorkerStrategy =
+  | "grid"
+  | "dca"
+  | "signal"
+  | "trend"
+  | "sniper"
+  | "rotation";
 
 export interface BotWorkerConfig {
   id: string;
@@ -96,7 +102,7 @@ function isBotWorkerConfig(value: unknown): value is BotWorkerConfig {
     "network" in value &&
     (value.network === "testnet" || value.network === "mainnet") &&
     "strategy" in value &&
-    ["grid", "dca", "signal", "trend", "sniper"].includes(
+    ["grid", "dca", "signal", "trend", "sniper", "rotation"].includes(
       String(value.strategy),
     ) &&
     "symbol" in value &&

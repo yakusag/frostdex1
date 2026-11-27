@@ -344,6 +344,7 @@ const getBottomNavIcon = (menuId: string) => {
         inactiveIcon: <MarketsInactiveIcon />,
       };
     case "Bot":
+    case "AIBot":
       return {
         activeIcon: <BotActiveIcon />,
         inactiveIcon: <BotInactiveIcon />,
@@ -477,6 +478,11 @@ export const useOrderlyConfig = () => {
         name: t("extend.tradingPoints.points"),
       },
       { id: "Bot", href: "/bot", name: "🤖 Bot" },
+      {
+        id: "AIBot",
+        href: "/ai-bot",
+        name: "🤖 AI Bot Frostdex Capital Rotation",
+      },
     ];
 
     const defaultEnabledMenus = allMenuItems.filter((menu) => menu.isDefault);

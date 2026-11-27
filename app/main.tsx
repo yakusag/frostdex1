@@ -40,6 +40,8 @@ const PointsLayout = lazy(() => import("./pages/points/Layout"));
 const PointsIndex = lazy(() => import("./pages/points/Index"));
 const BotLayout = lazy(() => import("./pages/bot/Layout"));
 const BotIndex = lazy(() => import("./pages/bot/Index"));
+const RotationLayout = lazy(() => import("./pages/rotation/Layout"));
+const RotationIndex = lazy(() => import("./pages/rotation/Index"));
 const AboutLayout = lazy(() => import("./pages/about/Layout"));
 const AboutIndex = lazy(() => import("./pages/about/Index"));
 const TokenLayout = lazy(() => import("./pages/token/Layout"));
@@ -166,6 +168,11 @@ const router = createBrowserRouter(
           children: [{ index: true, element: <BotIndex /> }],
         },
         {
+          path: "ai-bot",
+          element: <RotationLayout />,
+          children: [{ index: true, element: <RotationIndex /> }],
+        },
+        {
           path: "about",
           element: <AboutLayout />,
           children: [{ index: true, element: <AboutIndex /> }],
@@ -244,6 +251,11 @@ const routePrefetchers: Record<string, () => Promise<unknown>> = {
     ]),
   "/bot": () =>
     Promise.all([import("./pages/bot/Layout"), import("./pages/bot/Index")]),
+  "/ai-bot": () =>
+    Promise.all([
+      import("./pages/rotation/Layout"),
+      import("./pages/rotation/Index"),
+    ]),
   "/about": () =>
     Promise.all([
       import("./pages/about/Layout"),

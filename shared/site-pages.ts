@@ -24,6 +24,12 @@ export const SITE_PAGES = [
   { id: "Swap", label: "Swap", paths: ["/swap"], prefixes: [] },
   { id: "Points", label: "Points", paths: ["/points"], prefixes: [] },
   { id: "Bot", label: "Bot", paths: ["/bot"], prefixes: [] },
+  {
+    id: "AIBot",
+    label: "AI Bot Capital Rotation",
+    paths: ["/ai-bot"],
+    prefixes: [],
+  },
   { id: "About", label: "About", paths: ["/about"], prefixes: [] },
   { id: "Token", label: "Token Search", paths: ["/token"], prefixes: [] },
   { id: "Referral", label: "Referral", paths: ["/referral"], prefixes: [] },

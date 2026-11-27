@@ -16,6 +16,7 @@
     "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
     "prepare": "husky",
     "preview": "vite preview",
+    "worker": "tsx worker/rotation-worker.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc"
   },

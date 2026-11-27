@@ -5,6 +5,7 @@
     "api/**/*.ts",
     "server/**/*.ts",
     "shared/**/*.ts",
+    "worker/**/*.ts",
     "scripts/**/*.ts",
     "build.ts",
     "vite.config.ts",

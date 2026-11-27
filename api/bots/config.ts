@@ -37,7 +37,9 @@ function isBotConfig(
     typeof value.id === "string" &&
     /^[A-Z0-9_-]{1,32}$/.test(value.id) &&
     typeof value.strategy === "string" &&
-    ["grid", "dca", "signal", "trend", "sniper"].includes(value.strategy) &&
+    ["grid", "dca", "signal", "trend", "sniper", "rotation"].includes(
+      value.strategy,
+    ) &&
     typeof value.symbol === "string" &&
     /^PERP_[A-Z0-9]+_(USDC|USDT)(?:_[A-Za-z0-9]+)?$/.test(value.symbol) &&
     typeof value.investment === "number" &&
