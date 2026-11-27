@@ -12,6 +12,8 @@ import {
   createBotLoginChallenge,
   getBotSessionAddress,
   setBotSessionCookie,
+  setBotGuestSessionCookie,
+  getBotSessionOwner,
   verifyBotLogin,
   BotAuthSetupError,
 } from "../../server/bot-auth.js";
@@ -40,10 +42,9 @@ function handleError(res: ServerResponse, error: unknown) {
 
 export default async function handler(req: BotApiRequest, res: ServerResponse) {
   if (req.method === "GET") {
-    return sendJson(res, 200, {
-      authenticated: Boolean(getBotSessionAddress(req)),
-      address: getBotSessionAddress(req),
-    });
+    const owner = getBotSessionOwner(req);
+    const address = getBotSessionAddress(req);
+    return sendJson(res, 200, { authenticated: Boolean(owner), address, guest: Boolean(owner && owner.startsWith("guest_")) });
   }
 
   if (req.method === "DELETE") {
@@ -92,6 +93,10 @@ export default async function handler(req: BotApiRequest, res: ServerResponse) {
   }
 
   try {
+    if (body.action === "guest") {
+      const owner = setBotGuestSessionCookie(res);
+      return sendJson(res, 200, { authenticated: true, guest: true, session: owner.slice(0, 14) });
+    }
     if (body.action === "challenge") {
       if (typeof body.address !== "string") {
         return sendJson(res, 400, { error: "A wallet address is required." });
