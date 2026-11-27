@@ -325,7 +325,7 @@ export default function RotationPage() {
           : <div className="flex flex-wrap gap-2"><button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address} onClick={signIn}>Sign in with wallet</button><button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={startGuest}>Start guest simulation</button></div>}
         <div className="flex gap-2 text-sm">
           {(["testnet", "mainnet"] as Network[]).map((n) => (
-            <button key={n} disabled={guest && n === "mainnet"} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
+            <button key={n} disabled={running || paused || (guest && n === "mainnet")} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
           ))}
         </div>
       </section>
