@@ -294,7 +294,7 @@ export async function tick(
   let freeNow = free;
   let opened = 0;
   for (const c of ranked) {
-    if (slots <= 0 || freeNow < margin * 0.999) break;
+    if (slots <= 0 || freeNow <= 0.01) break;
     if (c.score <= params.minScore) break; // sorted: everything after is worse
     const market = markets.find((m) => m.symbol === c.symbol);
     const price = market?.price;
