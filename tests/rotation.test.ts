@@ -149,13 +149,34 @@ test("market analysis identifies trend and produces multi-timeframe diagnostics"
   assert.ok(fused > 0.6 && fused < 1);
 });
 
-test("high-volatility regime is detected without fabricating external data", () => {
-  const c = walk(240, 0, 0.004, 19);
-  const a = analyzeMarket(c);
-  assert.ok(a);
-  assert.ok(["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"].includes(a.regime));
-  assert.ok(a.volatilityRatio > 0);
+test("volatility expansion is classified as a high-volatility regime", () => {
+  let p = 100;
+  const c: Candle[] = [];
+  for (let i = 0; i < 180; i++) {
+    const ret = i < 150 ? (i % 2 ? 0.0001 : -0.0001) : (i % 2 ? 0.004 : -0.004);
+    const next = p * Math.exp(ret);
+    c.push({ t: i * 60000, o: p, h: Math.max(p, next) * 1.0001,
+      l: Math.min(p, next) * 0.9999, c: next, v: 10 });
+    p = next;
+  }
+  const a = analyzeMarket(c)!;
+  assert.equal(a.regime, "HIGH_VOL");
+  assert.ok(a.volatilityRatio >= 1.8);
   assert.ok(a.atrPct > 0);
+});
+
+test("regime changes target distance and MTF disagreement discounts score", () => {
+  const base = { symbol: "X", price: 100, pUp: 0.8, sigma: 0.001 };
+  const trend = scoreCandidate({ ...base, analysis: {
+    regime: "TRENDING", efficiencyRatio: 0.7, volatilityRatio: 1,
+    atrPct: 0.001, mtfBias: 0.8, mtfAgreement: 1,
+  } }, 100, DEFAULT_PARAMS);
+  const range = scoreCandidate({ ...base, analysis: {
+    regime: "RANGING", efficiencyRatio: 0.1, volatilityRatio: 1,
+    atrPct: 0.001, mtfBias: -0.8, mtfAgreement: 0.33,
+  } }, 100, DEFAULT_PARAMS);
+  assert.ok(trend.tpDist > range.tpDist);
+  assert.ok(trend.score > range.score);
 });
 
 test("sigma1m is positive on noisy data", () => {
