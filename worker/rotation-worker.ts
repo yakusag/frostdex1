@@ -12,7 +12,7 @@ import {
 } from "../server/bot-store.js";
 import { redisCommand } from "../server/redis.js";
 import {
-  DEFAULT_PARAMS, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  DEFAULT_PARAMS, HORIZON_CANDLES, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
   newAdaptiveConformalState, normalizeParams, observeAdaptiveConformal, predictPUp, sigma1m, smoothedP, trainEnsemble,
   type AdaptiveConformalState, type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
@@ -289,7 +289,7 @@ class MarketData {
           ).threshold;
           state.pending.push({
             originTime: forecast.candleTime,
-            targetTime: forecast.candleTime + 10 * CANDLE_MS,
+            targetTime: forecast.candleTime + HORIZON_CANDLES * CANDLE_MS,
             originClose: forecast.close,
             pUp: forecast.pUp,
             threshold,
