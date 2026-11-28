@@ -45,6 +45,8 @@ class MarketData {
   fetchedAt = new Map<string, number>();
   models = new Map<string, Ensemble>();
   kalman = new Map<string, Kalman1D>();
+  kalmanAt = new Map<string, number>();
+  kalmanP = new Map<string, number>();
   rules = new Map<string, SymbolRules>();
   rulesAt = 0;
   constructor(readonly network: BotNetwork) {}
@@ -165,10 +167,17 @@ class MarketData {
       if (!analysis) continue;
       const rawP = predictPUp(model, x);
       const fusedP = fuseMultiTimeframe(rawP, analysis);
+      const candleTime = candles[candles.length - 1].t;
+      // Kalman observations are independent candle closes, not 10-second worker
+      // polls of the same candle. Reusing one observation avoids false certainty.
+      if (this.kalmanAt.get(symbol) !== candleTime || !this.kalmanP.has(symbol)) {
+        this.kalmanP.set(symbol, smoothedP(k, fusedP));
+        this.kalmanAt.set(symbol, candleTime);
+      }
       out.push({
         symbol,
         price,
-        pUp: smoothedP(k, fusedP),
+        pUp: this.kalmanP.get(symbol) ?? fusedP,
         sigma: sigma1m(candles),
         analysis,
       });
