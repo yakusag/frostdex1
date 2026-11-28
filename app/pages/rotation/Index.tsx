@@ -381,14 +381,14 @@ export default function RotationPage() {
             ["Leverage (1–10)", leverage, setLeverage, 1],
             ["Max open positions (1–8)", maxPositions, setMaxPositions, 1],
             ["Maximum total trades", maxTrades, setMaxTrades, 1],
-            ["Margin per trade (USDC)", tradeAmount, setTradeAmount, 1],
+            ["Margin per trade (USDC)", tradeAmount, setTradeAmount, 0.01],
             ["Take profit (× risk)", tpR, setTpR, 0.5],
             ["Stop loss (%)", slPct, setSlPct, 0.1],
             ["Time stop (min)", timeStopMin, setTimeStopMin, 1],
             ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
           ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
             <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") || label === "Maximum total trades" ? 1 : label === "Margin per trade (USDC)" ? 0.01 : undefined} max={label.startsWith("Max open positions") ? 8 : label === "Maximum total trades" ? 100000 : label === "Margin per trade (USDC)" ? capital : undefined} value={v} disabled={running || paused} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : label === "Maximum total trades" ? Math.max(1, Math.min(100000, Math.floor(Number(e.target.value))) : Number(e.target.value))} />
+              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") || label === "Maximum total trades" ? 1 : label === "Margin per trade (USDC)" ? 0.01 : undefined} max={label.startsWith("Max open positions") ? 8 : label === "Maximum total trades" ? 100000 : label === "Margin per trade (USDC)" ? capital : undefined} value={v} disabled={running || paused} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : label === "Maximum total trades" ? Math.max(1, Math.min(100000, Math.floor(Number(e.target.value)))) : Number(e.target.value))} />
             </label>
           ))}
         </div>
