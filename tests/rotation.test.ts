@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  DEFAULT_PARAMS, Kalman1D, featuresAt, normalizeParams, predictPUp,
-  rankCandidates, scoreCandidate, sigma1m, smoothedP, trainEnsemble, type Candle,
+  DEFAULT_PARAMS, Kalman1D, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  normalizeParams, predictPUp, rankCandidates, scoreCandidate, sigma1m,
+  smoothedP, trainEnsemble, type Candle,
 } from "../shared/rotation/engine";
 import { PaperBroker, newState, tick } from "../shared/rotation/runner";
 
@@ -130,6 +131,31 @@ test("params are clamped", () => {
   assert.equal(p.leverage, 10);
   assert.equal(p.maxPositions, 1);
   assert.equal(p.tpR, DEFAULT_PARAMS.tpR);
+});
+
+test("market analysis identifies trend and produces multi-timeframe diagnostics", () => {
+  let p = 100;
+  const trend: Candle[] = [];
+  for (let i = 0; i < 180; i++) {
+    const next = p * Math.exp(0.0008);
+    trend.push({ t: i * 60000, o: p, h: next * 1.0001, l: p * 0.9999, c: next, v: 10 });
+    p = next;
+  }
+  const a = analyzeMarket(trend)!;
+  assert.equal(a.regime, "TRENDING");
+  assert.ok(a.mtfBias > 0.5);
+  assert.ok(a.mtfAgreement >= 2 / 3);
+  const fused = fuseMultiTimeframe(0.6, a);
+  assert.ok(fused > 0.6 && fused < 1);
+});
+
+test("high-volatility regime is detected without fabricating external data", () => {
+  const c = walk(240, 0, 0.004, 19);
+  const a = analyzeMarket(c);
+  assert.ok(a);
+  assert.ok(["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"].includes(a.regime));
+  assert.ok(a.volatilityRatio > 0);
+  assert.ok(a.atrPct > 0);
 });
 
 test("sigma1m is positive on noisy data", () => {
