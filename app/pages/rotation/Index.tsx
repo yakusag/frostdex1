@@ -364,42 +364,79 @@ export default function RotationPage() {
         </section>
       )}
 
-      {/* 3. config */}
-      <section className={`${card} space-y-3`}>
-        <h2 className="font-semibold">3 · Configure</h2>
-        {guest && <p className="text-xs text-emerald-300">Guest sessions are isolated, testnet-only simulations with up to 1,000 virtual USDC. Use “Switch to wallet sign-in” above to leave guest mode before enabling live trading.</p>}
-        {!guest && !live && <p className="text-xs text-white/50">Live mode requires wallet sign-in, Mainnet selection, an enabled Mainnet bot network, and a dedicated Orderly read,trading key.</p>}
-        <div className="flex gap-2 text-sm">
-          <button className={`${btn} ${!live ? "bg-emerald-500/30" : "bg-white/5"}`} onClick={() => setLive(false)}>Simulation</button>
-          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={guest || !authed || network !== "mainnet"} onClick={() => setLive(true)}>Live</button>
+      {/* 3. professional configuration */}
+      <section className="overflow-hidden rounded-2xl border border-sky-400/20 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 shadow-2xl shadow-sky-950/20">
+        <div className="border-b border-white/10 bg-white/[0.03] p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300">Capital Rotation Control Center</div>
+              <h2 className="mt-1 text-xl font-bold tracking-tight">Bot configuration</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">Configure capital, exposure and exit behaviour. Changes are applied when you start or save a run.</p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-[10px] font-bold tracking-wider ${live ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"}`}>{live ? "LIVE EXECUTION" : "PAPER SIMULATION"}</span>
+          </div>
+          {guest && <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3 text-xs leading-5 text-emerald-200">Guest mode is isolated and testnet-only. It uses virtual capital up to 1,000 USDC and cannot place real trades.</div>}
+          {!guest && !live && <p className="mt-3 text-[11px] leading-5 text-slate-500">Live mode requires wallet sign-in, Mainnet, Mainnet bot access and an authorized Orderly trading key.</p>}
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-black/30 p-1">
+            <button className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${!live ? "bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/30" : "text-slate-400 hover:bg-white/5"}`} onClick={() => setLive(false)}>Simulation</button>
+            <button className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${live ? "bg-rose-400 text-slate-950 shadow-lg shadow-rose-950/30" : "text-slate-400 hover:bg-white/5"}`} disabled={guest || !authed || network !== "mainnet"} onClick={() => setLive(true)}>Live mode</button>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {([
-            ["Capital (USDC, min 10)", capital, setCapital, 1],
-            ["Leverage (1–10)", leverage, setLeverage, 1],
-            ["Max open positions (1–8)", maxPositions, setMaxPositions, 1],
-            ["Take profit (× risk)", tpR, setTpR, 0.5],
-            ["Stop loss (%)", slPct, setSlPct, 0.1],
-            ["Time stop (min)", timeStopMin, setTimeStopMin, 1],
-            ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
-          ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
-            <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") ? 1 : undefined} max={label.startsWith("Max open positions") ? 8 : undefined} value={v} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
-            </label>
-          ))}
+
+        <div className="space-y-5 p-4 sm:p-5">
+          <div>
+            <div className="mb-3 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-400/10 text-xs font-bold text-sky-300">01</span><div><h3 className="text-sm font-semibold">Capital & exposure</h3><p className="text-[11px] text-slate-500">Define the account budget and simultaneous market exposure</p></div></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <span className="text-[11px] font-medium text-slate-400">Trading capital</span>
+                <div className="mt-2 flex items-center gap-2"><input className="w-full min-w-0 bg-transparent text-2xl font-bold text-white outline-none" type="number" min={MIN_CAPITAL} max={guest ? 1000 : undefined} step="1" value={capital} onChange={(e) => setCapital(Number(e.target.value))}/><span className="text-xs font-bold text-sky-300">USDC</span></div>
+                <p className="mt-1 text-[10px] text-slate-500">Minimum 10 USDC{guest ? " · Guest cap 1,000" : ""}</p>
+              </label>
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between"><span className="text-[11px] font-medium text-slate-400">Maximum open positions</span><strong className="text-lg text-white">{maxPositions}</strong></div>
+                <input className="mt-4 w-full accent-sky-400" type="range" min="1" max="8" step="1" value={maxPositions} onChange={(e) => setMaxPositions(Number(e.target.value))}/>
+                <div className="mt-1 flex justify-between text-[10px] text-slate-600"><span>1 position</span><span>8 positions</span></div>
+              </label>
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3 sm:col-span-2">
+                <div className="flex items-center justify-between"><span className="text-[11px] font-medium text-slate-400">Leverage</span><strong className="text-lg text-white">{leverage}×</strong></div>
+                <input className="mt-4 w-full accent-sky-400" type="range" min="1" max="10" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))}/>
+                <div className="mt-1 flex justify-between text-[10px] text-slate-600"><span>1× · Lower exposure</span><span>10× · Higher exposure</span></div>
+              </label>
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 pt-5">
+            <div className="mb-3 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-400/10 text-xs font-bold text-violet-300">02</span><div><h3 className="text-sm font-semibold">Trade management</h3><p className="text-[11px] text-slate-500">Set profit objectives and protective exit boundaries</p></div></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between"><span className="text-[11px] text-slate-400">Take-profit / risk</span><strong className="text-lg text-emerald-300">{tpR.toFixed(1)}R</strong></div><input className="mt-4 w-full accent-emerald-400" type="range" min="0.5" max="5" step="0.5" value={tpR} onChange={(e) => setTpR(Number(e.target.value))}/><p className="mt-1 text-[10px] text-slate-500">Target reward relative to the stop distance</p></label>
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between"><span className="text-[11px] text-slate-400">Minimum stop distance</span><strong className="text-lg text-rose-300">{slPct.toFixed(1)}%</strong></div><input className="mt-4 w-full accent-rose-400" type="range" min="0.1" max="2" step="0.1" value={slPct} onChange={(e) => setSlPct(Number(e.target.value))}/><p className="mt-1 text-[10px] text-slate-500">Volatility and ATR may widen the actual stop</p></label>
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between"><span className="text-[11px] text-slate-400">Maximum holding time</span><strong className="text-lg text-white">{timeStopMin} min</strong></div><input className="mt-4 w-full accent-violet-400" type="range" min="3" max="120" step="1" value={timeStopMin} onChange={(e) => setTimeStopMin(Number(e.target.value))}/><p className="mt-1 text-[10px] text-slate-500">Time-based exit if neither TP nor SL is reached</p></label>
+              <label className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between"><span className="text-[11px] text-slate-400">Daily loss limit</span><strong className="text-lg text-amber-300">{dailyLossPct.toFixed(1)}%</strong></div><input className="mt-4 w-full accent-amber-400" type="range" min="0.5" max="10" step="0.5" value={dailyLossPct} onChange={(e) => setDailyLossPct(Number(e.target.value))}/><p className="mt-1 text-[10px] text-slate-500">Halts new entries and triggers portfolio close at the limit</p></label>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-sky-400/15 bg-sky-400/[0.04] p-3">
+            <div className="flex items-center justify-between gap-2"><div><div className="text-[10px] font-bold uppercase tracking-widest text-sky-300">Active intelligence stack</div><p className="mt-1 text-xs text-slate-300">132-tree · Bayesian · HMM · GARCH · CUSUM · Kalman · Thompson · Kelly · Monte Carlo/CVaR</p></div><span className="rounded-lg bg-sky-400/10 px-2 py-1 text-[10px] font-semibold text-sky-200">ENGINE</span></div>
+            <p className="mt-2 text-[10px] leading-4 text-slate-500">Advanced model controls are managed by the strategy engine. This panel does not expose switches for models that are not independently configurable.</p>
+          </div>
+
+          {!capitalOk && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{guest && capital > 1000 ? "Guest simulations are limited to 1,000 virtual USDC." : `Capital must be at least ${MIN_CAPITAL} USDC.`}</p>}
+          <p className="text-[11px] leading-5 text-slate-500">The bot scans the full eligible USDC perpetual universe. It may hold fewer positions than the maximum when no candidate passes its expected-net-edge and risk checks. Pause keeps existing positions managed; Stop closes the portfolio.</p>
         </div>
-        {!capitalOk && <p className="text-xs text-rose-400">
-          {guest && capital > 1000 ? "Guest simulations are limited to 1,000 virtual USDC total capital." : `Capital must be at least ${MIN_CAPITAL} USDC.`}
-        </p>}
-        <p className="text-xs text-white/50">Max open positions controls simultaneous positions. The bot keeps scanning and can open new positions whenever a valid signal and sufficient free balance are available. It runs until you Pause or Stop it.</p>
-        <div className="flex flex-wrap gap-2">
-          {running && <button className={`${btn} bg-amber-500 text-black`} disabled={busy} onClick={() => control("pause")}>Ⅱ Pause (keep positions)</button>}
-          {paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={() => control("resume")}>▶ Resume</button>}
-          {(running || paused) && <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => control("stop")}>■ Stop &amp; close all</button>}
-          <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", true)}>▶ Start new 24/7 run ({live ? "LIVE" : "simulation"})</button>
+
+        <div className="border-t border-white/10 bg-black/20 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><div className="text-xs font-semibold text-white">Execution controls</div><p className="mt-1 text-[10px] text-slate-500">Start creates a new saved run using the settings above.</p></div>
+            <div className="flex flex-wrap gap-2">
+              {running && <button className={`${btn} border border-amber-300/20 bg-amber-400/10 text-amber-200`} disabled={busy} onClick={() => control("pause")}>Ⅱ Pause</button>}
+              {paused && <button className={`${btn} bg-emerald-400 text-slate-950`} disabled={busy} onClick={() => control("resume")}>▶ Resume</button>}
+              {(running || paused) && <button className={`${btn} border border-rose-400/20 bg-rose-400/10 text-rose-200`} disabled={busy} onClick={() => control("stop")}>■ Stop & close</button>}
+              <button className={`${btn} bg-sky-400 text-slate-950 shadow-lg shadow-sky-950/30 hover:bg-sky-300`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", true)}>{busy ? "Applying…" : `▶ Start new run · ${live ? "LIVE" : "SIMULATION"}`}</button>
+            </div>
+          </div>
+          {msg && <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-200">{msg}</p>}
+          {bot && !workerOnline && running && <p className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200">Worker offline — entries are not running until the 24/7 worker reconnects.</p>}
         </div>
-        {msg && <p className="text-sm text-amber-300">{msg}</p>}
-        {bot && !workerOnline && running && <p className="text-sm text-rose-300">Worker offline — trading is paused until the 24/7 worker is running.</p>}
       </section>
 
       {botHistory.length > 0 && (
