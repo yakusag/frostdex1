@@ -329,7 +329,7 @@ export default function RotationPage() {
       <div>
         <h1 className="text-2xl font-bold">🤖 {TITLE}</h1>
         <p className="mt-1 text-sm text-white/60">
-          132-tree signal + Bayesian probability calibration → HMM regime filter + GARCH volatility forecast + CUSUM shift detection + candle-close Kalman → Thompson opportunity selection → Fractional Kelly + Monte Carlo/CVaR risk sizing → adaptive TP/SL and net capital rotation. Runs 24/7 on the Frostdex worker across all {universe.length || "—"} USDC perps on the Markets page.
+          132-tree signal + Bayesian calibration → HMM/GARCH/CUSUM/Kalman market intelligence → regime-aware Trend / Mean-Reversion / Momentum competition → Thompson selection → Fractional Kelly + Monte Carlo/CVaR sizing → adaptive TP/SL and capital rotation. Runs 24/7 on the Frostdex worker across all {universe.length || "—"} USDC perps on the Markets page.
         </p>
       </div>
 
@@ -490,7 +490,7 @@ export default function RotationPage() {
           </section>
 
           <section className={card}>
-            <h2 className="mb-2 font-semibold">Ranked entries · HMM + GARCH + CUSUM + Bayesian + Thompson</h2>
+            <h2 className="mb-2 font-semibold">Ranked opportunities · Strategy competition + HMM + GARCH + CUSUM + Bayesian + Thompson</h2>
             <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>Strategy</th><th>pTP</th><th>Regime</th><th>HMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>τ</th><th>Net score</th></tr></thead><tbody>
               {rot.ranked.map((c) => (
                 <tr key={c.symbol} className="border-t border-white/5">
