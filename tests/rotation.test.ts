@@ -83,6 +83,7 @@ test("tick: opens best entry, exits on take-profit, frees capital", async () => 
   const mk = (price: number) => [{ symbol: "X", price, pUp: 0.9, sigma: 0.001 }];
   await tick(s, params, new Map([["X", 100]]), mk(100), broker, { tradingEnabled: true, now: 60_000 });
   assert.equal(s.positions.length, 1);
+  assert.ok(s.positions[0].margin > 0 && s.positions[0].margin < 1000, "Fractional Kelly must size below the full available allocation");
   const tp = s.positions[0].tpDist;
   await tick(s, params, new Map([["X", 100 * (1 + tp + 0.001)]]), [], broker, { tradingEnabled: true, now: 120_000 });
   assert.equal(s.positions.length, 0);
