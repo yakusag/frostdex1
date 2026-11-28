@@ -418,3 +418,85 @@ html[data-theme="standard"] .whitepaper-roadmap-line {
 html[data-theme="standard"] .whitepaper-roadmap-pending {
   color: var(--standard-accent-color) !important;
 }
+
+/* ─── STANDARD LIGHT THEME: global readable text contrast ─────────────
+   Many pages use Tailwind/OUI white text utilities from the dark theme.
+   Convert those utilities to dark, readable text in Standard mode while
+   leaving semantic profit/loss/status colors and button surfaces intact. */
+html[data-theme="standard"] :is(
+  [class~="text-white"],
+  [class*="text-white/"],
+  [class*="oui-text-white"],
+  [class~="text-slate-50"],
+  [class~="text-slate-100"],
+  [class~="text-slate-200"],
+  [class~="text-slate-300"],
+  [class~="text-gray-50"],
+  [class~="text-gray-100"],
+  [class~="text-gray-200"],
+  [class~="text-gray-300"]
+) {
+  color: #1e2329 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Dimmed white/gray labels from dark-mode utility classes need a readable
+   secondary tone rather than becoming faint on the light background. */
+html[data-theme="standard"] :is(
+  [class*="text-white/"],
+  [class~="text-slate-300"],
+  [class~="text-gray-300"]
+) {
+  color: #707a8a !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Restore legible white foreground only where it sits on an explicitly
+   saturated danger/success action surface. */
+html[data-theme="standard"] :is(
+  .oui-bg-danger,
+  [class*="oui-bg-danger"],
+  .bg-red-500,
+  .bg-red-600,
+  .bg-rose-500,
+  .bg-rose-600,
+  .bg-emerald-500,
+  .bg-emerald-600
+) :is([class~="text-white"], [class*="text-white/"], [class*="oui-text-white"]) {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Custom dashboards/widgets also contain hard-coded pale text colors that
+   utility-class overrides cannot catch. */
+html[data-theme="standard"] :is(
+  .sm-base, .sm-title, .sentiment-title, .mac-title, .mac-base,
+  .palert-title, .palert-row-base, .palert-row-target,
+  .liq-title, .wm-title, .whale-title, .bot-chart-label
+) {
+  color: #1e2329 !important;
+}
+
+/* Keep secondary copy in custom panels readable on white surfaces. */
+html[data-theme="standard"] :is(
+  .sm-legend, .sm-footer, .sm-empty, .sm-row-funding,
+  .sentiment-card-title, .sentiment-loading, .sentiment-fg-scale,
+  .sentiment-updated, .mac-sub, .mac-legend, .mac-empty, .mac-footer,
+  .palert-sub, .palert-form-label, .palert-cur-price, .palert-row-dist,
+  .palert-empty, .palert-section-label, .palert-footer,
+  .rw-sub, .rw-perk
+) {
+  color: #707a8a !important;
+}
+
+/* Ensure form controls and placeholders remain visible in the light theme. */
+html[data-theme="standard"] :is(input, textarea, select) {
+  color: #1e2329;
+  background-color: #ffffff;
+  border-color: #d7dce2;
+}
+html[data-theme="standard"] :is(input, textarea, select)::placeholder {
+  color: #8a939f !important;
+  opacity: 1;
+}
+
