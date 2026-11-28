@@ -491,7 +491,7 @@ export default function RotationPage() {
 
           <section className={card}>
             <h2 className="mb-2 font-semibold">Ranked opportunities · Strategy competition + HSMM + Conformal + Change-point + GARCH + CUSUM</h2>
-            <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>Strategy</th><th>pTP</th><th>Regime</th><th>HMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>HSMM duration</th><th>Change point</th><th>Conformal</th><th>τ</th><th>Net score</th></tr></thead><tbody>
+            <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>Strategy</th><th>pTP</th><th>Regime</th><th>HSMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>HSMM duration</th><th>Change point</th><th>Conformal</th><th>τ</th><th>Net score</th></tr></thead><tbody>
               {rot.ranked.map((c) => (
                 <tr key={c.symbol} className="border-t border-white/5">
                   <td className="py-2">{c.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{c.side}</td>
