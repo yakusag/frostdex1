@@ -254,9 +254,11 @@ async function acquireLock(network: BotNetwork): Promise<boolean> {
 
 async function main() {
   const mainnetOn = process.env.BOT_MAINNET_ENABLED === "true";
-  const networks = (process.env.BOT_NETWORKS ?? (mainnetOn ? "testnet,mainnet" : "testnet"))
+  const configuredNetworks = (process.env.BOT_NETWORKS ?? (mainnetOn ? "testnet,mainnet" : "testnet"))
     .split(",").map((s) => s.trim())
     .filter((n): n is BotNetwork => n === "testnet" || (n === "mainnet" && mainnetOn));
+  // Guest simulations always use Testnet, even if the operator configured Mainnet only.
+  const networks: BotNetwork[] = [...new Set<BotNetwork>(["testnet", ...configuredNetworks])];
   log(`Frostdex Capital Rotation worker ${WORKER_ID} — networks: ${networks.join(", ")}`);
 
   const port = Number(process.env.PORT);
