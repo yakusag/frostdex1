@@ -193,6 +193,13 @@ export async function tick(
     : [];
   s.ranked = ranked.slice(0, 10);
 
+  const lastTrace = s.trace[s.trace.length - 1];
+  if (markets.length === 0 && (!lastTrace || lastTrace.text !== "Waiting for market candles/model data; no valid signals available." || now - lastTrace.t > 60_000)) {
+    pushTrace(s, "info", "Waiting for market candles/model data; no valid signals available.", now);
+  } else if (margin <= 0 && s.positions.length < params.maxPositions && (!lastTrace || lastTrace.text !== "No free balance available for another position." || now - lastTrace.t > 60_000)) {
+    pushTrace(s, "risk", "No free balance available for another position.", now);
+  }
+
   if (!opts.tradingEnabled || s.haltedReason || s.positions.length >= params.maxPositions) return;
   let slots = params.maxPositions - s.positions.length;
   let freeNow = free;
