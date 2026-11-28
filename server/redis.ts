@@ -12,7 +12,7 @@ function databaseConfig() {
   const rawUrl = process.env.TURSO_DATABASE_URL?.trim();
   const authToken = process.env.TURSO_AUTH_TOKEN?.trim();
   if (!rawUrl || !authToken) throw new RedisSetupError("Turso storage is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.");
-  const url = rawUrl.replace(/^libsql:\/\//, "https://").replace(/\/+$/, "");
+  const url = rawUrl.replace(/^(?:libsql|turso):\/\//, "https://").replace(/\/+$/, "");
   return { endpoint: url.endsWith("/v2/pipeline") ? url : `${url}/v2/pipeline`, authToken };
 }
 function toHrana(value: string | number | null): HranaValue {
@@ -64,7 +64,7 @@ export async function redisCommand(...command: string[]): Promise<unknown> {
       return rowValue(await execute("SELECT value FROM frostdex_kv WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)", [command[1], now]));
     }
     if (op === "GETDEL" && command.length === 2) {
-      return rowValue(await execute("DELETE FROM frostdex_kv WHERE key = ? RETURNING value", [command[1]]));
+      return rowValue(await execute("DELETE FROM frostdex_kv WHERE key = ? AND (expires_at IS NULL OR expires_at > ?) RETURNING value", [command[1], now]));
     }
     if (op === "SET" && command.length >= 3) {
       const [key, value] = command.slice(1, 3);
@@ -119,7 +119,7 @@ export async function redisCommand(...command: string[]): Promise<unknown> {
     if (op === "EXPIRE" && command.length === 3) {
       const seconds = Number(command[2]);
       if (!Number.isFinite(seconds)) throw new RedisStoreError("Invalid storage expiry.");
-      const result = await execute("UPDATE frostdex_kv SET expires_at=? WHERE key=?", [now + seconds, command[1]]);
+      const result = await execute("UPDATE frostdex_kv SET expires_at=? WHERE key=? AND (expires_at IS NULL OR expires_at > ?)", [now + seconds, command[1], now]);
       return (result.affected_row_count ?? 0) > 0 ? 1 : 0;
     }
     throw new RedisStoreError(`Unsupported storage command: ${op}`);
