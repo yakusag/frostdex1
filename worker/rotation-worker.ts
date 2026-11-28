@@ -12,9 +12,9 @@ import {
 } from "../server/bot-store.js";
 import { redisCommand } from "../server/redis.js";
 import {
-  DEFAULT_PARAMS, Kalman1D, analyzeMarket, conformalDecision, featuresAt, fuseMultiTimeframe,
-  normalizeParams, predictPUp, sigma1m, smoothedP, trainEnsemble,
-  type Candle, type Ensemble, type MarketInput,
+  DEFAULT_PARAMS, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  newAdaptiveConformalState, normalizeParams, observeAdaptiveConformal, predictPUp, sigma1m, smoothedP, trainEnsemble,
+  type AdaptiveConformalState, type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
 import {
   PaperBroker, closePosition, newState, tick,
@@ -35,6 +35,33 @@ const WORKER_ID = randomBytes(6).toString("hex");
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 const stateKey = (n: BotNetwork, owner: string, id: string) =>
   `frostdex:rotation:state:${n}:${owner.toLowerCase()}:${id}`;
+const calibrationKey = (network: BotNetwork, symbol: string) =>
+  `frostdex:rotation:calibration:v1:${network}:${symbol}`;
+
+interface PendingCalibrationForecast {
+  originTime: number;
+  targetTime: number;
+  originClose: number;
+  pUp: number;
+  threshold: number;
+}
+
+interface StoredAdaptiveCalibration {
+  version: 1;
+  adaptive: AdaptiveConformalState;
+  pending: PendingCalibrationForecast[];
+  lastForecastTime: number;
+}
+
+interface MarketForecast {
+  candleTime: number;
+  close: number;
+  pUp: number;
+  price: number;
+  sigma: number;
+  distZ: number;
+  analysis: NonNullable<MarketInput["analysis"]>;
+}
 
 // ------------------------------------------------------------ market data
 
@@ -49,6 +76,8 @@ class MarketData {
   kalmanP = new Map<string, number>();
   rules = new Map<string, SymbolRules>();
   rulesAt = 0;
+  calibrations = new Map<string, StoredAdaptiveCalibration>();
+  calibrationLoaded = new Set<string>();
   constructor(readonly network: BotNetwork) {}
 
   async refreshPrices() {
@@ -63,11 +92,84 @@ class MarketData {
         this.prices.set(r.symbol, px);
       }
     }
-    if (symbols.length) this.symbols = symbols; // the full list shown on the Markets page
+    if (symbols.length) this.symbols = symbols;
     if (Date.now() - this.rulesAt > 10 * 60_000) {
       this.rules = await loadRules(this.network);
       this.rulesAt = Date.now();
     }
+  }
+
+  private async loadCalibration(symbol: string): Promise<StoredAdaptiveCalibration> {
+    const cached = this.calibrations.get(symbol);
+    if (cached) return cached;
+    let state: StoredAdaptiveCalibration = {
+      version: 1,
+      adaptive: newAdaptiveConformalState(),
+      pending: [],
+      lastForecastTime: 0,
+    };
+    if (!this.calibrationLoaded.has(symbol)) {
+      try {
+        const raw = await redisCommand("GET", calibrationKey(this.network, symbol));
+        if (typeof raw === "string") {
+          const parsed = JSON.parse(raw) as Partial<StoredAdaptiveCalibration>;
+          const a = parsed.adaptive;
+          if (parsed.version === 1 && a && Array.isArray(a.scores)) {
+            state = {
+              version: 1,
+              adaptive: {
+                alpha: Number.isFinite(a.alpha) ? Math.max(0.01, Math.min(0.5, Number(a.alpha))) : 0.1,
+                scores: a.scores.filter((v): v is number => Number.isFinite(v)).slice(-300),
+                observations: Number.isFinite(a.observations) ? Math.max(0, Number(a.observations)) : 0,
+                misses: Number.isFinite(a.misses) ? Math.max(0, Number(a.misses)) : 0,
+              },
+              pending: Array.isArray(parsed.pending) ? parsed.pending.filter((p): p is PendingCalibrationForecast =>
+                Number.isFinite(p?.originTime) && Number.isFinite(p?.targetTime) &&
+                Number.isFinite(p?.originClose) && p.originClose > 0 &&
+                Number.isFinite(p?.pUp) && p.pUp >= 0 && p.pUp <= 1 &&
+                Number.isFinite(p?.threshold) && p.threshold >= 0 && p.threshold <= 1
+              ).slice(-30) : [],
+              lastForecastTime: Number.isFinite(parsed.lastForecastTime) ? Number(parsed.lastForecastTime) : 0,
+            };
+          }
+        }
+      } catch (e) {
+        log("calibration load failed", this.network, symbol, (e as Error).message);
+      }
+      this.calibrationLoaded.add(symbol);
+    }
+    this.calibrations.set(symbol, state);
+    return state;
+  }
+
+  private forecast(symbol: string): MarketForecast | null {
+    const candles = this.candles.get(symbol);
+    const model = this.models.get(symbol);
+    const price = this.prices.get(symbol);
+    if (!candles || !model || !price || candles.length < 121) return null;
+    const x = featuresAt(candles, candles.length - 1);
+    if (!x) return null;
+    const analysis = analyzeMarket(candles);
+    if (!analysis) return null;
+    const rawP = predictPUp(model, x);
+    const fusedP = fuseMultiTimeframe(rawP, analysis);
+    const candleTime = candles[candles.length - 1].t;
+    let k = this.kalman.get(symbol);
+    if (!k) this.kalman.set(symbol, (k = new Kalman1D()));
+    // Kalman updates once per completed candle, never on repeated 10s polls.
+    if (this.kalmanAt.get(symbol) !== candleTime || !this.kalmanP.has(symbol)) {
+      this.kalmanP.set(symbol, smoothedP(k, fusedP));
+      this.kalmanAt.set(symbol, candleTime);
+    }
+    return {
+      candleTime,
+      close: candles[candles.length - 1].c,
+      pUp: this.kalmanP.get(symbol) ?? fusedP,
+      price,
+      sigma: sigma1m(candles),
+      distZ: x[0],
+      analysis,
+    };
   }
 
   private async fetchCandles(symbol: string) {
@@ -75,9 +177,7 @@ class MarketData {
     const from = to - CANDLES_BACK * 60;
     const url = `${API_BASE[this.network]}/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1&from=${from}&to=${to}`;
 
-    // The public history endpoint can occasionally return an HTML edge/error
-    // page instead of JSON. Retry transient failures and report the real
-    // response rather than letting "Unexpected token '<'" hide the cause.
+    // Public history may return an HTML edge page instead of JSON; retry transient errors.
     let d: any;
     let lastError = "unknown response";
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -95,12 +195,8 @@ class MarketData {
         } else if (!/application\\/(?:[\\w.+-]*\\+)?json/i.test(contentType)) {
           lastError = `non-JSON response (${contentType}): ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
         } else {
-          try {
-            d = JSON.parse(body);
-            break;
-          } catch {
-            lastError = `invalid JSON response: ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
-          }
+          try { d = JSON.parse(body); break; }
+          catch { lastError = `invalid JSON response: ${body.slice(0, 180).replace(/\\s+/g, " ")}`; }
         }
       } catch (e) {
         lastError = (e as Error).message || String(e);
@@ -112,6 +208,7 @@ class MarketData {
     if (d.s !== "ok" || !Array.isArray(d.t)) {
       throw new Error(`history API status=${String(d.s)}; ${String(d.errmsg ?? d.message ?? "no candle data")}`);
     }
+    const now = Date.now();
     const rows: Candle[] = d.t
       .map((t: number, i: number) => ({
         t: t * 1000, o: Number(d.o?.[i]), h: Number(d.h?.[i]),
@@ -121,72 +218,122 @@ class MarketData {
         Number.isFinite(c.t) && c.t > 0 &&
         Number.isFinite(c.o) && Number.isFinite(c.h) &&
         Number.isFinite(c.l) && Number.isFinite(c.c) && c.c > 0 &&
-        Number.isFinite(c.v),
+        Number.isFinite(c.v) && c.t + CANDLE_MS <= now - 1_000,
       )
       .sort((a: Candle, b: Candle) => a.t - b.t);
     if (rows.length < 100) {
-      throw new Error(`history returned only ${rows.length} valid candles; at least 100 required`);
+      throw new Error(`history returned only ${rows.length} completed valid candles; at least 100 required`);
     }
 
     this.candles.set(symbol, rows);
-    this.fetchedAt.set(symbol, Date.now());
+    this.fetchedAt.set(symbol, now);
     const m = this.models.get(symbol);
-    if (!m || Date.now() - m.trainedAt > RETRAIN_MS) {
+    if (!m || now - m.trainedAt > RETRAIN_MS) {
       const trained = trainEnsemble(rows, DEFAULT_PARAMS.trees, DEFAULT_PARAMS.eta);
       if (trained) this.models.set(symbol, trained);
     }
   }
 
-  /** Refresh stale candles, 4 requests in parallel, to stay within public rate limits. */
+  /** Refresh stale candles, four requests in parallel, to stay within public rate limits. */
   async refreshCandles() {
     const stale = this.symbols.filter((s) => Date.now() - (this.fetchedAt.get(s) ?? 0) > CANDLE_MS);
     let i = 0;
-    await Promise.all(
-      Array.from({ length: 4 }, async () => {
-        while (i < stale.length) {
-          const s = stale[i++];
-          try { await this.fetchCandles(s); } catch (e) { log("candles", s, (e as Error).message); }
-          await new Promise((r) => setTimeout(r, 120));
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (i < stale.length) {
+        const symbol = stale[i++];
+        try { await this.fetchCandles(symbol); }
+        catch (e) { log("candles", symbol, (e as Error).message); }
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }));
+  }
+
+  /**
+   * Prequential test-then-update calibration, persisted per network + symbol.
+   * Forecasts are stored once per completed 1m candle and scored only after
+   * their 10-candle outcome is observable. All bot modes on this network
+   * consume the same calibrated MarketInput stream.
+   */
+  async refreshAdaptiveCalibration() {
+    for (const symbol of this.symbols) {
+      const candles = this.candles.get(symbol);
+      const model = this.models.get(symbol);
+      if (!candles || !model || candles.length < 121) continue;
+      const state = await this.loadCalibration(symbol);
+      const candleByTime = new Map(candles.map((c) => [c.t, c]));
+      const latestTime = candles[candles.length - 1].t;
+      let changed = false;
+      const remaining: PendingCalibrationForecast[] = [];
+
+      for (const pending of state.pending.sort((a, b) => a.originTime - b.originTime)) {
+        const target = candleByTime.get(pending.targetTime);
+        if (target && Date.now() >= pending.targetTime + CANDLE_MS) {
+          const actualUp = target.c > pending.originClose;
+          const nonconformity = actualUp ? 1 - pending.pUp : pending.pUp;
+          observeAdaptiveConformal(state.adaptive, nonconformity, pending.threshold);
+          changed = true;
+        } else if (latestTime <= pending.targetTime + 3 * CANDLE_MS) {
+          remaining.push(pending);
+        } else {
+          // Required target bar is missing from the feed; do not invent a label.
+          changed = true;
         }
-      }),
-    );
+      }
+      state.pending = remaining;
+
+      if (latestTime > state.lastForecastTime) {
+        const forecast = this.forecast(symbol);
+        if (forecast) {
+          const threshold = adaptiveConformalDecision(
+            state.adaptive, forecast.pUp, model.conformalQ ?? 1,
+          ).threshold;
+          state.pending.push({
+            originTime: forecast.candleTime,
+            targetTime: forecast.candleTime + 10 * CANDLE_MS,
+            originClose: forecast.close,
+            pUp: forecast.pUp,
+            threshold,
+          });
+          state.pending = state.pending.slice(-30);
+          state.lastForecastTime = forecast.candleTime;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        try {
+          await redisCommand("SET", calibrationKey(this.network, symbol), JSON.stringify(state));
+        } catch (e) {
+          log("calibration save failed", this.network, symbol, (e as Error).message);
+        }
+      }
+    }
   }
 
   inputs(): MarketInput[] {
     const out: MarketInput[] = [];
     for (const symbol of this.symbols) {
-      const candles = this.candles.get(symbol);
+      const forecast = this.forecast(symbol);
       const model = this.models.get(symbol);
-      const price = this.prices.get(symbol);
-      if (!candles || !model || !price) continue;
-      const x = featuresAt(candles, candles.length - 1);
-      if (!x) continue;
-      let k = this.kalman.get(symbol);
-      if (!k) this.kalman.set(symbol, (k = new Kalman1D()));
-      const analysis = analyzeMarket(candles);
-      if (!analysis) continue;
-      const rawP = predictPUp(model, x);
-      const fusedP = fuseMultiTimeframe(rawP, analysis);
-      const candleTime = candles[candles.length - 1].t;
-      // Kalman observations are independent candle closes, not 10-second worker
-      // polls of the same candle. Reusing one observation avoids false certainty.
-      if (this.kalmanAt.get(symbol) !== candleTime || !this.kalmanP.has(symbol)) {
-        this.kalmanP.set(symbol, smoothedP(k, fusedP));
-        this.kalmanAt.set(symbol, candleTime);
-      }
-      const finalP = this.kalmanP.get(symbol) ?? fusedP;
-      const conformal = conformalDecision(model, finalP);
+      if (!forecast || !model) continue;
+      const calibration = this.calibrations.get(symbol);
+      const adaptive = calibration?.adaptive ?? newAdaptiveConformalState();
+      const conformal = adaptiveConformalDecision(adaptive, forecast.pUp, model.conformalQ ?? 1);
       out.push({
         symbol,
-        price,
-        pUp: finalP,
-        sigma: sigma1m(candles),
-        distZ: x[0],
+        price: forecast.price,
+        pUp: forecast.pUp,
+        sigma: forecast.sigma,
+        distZ: forecast.distZ,
         conformalEligible: conformal.eligible,
         conformalSetSize: conformal.setSize,
         conformalIncludeUp: conformal.includeUp,
         conformalIncludeDown: conformal.includeDown,
-        analysis,
+        conformalThreshold: conformal.threshold,
+        conformalAlpha: conformal.alpha,
+        conformalCalibrationSamples: conformal.calibrationSamples,
+        conformalCalibrated: conformal.calibrated,
+        analysis: forecast.analysis,
       });
     }
     return out;
@@ -353,6 +500,7 @@ async function main() {
         const md = markets[n];
         await md.refreshPrices();
         await md.refreshCandles();
+        await md.refreshAdaptiveCalibration();
       }
       for (const [key, r] of runs) {
         if (!owned.includes(r.config.network)) continue;
