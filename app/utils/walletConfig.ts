@@ -20,7 +20,7 @@ import walletConnectOnboard from "@web3-onboard/walletconnect";
 import { CreateConnectorFn } from "wagmi";
 import { injected, walletConnect } from "wagmi/connectors";
 import type { NetworkId } from "@orderly.network/types";
-import { getRuntimeConfig } from "./runtime-config";
+import { getRuntimeConfig, getRuntimeConfigBoolean } from "./runtime-config";
 
 export const getEvmConnectors = (): CreateConnectorFn[] => {
   const walletConnectProjectId = getRuntimeConfig(
@@ -87,6 +87,41 @@ export const getSolanaConfig = (networkId: NetworkId) => {
   };
 };
 
+const getWalletConnectChainOptions = () => {
+  const parseIds = (value: string) =>
+    value
+      .split(",")
+      .map((part) => Number(part.trim()))
+      .filter(
+        (id) =>
+          Number.isSafeInteger(id) &&
+          id > 0 &&
+          id !== 900900900 &&
+          id !== 901901901,
+      );
+
+  const supportedChains = [
+    ...(!getRuntimeConfigBoolean("VITE_DISABLE_MAINNET")
+      ? parseIds(getRuntimeConfig("VITE_ORDERLY_MAINNET_CHAINS"))
+      : []),
+    ...(!getRuntimeConfigBoolean("VITE_DISABLE_TESTNET")
+      ? parseIds(getRuntimeConfig("VITE_ORDERLY_TESTNET_CHAINS"))
+      : []),
+  ].filter((id, index, all) => all.indexOf(id) === index);
+
+  const configuredDefault = Number(getRuntimeConfig("VITE_DEFAULT_CHAIN"));
+  const requiredChain = supportedChains.includes(configuredDefault)
+    ? configuredDefault
+    : supportedChains[0];
+
+  if (!requiredChain) return {};
+
+  return {
+    requiredChains: [requiredChain],
+    optionalChains: supportedChains.filter((id) => id !== requiredChain),
+  };
+};
+
 export const getOnboardEvmWallets = () => {
   const walletConnectProjectId = getRuntimeConfig(
     "VITE_WALLETCONNECT_PROJECT_ID",
@@ -104,7 +139,9 @@ export const getOnboardEvmWallets = () => {
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
       projectId: walletConnectProjectId,
+      // Orderly account registration and trading-key authorization both use EIP-712 v4.
       additionalRequiredMethods: ["eth_signTypedData_v4"],
+      ...getWalletConnectChainOptions(),
       qrModalOptions: {
         themeMode: "dark",
       },
