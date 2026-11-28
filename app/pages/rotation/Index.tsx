@@ -66,6 +66,7 @@ export default function RotationPage() {
   const [guest, setGuest] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [bot, setBot] = useState<BotConfig | null>(null);
+  const [botHistory, setBotHistory] = useState<BotConfig[]>([]);
   const [rot, setRot] = useState<RotationState | null>(null);
   const [workerOnline, setWorkerOnline] = useState(false);
   const [universe, setUniverse] = useState<string[]>([]);
@@ -92,13 +93,15 @@ export default function RotationPage() {
       const ok = isGuest || (a.authenticated && !!address && a.address?.toLowerCase() === address.toLowerCase());
       setGuest(isGuest);
       setAuthed(ok);
-      if (!ok) { setBot(null); setKeyConfigured(false); return; }
+      if (!ok) { setBot(null); setBotHistory([]); setKeyConfigured(false); return; }
       const [k, c] = await Promise.all([
         isGuest ? Promise.resolve({ configured: false }) : api<{ configured: boolean }>(`/api/bots/keys?network=${effectiveNetwork}`),
         api<{ bots: BotConfig[] }>(`/api/bots/config?network=${effectiveNetwork}`),
       ]);
       setKeyConfigured(k.configured);
-      const mine = c.bots.filter((b) => b.strategy === "rotation").sort((a2, b2) => b2.updatedAt - a2.updatedAt)[0] ?? null;
+      const history = c.bots.filter((b) => b.strategy === "rotation").sort((a2, b2) => b2.updatedAt - a2.updatedAt);
+      setBotHistory(history);
+      const mine = history[0] ?? null;
       setBot(mine);
       if (mine) {
         setLive(mine.liveMode);
@@ -149,6 +152,7 @@ export default function RotationPage() {
       setGuest(false);
       setAuthed(false);
       setBot(null);
+      setBotHistory([]);
       setRot(null);
       setWorkerOnline(false);
       setKeyConfigured(false);
@@ -398,6 +402,21 @@ export default function RotationPage() {
         {msg && <p className="text-sm text-amber-300">{msg}</p>}
         {bot && !workerOnline && running && <p className="text-sm text-rose-300">Worker offline — trading is paused until the 24/7 worker is running.</p>}
       </section>
+
+      {botHistory.length > 0 && (
+        <section className={`${card} space-y-2`}>
+          <h2 className="font-semibold">Saved runs ({botHistory.length})</h2>
+          <p className="text-xs text-white/50">Each Start creates a separate saved run. Select one to inspect its own positions, trades and results.</p>
+          <div className="space-y-2">
+            {botHistory.map((run) => (
+              <button key={`${run.network}:${run.id}`} className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs ${bot?.id === run.id && bot?.network === run.network ? "border-sky-400/60 bg-sky-400/10" : "border-white/10 bg-black/20"}`} onClick={() => { setBot(run); setNetwork(run.network); setLive(run.liveMode); }}>
+                <span><strong>{run.id}</strong><span className="ml-2 text-white/50">{new Date(run.updatedAt).toLocaleString()}</span></span>
+                <span className="text-white/70">{run.liveMode ? "LIVE" : "SIMULATION"} · {run.status.toUpperCase()} · ${run.investment}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* dashboard */}
       {rot && (
