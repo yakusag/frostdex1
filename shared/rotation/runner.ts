@@ -123,6 +123,82 @@ export async function closePosition(
   pushTrace(s, "exit", `${pos.side} ${pos.symbol} closed (${reason}) pnl ${pnl.toFixed(2)}$ — ${pos.margin.toFixed(2)}$ margin freed`, now);
 }
 
+/** Deterministic pseudo-random generator so a tick is reproducible in tests/log review. */
+function seededRandom(seed: number) {
+  let x = (seed >>> 0) || 1;
+  return () => {
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    return (x >>> 0) / 4294967296;
+  };
+}
+
+/** Approximate Thompson draw from a Beta posterior using its normal approximation. */
+function betaPosteriorDraw(wins: number, losses: number, random: () => number) {
+  const a = 2 + wins, b = 2 + losses;
+  const mean = a / (a + b);
+  const variance = (a * b) / ((a + b) ** 2 * (a + b + 1));
+  const u1 = Math.max(random(), 1e-9), u2 = random();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return Math.max(0.001, Math.min(0.999, mean + Math.sqrt(variance) * z));
+}
+
+/** Bayesian shrinkage of the heuristic barrier probability toward observed net trade outcomes. */
+function bayesianCalibrate(c: Candidate, history: ClosedTrade[], params: RotationParams) {
+  const sample = history.filter((t) => t.symbol === c.symbol).slice(-40);
+  if (sample.length < 4) return;
+  const wins = sample.filter((t) => t.pnl > 0).length;
+  const posterior = (2 + wins) / (4 + sample.length);
+  const weight = sample.length / (sample.length + 20);
+  const calibrated = Math.max(0.05, Math.min(0.95, c.pTP * (1 - weight) + posterior * weight));
+  const oldNet = c.expectedNet;
+  const notional = c.margin * params.leverage;
+  const fees = notional * 2 * (params.feeRate + params.slippage);
+  c.pTP = calibrated;
+  c.expectedNet = calibrated * notional * c.tpDist -
+    (1 - calibrated) * notional * c.slDist - fees;
+  c.score += (c.expectedNet - oldNet) / Math.max(c.margin * c.tauMin, 1e-9);
+}
+
+/** Monte Carlo portfolio loss distribution with a shared market shock; returns 95% CVaR. */
+function estimateCvarLoss(
+  positions: Position[],
+  candidate: Candidate,
+  candidateMargin: number,
+  leverage: number,
+  seed: number,
+) {
+  const random = seededRandom(seed);
+  const losses: number[] = [];
+  const paths = 400;
+  for (let path = 0; path < paths; path++) {
+    const common = random();
+    let loss = 0;
+    for (const p of positions) {
+      const event = 0.35 * common + 0.65 * random();
+      const win = event < 0.5; // conservative neutral prior for open positions
+      const notional = p.margin * leverage;
+      loss += win ? -notional * p.tpDist : notional * p.slDist;
+    }
+    const event = 0.35 * common + 0.65 * random();
+    const win = event < candidate.pTP;
+    const notional = candidateMargin * leverage;
+    loss += win ? -notional * candidate.tpDist : notional * candidate.slDist;
+    losses.push(loss);
+  }
+  losses.sort((a, b) => b - a);
+  const tail = losses.slice(0, Math.max(1, Math.ceil(paths * 0.05)));
+  return Math.max(0, tail.reduce((sum, value) => sum + value, 0) / tail.length);
+}
+
+/** Fractional Kelly risk budget, capped at 0.5% equity at the stop. */
+function kellyMargin(c: Candidate, equity: number, maxMargin: number, leverage: number) {
+  const rewardRisk = c.tpDist / Math.max(c.slDist, 1e-9);
+  const fullKelly = c.pTP - (1 - c.pTP) / Math.max(rewardRisk, 1e-9);
+  const fractionalRisk = Math.min(0.005, Math.max(0, 0.25 * fullKelly));
+  const margin = equity * fractionalRisk / Math.max(leverage * c.slDist, 1e-9);
+  return Math.min(maxMargin, margin);
+}
+
 /**
  * One decision cycle. `prices` covers every symbol the bot holds; `markets`
  * covers every scannable symbol (with model probability).
@@ -191,6 +267,19 @@ export async function tick(
   const ranked = margin > 0
     ? rankCandidates(markets.filter((m) => !held.has(m.symbol)), margin, params)
     : [];
+  // Bayesian outcome calibration and contextual Thompson exploration, both
+  // bounded so neither can overwhelm the expected-net-return ranking.
+  for (const c of ranked) {
+    bayesianCalibrate(c, s.trades, params);
+    const history = s.trades.filter((t) => t.symbol === c.symbol).slice(-40);
+    const wins = history.filter((t) => t.pnl > 0).length;
+    const losses = history.length - wins;
+    const random = seededRandom(now ^ c.symbol.split("").reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261));
+    const draw = betaPosteriorDraw(wins, losses, random);
+    const posteriorMean = (2 + wins) / (4 + history.length);
+    c.score *= Math.max(0.85, Math.min(1.15, 1 + (draw - posteriorMean) * 0.6));
+  }
+  ranked.sort((a, b) => b.score - a.score);
   s.ranked = ranked.slice(0, 10);
 
   const lastTrace = s.trace[s.trace.length - 1];
@@ -207,9 +296,24 @@ export async function tick(
   for (const c of ranked) {
     if (slots <= 0 || freeNow < margin * 0.999) break;
     if (c.score <= params.minScore) break; // sorted: everything after is worse
-    const price = markets.find((m) => m.symbol === c.symbol)?.price;
+    const market = markets.find((m) => m.symbol === c.symbol);
+    const price = market?.price;
     if (!price) continue;
-    const qty = broker.normalizeQty(c.symbol, (margin * params.leverage) / price, price);
+    // Kelly determines the risk budget; Monte Carlo CVaR then stress-tests the
+    // whole open book plus this candidate and scales size down if needed.
+    let orderMargin = kellyMargin(c, s.equity, Math.min(margin, freeNow), params.leverage);
+    if (orderMargin <= 0) {
+      pushTrace(s, "skip", `${c.symbol}: fractional Kelly found no positive risk budget`, now);
+      continue;
+    }
+    const cvar = estimateCvarLoss(s.positions, c, orderMargin, params.leverage, now ^ c.symbol.length);
+    const cvarLimit = Math.max(0, s.equity * 0.02);
+    if (cvar > cvarLimit && cvar > 0) orderMargin *= cvarLimit / cvar;
+    if (orderMargin <= 0.01) {
+      pushTrace(s, "skip", `${c.symbol}: portfolio CVaR limit reached`, now);
+      continue;
+    }
+    const qty = broker.normalizeQty(c.symbol, (orderMargin * params.leverage) / price, price);
     if (qty <= 0) {
       pushTrace(s, "skip", `${c.symbol}: below exchange minimum size`, now);
       continue;
@@ -218,14 +322,14 @@ export async function tick(
       const fill = await broker.open(c.symbol, c.side, qty, price);
       const pos: Position = {
         id: `${now}-${c.symbol}`, symbol: c.symbol, side: c.side, entry: fill.price, qty,
-        margin, slDist: c.slDist, tpDist: c.tpDist, openedAt: now, entryFee: fill.fee,
+        margin: orderMargin, slDist: c.slDist, tpDist: c.tpDist, openedAt: now, entryFee: fill.fee,
         peak: fill.price, score: c.score, live: s.mode === "live",
       };
       s.positions.push(pos);
       if (c.side === "LONG") s.stats.longs++;
       else s.stats.shorts++;
       pushTrace(s, "entry", `${c.side} ${c.symbol} @ ${fill.price.toPrecision(6)} score ${c.score.toFixed(5)} pTP ${(c.pTP * 100).toFixed(1)}% TP ${(c.tpDist * 100).toFixed(2)}% SL ${(c.slDist * 100).toFixed(2)}%`, now);
-      slots--; freeNow -= margin; opened++;
+      slots--; freeNow -= orderMargin; opened++;
     } catch (e) {
       pushTrace(s, "skip", `${c.symbol}: order failed (${(e as Error).message.slice(0, 120)})`, now);
     }
