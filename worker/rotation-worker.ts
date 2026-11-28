@@ -286,7 +286,6 @@ class MarketData {
       const models = this.horizonModels.get(symbol);
       if (!candles || !models || candles.length < 121) continue;
       const state = await this.loadCalibration(symbol);
-      const candleByTime = new Map(candles.map((c) => [c.t, c]));
       const latestTime = candles[candles.length - 1].t;
       let changed = false;
 
@@ -294,23 +293,7 @@ class MarketData {
         const bucket = state.horizons[String(horizon)];
         const model = models[horizon];
         if (!bucket || !model) continue;
-        const remaining: PendingCalibrationForecast[] = [];
-
-        for (const pending of bucket.pending.sort((a, b) => a.originTime - b.originTime)) {
-          const target = candleByTime.get(pending.targetTime);
-          if (target && Date.now() >= pending.targetTime + CANDLE_MS) {
-            const actualUp = target.c > pending.originClose;
-            const nonconformity = actualUp ? 1 - pending.pUp : pending.pUp;
-            observeAdaptiveConformal(bucket.adaptive, nonconformity, pending.threshold);
-            changed = true;
-          } else if (latestTime <= pending.targetTime + 3 * CANDLE_MS) {
-            remaining.push(pending);
-          } else {
-            // Missing target candle: discard without fabricating a realised label.
-            changed = true;
-          }
-        }
-        bucket.pending = remaining;
+        changed = resolveHorizonForecasts(bucket, candles, Date.now(), CANDLE_MS) || changed;
 
         if (latestTime > bucket.lastForecastTime) {
           const forecast = this.forecast(symbol, horizon);
@@ -318,16 +301,9 @@ class MarketData {
             const threshold = adaptiveConformalDecision(
               bucket.adaptive, forecast.pUp, model.conformalQ ?? 1,
             ).threshold;
-            bucket.pending.push({
-              originTime: forecast.candleTime,
-              targetTime: forecast.candleTime + horizon * CANDLE_MS,
-              originClose: forecast.close,
-              pUp: forecast.pUp,
-              threshold,
-            });
-            bucket.pending = bucket.pending.slice(-60);
-            bucket.lastForecastTime = forecast.candleTime;
-            changed = true;
+            changed = queueHorizonForecast(
+              bucket, horizon, forecast, CANDLE_MS, threshold,
+            ) || changed;
           }
         }
       }
