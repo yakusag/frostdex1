@@ -286,7 +286,7 @@ export interface MarketAnalysis {
 /** Gaussian HMM forward filter over the recent efficiency/volatility sequence. */
 function hmmRegimeFilter(candles: Candle[], end: number) {
   const states: MarketRegime[] = ["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"];
-  const means = [[0.65, 0], [0.10, -0.1], [0.25, 0.8], [0.30, 0.15]];
+  const means = [[0.85, 0], [0.10, -0.1], [0.25, 0.8], [0.40, 0.15]];
   const transition = [
     [0.88, 0.03, 0.03, 0.06], [0.04, 0.86, 0.03, 0.07],
     [0.04, 0.04, 0.86, 0.06], [0.12, 0.12, 0.08, 0.68],
