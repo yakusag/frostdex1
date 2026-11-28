@@ -1,7 +1,7 @@
 // Frostdex Capital Rotation — 24/7 worker.
 // Run it on an always-on host (Railway / Fly / VPS), NOT on Vercel serverless:
 //   yarn worker
-// Required env: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, BOT_KEY_ENCRYPTION_KEY
+// Required env: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, BOT_KEY_ENCRYPTION_KEY
 // Optional env: BOT_MAINNET_ENABLED=true, BOT_NETWORKS=testnet,mainnet, PORT
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
