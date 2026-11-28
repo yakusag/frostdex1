@@ -345,7 +345,7 @@ export default function RotationPage() {
           : <div className="flex flex-wrap gap-2"><button className={`${btn} bg-sky-500 text-white`} disabled={busy || !address} onClick={signIn}>Sign in with wallet</button><button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={startGuest}>Start guest simulation</button></div>}
         <div className="flex gap-2 text-sm">
           {(["testnet", "mainnet"] as Network[]).map((n) => (
-            <button key={n} disabled={running || paused || (guest && n === "mainnet")} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
+            <button key={n} disabled={guest && n === "mainnet"} className={`${btn} ${network === n ? "bg-white/20" : "bg-white/5"}`} onClick={() => setNetwork(n)}>{n}</button>
           ))}
         </div>
       </section>
@@ -370,8 +370,8 @@ export default function RotationPage() {
         {guest && <p className="text-xs text-emerald-300">Guest sessions are isolated, testnet-only simulations with up to 1,000 virtual USDC. Use “Switch to wallet sign-in” above to leave guest mode before enabling live trading.</p>}
         {!guest && !live && <p className="text-xs text-white/50">Live mode requires wallet sign-in, Mainnet selection, an enabled Mainnet bot network, and a dedicated Orderly read,trading key.</p>}
         <div className="flex gap-2 text-sm">
-          <button className={`${btn} ${!live ? "bg-emerald-500/30" : "bg-white/5"}`} disabled={running} onClick={() => setLive(false)}>Simulation</button>
-          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={running || guest || !authed || network !== "mainnet"} onClick={() => setLive(true)}>Live</button>
+          <button className={`${btn} ${!live ? "bg-emerald-500/30" : "bg-white/5"}`} onClick={() => setLive(false)}>Simulation</button>
+          <button className={`${btn} ${live ? "bg-rose-500/30" : "bg-white/5"}`} disabled={guest || !authed || network !== "mainnet"} onClick={() => setLive(true)}>Live</button>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {([
@@ -384,7 +384,7 @@ export default function RotationPage() {
             ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
           ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
             <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") ? 1 : undefined} max={label.startsWith("Max open positions") ? 8 : undefined} value={v} disabled={running || paused} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
+              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") ? 1 : undefined} max={label.startsWith("Max open positions") ? 8 : undefined} value={v} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
             </label>
           ))}
         </div>
@@ -396,8 +396,7 @@ export default function RotationPage() {
           {running && <button className={`${btn} bg-amber-500 text-black`} disabled={busy} onClick={() => control("pause")}>Ⅱ Pause (keep positions)</button>}
           {paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={() => control("resume")}>▶ Resume</button>}
           {(running || paused) && <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => control("stop")}>■ Stop &amp; close all</button>}
-          {!running && !paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot)}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
-          {bot && !running && !paused && <button className={`${btn} bg-white/10`} disabled={busy} onClick={() => save("stopped", true)}>Reset (new run)</button>}
+          <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", true)}>▶ Start new 24/7 run ({live ? "LIVE" : "simulation"})</button>
         </div>
         {msg && <p className="text-sm text-amber-300">{msg}</p>}
         {bot && !workerOnline && running && <p className="text-sm text-rose-300">Worker offline — trading is paused until the 24/7 worker is running.</p>}
