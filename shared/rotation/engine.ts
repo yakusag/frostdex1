@@ -239,8 +239,11 @@ export function trainEnsemble(
   const qIndex = Math.min(nonconformity.length - 1, Math.ceil(0.90 * (nonconformity.length + 1)) - 1);
   const conformalQ = nonconformity.length ? nonconformity[Math.max(0, qIndex)] : 1;
 
-  const full = fitStumps(X, y, trees, eta);
-  return { ...full, eta, valAccuracy, samples: X.length, trainedAt: now, conformalQ };
+  // Keep the exact model that generated the untouched calibration scores.
+  // Refitting on the calibration tail would invalidate the split calibration.
+  // The holdout is chronological; due to serial dependence this is an empirical
+  // abstention heuristic, not a distribution-free coverage guarantee.
+  return { ...val, eta, valAccuracy, samples: trainEnd, trainedAt: now, conformalQ };
 }
 
 /**
@@ -252,7 +255,7 @@ export function predictPUp(model: Ensemble, x: number[]): number {
   return sigmoid(weight * rawLogit(model, x));
 }
 
-/** Split-conformal class set. A singleton set is required to permit a new entry. */
+/** Chronological holdout-calibrated class set; temporal coverage is approximate. */
 export function conformalDecision(model: Ensemble, pUp: number) {
   const q = clamp(model.conformalQ ?? 1, 0, 1);
   const includeUp = 1 - pUp <= q;
