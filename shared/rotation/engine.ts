@@ -270,6 +270,85 @@ export function conformalDecision(model: Ensemble, pUp: number) {
   };
 }
 
+/**
+ * Online ACI-style calibration for sequential binary forecasts.
+ * The rolling score window and feedback update adapt the singleton-set
+ * threshold to recent forecast errors. It is empirical for market data:
+ * temporal dependence and predictor drift mean this is not a coverage guarantee.
+ */
+export interface AdaptiveConformalState {
+  alpha: number;
+  scores: number[];
+  observations: number;
+  misses: number;
+}
+
+export const newAdaptiveConformalState = (): AdaptiveConformalState => ({
+  alpha: 0.1,
+  scores: [],
+  observations: 0,
+  misses: 0,
+});
+
+const ACI_TARGET_ALPHA = 0.1;
+const ACI_LEARNING_RATE = 0.02;
+const ACI_MIN_SAMPLES = 40;
+const ACI_WINDOW = 300;
+
+export function adaptiveConformalThreshold(
+  state: AdaptiveConformalState,
+  fallbackQ = 1,
+): number {
+  const scores = state.scores.filter((v) => Number.isFinite(v)).slice(-ACI_WINDOW);
+  if (scores.length < ACI_MIN_SAMPLES) return clamp(fallbackQ, 0, 1);
+  const sorted = [...scores].sort((a, b) => a - b);
+  const alpha = clamp(state.alpha, 0.01, 0.5);
+  const index = clamp(Math.ceil((sorted.length + 1) * (1 - alpha)) - 1, 0, sorted.length - 1);
+  return sorted[index];
+}
+
+/** Update only after the forecast's full HORIZON_CANDLES outcome is observable. */
+export function observeAdaptiveConformal(
+  state: AdaptiveConformalState,
+  nonconformity: number,
+  thresholdAtForecast: number,
+): boolean {
+  const score = clamp(nonconformity, 0, 1);
+  const missed = score > clamp(thresholdAtForecast, 0, 1);
+  state.scores.push(score);
+  if (state.scores.length > ACI_WINDOW) state.scores.splice(0, state.scores.length - ACI_WINDOW);
+  state.alpha = clamp(
+    state.alpha + ACI_LEARNING_RATE * (ACI_TARGET_ALPHA - Number(missed)),
+    0.01,
+    0.5,
+  );
+  state.observations = Math.max(0, state.observations || 0) + 1;
+  state.misses = Math.max(0, state.misses || 0) + Number(missed);
+  return missed;
+}
+
+export function adaptiveConformalDecision(
+  state: AdaptiveConformalState,
+  pUp: number,
+  fallbackQ = 1,
+) {
+  const q = adaptiveConformalThreshold(state, fallbackQ);
+  const includeUp = 1 - pUp <= q;
+  const includeDown = pUp <= q;
+  return {
+    includeUp,
+    includeDown,
+    eligible: includeUp !== includeDown,
+    lower: Math.max(0, pUp - q),
+    upper: Math.min(1, pUp + q),
+    setSize: Number(includeUp) + Number(includeDown),
+    threshold: q,
+    alpha: clamp(state.alpha, 0.01, 0.5),
+    calibrationSamples: state.scores.length,
+    calibrated: state.scores.length >= ACI_MIN_SAMPLES,
+  };
+}
+
 // ----------------------------------------------------------------- Kalman
 
 export class Kalman1D {
@@ -517,11 +596,18 @@ export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
   const cusumSignal = detectCusum(candles, i, Math.max(shortVol, forecastSigma));
   const changePointProbability = bayesianChangePointProbability(candles, i, Math.max(shortVol, forecastSigma));
 
-  // Require meaningful posterior confidence; otherwise retain the neutral transition state.
-  const regime = hsmm.confidence >= 0.42 ? hsmm.regime : "TRANSITION";
+  // A fast/slow volatility expansion is a direct observable risk override:
+  // do not let semi-Markov dwell inertia mislabel a fresh volatility shock.
+  const highVolOverride = volatilityRatio >= 1.8;
+  const regime = highVolOverride
+    ? "HIGH_VOL"
+    : hsmm.confidence >= 0.42 ? hsmm.regime : "TRANSITION";
+  const regimeConfidence = highVolOverride
+    ? Math.max(hsmm.confidence, clamp((volatilityRatio - 1.4) / 1.2, 0.42, 0.9))
+    : hsmm.confidence;
   return {
     regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement,
-    forecastSigma, cusumSignal, regimeConfidence: hsmm.confidence,
+    forecastSigma, cusumSignal, regimeConfidence,
     regimeProbabilities: hsmm.probabilities,
     expectedRegimeMinutes: hsmm.expectedRegimeMinutes,
     changePointProbability,
@@ -622,7 +708,7 @@ export function scoreCandidate(
   const agreementPenalty = a ? 0.75 + 0.25 * a.mtfAgreement : 0.85;
   const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
   const cusumPenalty = a?.cusumSignal && a.cusumSignal !== (side === "LONG" ? 1 : -1) ? 0.65 : 1;
-  const confidencePenalty = a ? 0.8 + 0.2 * a.regimeConfidence : 1;
+  const confidencePenalty = a ? 0.8 + 0.2 * clamp(a.regimeConfidence ?? 0, 0, 1) : 1;
   const changePointPenalty = a ? 1 - 0.55 * clamp(a.changePointProbability ?? 0, 0, 1) : 1;
   const durationPenalty = a && a.expectedRegimeMinutes !== undefined && a.expectedRegimeMinutes < 3 ? 0.85 : 1;
   const conformalEligible = m.conformalSetSize !== undefined &&
@@ -630,7 +716,8 @@ export function scoreCandidate(
     ? m.conformalSetSize === 1 && (side === "LONG" ? m.conformalIncludeUp : m.conformalIncludeDown)
     : m.conformalEligible;
   const conformalPenalty = conformalEligible === false ? 0 : 1;
-  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty * changePointPenalty * durationPenalty * conformalPenalty;
+  const rawScore = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty * changePointPenalty * durationPenalty * conformalPenalty;
+  const score = conformalEligible === false ? 0 : (Number.isFinite(rawScore) ? rawScore : 0);
   return {
     symbol: m.symbol,
     side,
