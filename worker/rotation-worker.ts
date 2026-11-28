@@ -70,15 +70,61 @@ class MarketData {
   private async fetchCandles(symbol: string) {
     const to = Math.floor(Date.now() / 1000);
     const from = to - CANDLES_BACK * 60;
-    const res = await fetch(
-      `${API_BASE[this.network]}/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1&from=${from}&to=${to}`,
-    );
-    const d = (await res.json()) as any;
-    if (d?.s !== "ok" || !Array.isArray(d.t)) return;
+    const url = `${API_BASE[this.network]}/v1/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1&from=${from}&to=${to}`;
+
+    // The public history endpoint can occasionally return an HTML edge/error
+    // page instead of JSON. Retry transient failures and report the real
+    // response rather than letting "Unexpected token '<'" hide the cause.
+    let d: any;
+    let lastError = "unknown response";
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(12_000),
+          cache: "no-store",
+        });
+        const contentType = res.headers.get("content-type") ?? "unknown";
+        const body = await res.text();
+        if (!res.ok) {
+          lastError = `HTTP ${res.status} (${contentType}): ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
+          if (res.status < 500 && res.status !== 429) break;
+        } else if (!/application\\/(?:[\\w.+-]*\\+)?json/i.test(contentType)) {
+          lastError = `non-JSON response (${contentType}): ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
+        } else {
+          try {
+            d = JSON.parse(body);
+            break;
+          } catch {
+            lastError = `invalid JSON response: ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
+          }
+        }
+      } catch (e) {
+        lastError = (e as Error).message || String(e);
+      }
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** (attempt - 1)));
+    }
+
+    if (!d) throw new Error(`${lastError} (after 3 attempts)`);
+    if (d.s !== "ok" || !Array.isArray(d.t)) {
+      throw new Error(`history API status=${String(d.s)}; ${String(d.errmsg ?? d.message ?? "no candle data")}`);
+    }
     const rows: Candle[] = d.t
-      .map((t: number, i: number) => ({ t: t * 1000, o: +d.o[i], h: +d.h[i], l: +d.l[i], c: +d.c[i], v: +d.v[i] }))
-      .filter((c: Candle) => c.t > 0 && c.c > 0);
-    if (rows.length < 100) return;
+      .map((t: number, i: number) => ({
+        t: t * 1000, o: Number(d.o?.[i]), h: Number(d.h?.[i]),
+        l: Number(d.l?.[i]), c: Number(d.c?.[i]), v: Number(d.v?.[i] ?? 0),
+      }))
+      .filter((c: Candle) =>
+        Number.isFinite(c.t) && c.t > 0 &&
+        Number.isFinite(c.o) && Number.isFinite(c.h) &&
+        Number.isFinite(c.l) && Number.isFinite(c.c) && c.c > 0 &&
+        Number.isFinite(c.v),
+      )
+      .sort((a: Candle, b: Candle) => a.t - b.t);
+    if (rows.length < 100) {
+      throw new Error(`history returned only ${rows.length} valid candles; at least 100 required`);
+    }
+
     this.candles.set(symbol, rows);
     this.fetchedAt.set(symbol, Date.now());
     const m = this.models.get(symbol);
