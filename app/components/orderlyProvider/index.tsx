@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, lazy, Suspense, useState } from "react";
+import { ReactNode, useCallback, lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
   LocaleProvider,
   LocaleCode,
@@ -7,6 +7,8 @@ import {
   Resources,
 } from "@orderly.network/i18n";
 import { OrderlyAppProvider } from "@orderly.network/react-app";
+import { useWalletConnector } from "@orderly.network/hooks";
+import { toast } from "@orderly.network/ui";
 import type { NetworkId } from "@orderly.network/types";
 import { DemoGraduationChecker } from "@/components/DemoGraduationChecker";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -25,6 +27,7 @@ import {
 } from "@/utils/runtime-config";
 import { getSEOConfig, getUserLanguage } from "@/utils/seo";
 import { createSymbolDataAdapter } from "@/utils/symbol-filter";
+import { walletSessionNeedsOrderlyTypedData } from "@/utils/wallet-signature-compat";
 import ServiceDisclaimerDialog from "./ServiceDisclaimerDialog";
 
 const NETWORK_ID_KEY = "orderly_network_id";
@@ -34,6 +37,47 @@ const resources: Resources<ExtendLocaleMessages> = {
   [LocaleEnum.en]: extendMessages,
   ["ar" as string]: extendMessagesAr,
   ["ma" as string]: extendMessagesMa,
+};
+
+/**
+ * WalletConnect persists the RPC methods approved when a session was first
+ * paired. If an old session lacks EIP-712 v4, Orderly's Create Account and
+ * Enable Trading requests cannot reach the wallet. Disconnect only that
+ * incompatible session so the next connection can request the required method.
+ */
+const WalletSignatureCompatibilityGuard = () => {
+  const { wallet, disconnect } = useWalletConnector();
+  const handledWallet = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!wallet) {
+      handledWallet.current = null;
+      return;
+    }
+
+    if (!walletSessionNeedsOrderlyTypedData(wallet)) return;
+
+    const address = wallet.accounts?.[0]?.address ?? "";
+    const key = `${wallet.label}:${address}`;
+    if (handledWallet.current === key) return;
+    handledWallet.current = key;
+
+    void disconnect({ label: wallet.label }).then(
+      () => {
+        toast.error(
+          "Your saved WalletConnect session cannot sign Orderly EIP-712 messages. Wallet disconnected; reconnect it to approve the updated signing permissions.",
+        );
+      },
+      (error) => {
+        console.error("Unable to reset incompatible WalletConnect session:", error);
+        toast.error(
+          "This wallet session is missing EIP-712 signing permission. Disconnect it in your wallet app, then reconnect to FrostDex.",
+        );
+      },
+    );
+  }, [wallet, disconnect]);
+
+  return null;
 };
 
 const getNetworkId = (): NetworkId => {
@@ -259,6 +303,7 @@ const OrderlyProvider = (props: { children: ReactNode }) => {
         ),
       }}
     >
+      <WalletSignatureCompatibilityGuard />
       <DemoGraduationChecker />
       <ServiceDisclaimerDialog />
       {props.children}
