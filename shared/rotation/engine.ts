@@ -543,6 +543,8 @@ export interface MarketInput {
   distZ?: number;
   conformalEligible?: boolean;
   conformalSetSize?: number;
+  conformalIncludeUp?: boolean;
+  conformalIncludeDown?: boolean;
 }
 
 export interface Candidate {
@@ -620,7 +622,11 @@ export function scoreCandidate(
   const confidencePenalty = a ? 0.8 + 0.2 * a.regimeConfidence : 1;
   const changePointPenalty = a ? 1 - 0.55 * clamp(a.changePointProbability ?? 0, 0, 1) : 1;
   const durationPenalty = a && a.expectedRegimeMinutes !== undefined && a.expectedRegimeMinutes < 3 ? 0.85 : 1;
-  const conformalPenalty = m.conformalEligible === false ? 0 : 1;
+  const conformalEligible = m.conformalSetSize !== undefined &&
+    m.conformalIncludeUp !== undefined && m.conformalIncludeDown !== undefined
+    ? m.conformalSetSize === 1 && (side === "LONG" ? m.conformalIncludeUp : m.conformalIncludeDown)
+    : m.conformalEligible;
+  const conformalPenalty = conformalEligible === false ? 0 : 1;
   const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty * changePointPenalty * durationPenalty * conformalPenalty;
   return {
     symbol: m.symbol,
@@ -640,7 +646,7 @@ export function scoreCandidate(
     cusumSignal: a?.cusumSignal ?? 0,
     forecastSigma,
     strategy,
-    conformalEligible: m.conformalEligible,
+    conformalEligible,
     changePointProbability: a?.changePointProbability,
     expectedRegimeMinutes: a?.expectedRegimeMinutes,
   };
