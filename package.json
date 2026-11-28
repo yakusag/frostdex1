@@ -17,6 +17,7 @@
     "prepare": "husky",
     "preview": "vite preview",
     "worker": "tsx worker/rotation-worker.ts",
+    "migrate:redis-to-turso": "tsx scripts/migrate-redis-to-turso.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc"
   },
