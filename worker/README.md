@@ -1,49 +1,62 @@
 # Frostdex Capital Rotation — 24/7 worker
 
-Vercel serverless functions cannot run a bot continuously, so the trading loop
-lives in this small Node process. The website (Vercel) only stores the bot
-config and displays the state the worker publishes to Redis.
+The trading loop runs as a persistent Node process on Railway/Fly/VPS. Vercel
+serves the API and dashboard; both connect to the same Turso database.
 
 ```
-Browser /ai-bot ──► Vercel /api/bots/* ──► Upstash Redis ◄── worker (Railway/Fly/VPS)
-                                                              │ public data + signed orders
-                                                              ▼
-                                                         Orderly REST API
+Browser /ai-bot → Vercel API ─┐
+                              ├→ Turso (shared durable storage) ← Railway worker
+                              └→ Orderly REST API (signed orders)
 ```
 
 ## Run
-
 ```bash
 yarn install
-yarn worker          # = tsx worker/rotation-worker.ts
+yarn worker
 ```
 
-## Environment (same values as the Vercel project)
+## Environment (configure on BOTH Vercel and Railway)
 
-| Var | Purpose |
+| Variable | Purpose |
 |---|---|
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | shared store |
-| `BOT_KEY_ENCRYPTION_KEY` | decrypts the stored Orderly trading keys (base64, 32 bytes) |
-| `BOT_MAINNET_ENABLED=true` | needed for mainnet, on **both** Vercel and the worker |
-| `BOT_NETWORKS` | optional, default `testnet` (+ `mainnet` when enabled) |
-| `PORT` | optional health endpoint for the host |
+| `TURSO_DATABASE_URL` | Turso URL beginning with `libsql://` |
+| `TURSO_AUTH_TOKEN` | Database authentication token |
+| `BOT_KEY_ENCRYPTION_KEY` | Existing base64 32-byte key used to decrypt stored Orderly keys |
+| `BOT_SESSION_SECRET` | Existing bot session signing secret |
+| `BOT_MAINNET_ENABLED=true` | Required for mainnet, on both services |
+| `BOT_NETWORKS` | Optional; defaults to testnet (+ mainnet when enabled) |
+| `PORT` | Optional health endpoint |
 
-Also set `BOT_SESSION_SECRET` and `BOT_KEY_ENCRYPTION_KEY` on Vercel (already required by `/api/bots/*`).
+Do not change `BOT_KEY_ENCRYPTION_KEY` during migration: stored Orderly
+secrets remain encrypted and require the same key.
 
-## Deploy on Railway (≈ 3 min)
+## Migrate existing Upstash data
 
-1. New project → Deploy from GitHub repo → this repo.
-2. Settings → Start command: `yarn worker`. Build command: `yarn install`.
-3. Add the variables above. Keep **one** instance: a Redis lock prevents two
-   workers trading the same network, a second one just idles.
+Before switching production traffic, run the one-time migration with BOTH the
+old Upstash credentials and the new Turso credentials in the same environment:
 
-## Safety model
+```bash
+yarn migrate:redis-to-turso
+```
 
-* Orderly keys are `read,trading` only — they cannot withdraw funds.
-* Software stops are checked every 10 s. There is **no exchange-side stop order**:
-  if the worker is down while a position is open, that position is unmanaged.
-  Keep leverage low and capital small until you have verified it on testnet.
-* The live broker refuses to open on a symbol where you already hold a position,
-  and drops tracked positions you closed by hand.
-* Daily loss limit flattens everything and halts until the next UTC day.
-* Pressing **Stop** in the page flattens the bot's positions.
+Stop the Railway worker while migrating. The script copies all
+`frostdex:*` string and set keys, including bot configs, encrypted keys,
+owners, rotation states, calibration, queued commands and admin settings.
+It is repeatable. If Upstash is over quota or cannot be read, migration cannot
+complete until read access is restored. Do not delete the old database or its
+credentials until production verification is complete.
+
+## Deploy on Railway
+
+1. Keep the existing Railway service and repository.
+2. Set the start command to `yarn worker`.
+3. Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; preserve the existing
+   `BOT_KEY_ENCRYPTION_KEY`, `BOT_SESSION_SECRET`, and network settings.
+4. Keep one worker instance; the database lock is shared by all instances.
+
+## Safety
+
+* Keep live trading disabled until migration and testnet verification succeed.
+* If the worker is down, open exchange positions are not managed by this process.
+* Orderly keys remain encrypted at rest; do not rotate their encryption key
+  unless all stored keys are deliberately re-encrypted first.
