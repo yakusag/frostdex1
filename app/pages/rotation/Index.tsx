@@ -329,7 +329,7 @@ export default function RotationPage() {
       <div>
         <h1 className="text-2xl font-bold">🤖 {TITLE}</h1>
         <p className="mt-1 text-sm text-white/60">
-          Boosted-tree signal → Kalman smoothing → capital-rotation ranking. Runs 24/7 on the Frostdex worker across all {universe.length || "—"} USDC perps on the Markets page.
+          132-tree signal → 5m/15m/60m momentum fusion → candle-close Kalman filter → volatility-regime detection → adaptive barriers → net capital-rotation ranking. Runs 24/7 on the Frostdex worker across all {universe.length || "—"} USDC perps on the Markets page.
         </p>
       </div>
 
