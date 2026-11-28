@@ -127,6 +127,7 @@ export interface Ensemble {
   valAccuracy: number; // out-of-sample directional accuracy (walk-forward)
   samples: number;
   trainedAt: number;
+  conformalQ?: number;
 }
 
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
@@ -226,9 +227,20 @@ export function trainEnsemble(
     if (pred === y[k]) correct++;
   }
   const valAccuracy = correct / (X.length - split);
+  // Split-conformal calibration on the untouched walk-forward validation tail.
+  // Nonconformity is 1 - probability assigned to the realised class.
+  const reliability = clamp((valAccuracy - 0.5) / 0.05, 0, 1);
+  const nonconformity: number[] = [];
+  for (let k = split; k < X.length; k++) {
+    const p = sigmoid(reliability * rawLogit({ ...val, eta }, X[k]));
+    nonconformity.push(1 - (y[k] === 1 ? p : 1 - p));
+  }
+  nonconformity.sort((a, b) => a - b);
+  const qIndex = Math.min(nonconformity.length - 1, Math.ceil(0.90 * (nonconformity.length + 1)) - 1);
+  const conformalQ = nonconformity.length ? nonconformity[Math.max(0, qIndex)] : 1;
 
   const full = fitStumps(X, y, trees, eta);
-  return { ...full, eta, valAccuracy, samples: X.length, trainedAt: now };
+  return { ...full, eta, valAccuracy, samples: X.length, trainedAt: now, conformalQ };
 }
 
 /**
@@ -238,6 +250,21 @@ export function trainEnsemble(
 export function predictPUp(model: Ensemble, x: number[]): number {
   const weight = clamp((model.valAccuracy - 0.5) / 0.05, 0, 1);
   return sigmoid(weight * rawLogit(model, x));
+}
+
+/** Split-conformal class set. A singleton set is required to permit a new entry. */
+export function conformalDecision(model: Ensemble, pUp: number) {
+  const q = clamp(model.conformalQ ?? 1, 0, 1);
+  const includeUp = 1 - pUp <= q;
+  const includeDown = pUp <= q;
+  return {
+    includeUp,
+    includeDown,
+    eligible: includeUp !== includeDown,
+    lower: Math.max(0, pUp - q),
+    upper: Math.min(1, pUp + q),
+    setSize: Number(includeUp) + Number(includeDown),
+  };
 }
 
 // ----------------------------------------------------------------- Kalman
@@ -281,6 +308,8 @@ export interface MarketAnalysis {
   cusumSignal: -1 | 0 | 1;
   regimeConfidence: number;
   regimeProbabilities: Record<MarketRegime, number>;
+  expectedRegimeMinutes?: number;
+  changePointProbability?: number;
 }
 
 /** Gaussian HMM forward filter over the recent efficiency/volatility sequence. */
@@ -308,6 +337,85 @@ function hmmRegimeFilter(candles: Candle[], end: number) {
   const probabilities = Object.fromEntries(states.map((state, i) => [state, alpha[i]])) as Record<MarketRegime, number>;
   const regime = states.reduce((best, state) => probabilities[state] > probabilities[best] ? state : best, states[0]);
   return { regime, probabilities, confidence: probabilities[regime] };
+}
+
+/**
+ * Explicit-duration semi-Markov filter. State dwell hazards vary with age,
+ * preventing the memoryless switching assumption of a plain HMM.
+ */
+function hsmmRegimeFilter(candles: Candle[], end: number) {
+  const states: MarketRegime[] = ["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"];
+  const means = [[0.85, 0], [0.10, -0.1], [0.25, 0.8], [0.40, 0.15]];
+  const transition = [
+    [0, 0.42, 0.18, 0.40], [0.38, 0, 0.22, 0.40],
+    [0.28, 0.32, 0, 0.40], [0.38, 0.38, 0.24, 0],
+  ];
+  const meanDuration = [18, 24, 10, 6];
+  const maxAge = 30;
+  let mass = states.map(() => Array(maxAge + 1).fill(0));
+  for (let state = 0; state < states.length; state++) mass[state][1] = 0.25;
+
+  for (let t = Math.max(120, end - 59); t <= end; t++) {
+    let path = 0;
+    for (let k = t - 19; k <= t; k++) path += Math.abs(candles[k].c - candles[k - 1].c);
+    const efficiency = path > 0 ? clamp(Math.abs(candles[t].c - candles[t - 20].c) / path, 0, 1) : 0;
+    const longVol = sigma1m(candles, t, 120);
+    const shortVol = sigma1m(candles, t, 30);
+    const obs = [efficiency, Math.log(clamp(longVol > 0 ? shortVol / longVol : 1, 0.1, 10))];
+    const emission = means.map(([e, v]) =>
+      Math.exp(-0.5 * (((obs[0] - e) / 0.22) ** 2 + ((obs[1] - v) / 0.55) ** 2)));
+    const next = states.map(() => Array(maxAge + 1).fill(0));
+    for (let state = 0; state < states.length; state++) {
+      for (let age = 1; age <= maxAge; age++) {
+        const p = mass[state][age];
+        if (p <= 0) continue;
+        const durationHazard = age >= maxAge ? 1 :
+          clamp(Math.pow(age / meanDuration[state], 1.5) / meanDuration[state], 0.004, 0.45);
+        next[state][Math.min(maxAge, age + 1)] += p * (1 - durationHazard);
+        for (let target = 0; target < states.length; target++) {
+          if (target !== state) next[target][1] += p * durationHazard * transition[state][target];
+        }
+      }
+    }
+    let total = 0;
+    for (let state = 0; state < states.length; state++) {
+      for (let age = 1; age <= maxAge; age++) {
+        next[state][age] *= emission[state];
+        total += next[state][age];
+      }
+    }
+    const norm = total || 1;
+    mass = next.map(row => row.map(v => v / norm));
+  }
+  const probabilities = Object.fromEntries(states.map((state, i) => [
+    state, mass[i].reduce((sum, p) => sum + p, 0),
+  ])) as Record<MarketRegime, number>;
+  const regime = states.reduce((best, state) =>
+    probabilities[state] > probabilities[best] ? state : best, states[0]);
+  const expectedAge = states.map((_, i) =>
+    mass[i].reduce((sum, p, age) => sum + p * age, 0) / Math.max(probabilities[states[i]], 1e-9));
+  const expectedRegimeMinutes = Math.max(0, meanDuration[states.indexOf(regime)] - expectedAge[states.indexOf(regime)]);
+  return { regime, probabilities, confidence: probabilities[regime], expectedRegimeMinutes };
+}
+
+/** Bayesian online change-point score from posterior predictive surprise. */
+function bayesianChangePointProbability(candles: Candle[], i: number, sigma: number) {
+  const hazard = 1 / 80;
+  const scale = Math.max(sigma, 1e-8);
+  let runMean = 0, runVariance = scale * scale, surprise = 0;
+  const recent = Math.min(30, i);
+  for (let k = i - recent + 1; k <= i; k++) {
+    const r = Math.log(candles[k].c / candles[k - 1].c);
+    const predictiveVariance = runVariance + scale * scale / 20;
+    const z = (r - runMean) / Math.sqrt(Math.max(predictiveVariance, 1e-16));
+    const likelihoodRatio = Math.exp(clamp(0.5 * (z * z - 1), -8, 8));
+    const cp = hazard * likelihoodRatio / (hazard * likelihoodRatio + (1 - hazard));
+    surprise = Math.max(surprise * 0.72, cp);
+    const gain = 1 / Math.min(20, k - (i - recent));
+    runMean += gain * (r - runMean);
+    runVariance = 0.94 * runVariance + 0.06 * (r - runMean) ** 2;
+  }
+  return clamp(surprise, 0, 1);
 }
 
 /** GARCH(1,1) variance forecast with conservative fixed coefficients. */
@@ -373,16 +481,19 @@ export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
   const mtfAgreement = sign === 0 ? 0 :
     signals.filter((v) => Math.sign(v) === sign).length / signals.length;
 
-  const hmm = hmmRegimeFilter(candles, i);
+  const hsmm = hsmmRegimeFilter(candles, i);
   const forecastSigma = garchSigmaForecast(candles, i);
   const cusumSignal = detectCusum(candles, i, Math.max(shortVol, forecastSigma));
+  const changePointProbability = bayesianChangePointProbability(candles, i, Math.max(shortVol, forecastSigma));
 
   // Require meaningful posterior confidence; otherwise retain the neutral transition state.
-  const regime = hmm.confidence >= 0.42 ? hmm.regime : "TRANSITION";
+  const regime = hsmm.confidence >= 0.42 ? hsmm.regime : "TRANSITION";
   return {
     regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement,
-    forecastSigma, cusumSignal, regimeConfidence: hmm.confidence,
-    regimeProbabilities: hmm.probabilities,
+    forecastSigma, cusumSignal, regimeConfidence: hsmm.confidence,
+    regimeProbabilities: hsmm.probabilities,
+    expectedRegimeMinutes: hsmm.expectedRegimeMinutes,
+    changePointProbability,
   };
 }
 
@@ -402,6 +513,8 @@ export interface MarketInput {
   sigma: number; // 1m log-return vol
   analysis?: MarketAnalysis;
   distZ?: number;
+  conformalEligible?: boolean;
+  conformalSetSize?: number;
 }
 
 export interface Candidate {
@@ -422,6 +535,9 @@ export interface Candidate {
   cusumSignal: -1 | 0 | 1;
   forecastSigma: number;
   strategy: "TREND_FOLLOWING" | "MEAN_REVERSION" | "MOMENTUM";
+  conformalEligible?: boolean;
+  changePointProbability?: number;
+  expectedRegimeMinutes?: number;
 }
 
 /**
@@ -474,7 +590,10 @@ export function scoreCandidate(
   const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
   const cusumPenalty = a?.cusumSignal && a.cusumSignal !== (side === "LONG" ? 1 : -1) ? 0.65 : 1;
   const confidencePenalty = a ? 0.8 + 0.2 * a.regimeConfidence : 1;
-  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty;
+  const changePointPenalty = a ? 1 - 0.55 * clamp(a.changePointProbability ?? 0, 0, 1) : 1;
+  const durationPenalty = a && a.expectedRegimeMinutes !== undefined && a.expectedRegimeMinutes < 3 ? 0.85 : 1;
+  const conformalPenalty = m.conformalEligible === false ? 0 : 1;
+  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty * changePointPenalty * durationPenalty * conformalPenalty;
   return {
     symbol: m.symbol,
     side,
@@ -493,6 +612,9 @@ export function scoreCandidate(
     cusumSignal: a?.cusumSignal ?? 0,
     forecastSigma,
     strategy,
+    conformalEligible: m.conformalEligible,
+    changePointProbability: a?.changePointProbability,
+    expectedRegimeMinutes: a?.expectedRegimeMinutes,
   };
 }
 
