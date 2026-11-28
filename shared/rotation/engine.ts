@@ -221,8 +221,8 @@ export function trainEnsemble(
   if (X.length < 200) return null;
 
   const split = Math.floor(X.length * 0.75);
-  // purge HORIZON_CANDLES between train and validation to avoid label leakage
-  const trainEnd = Math.max(50, split - HORIZON_CANDLES);
+  // Purge this model's own target horizon between train and validation.
+  const trainEnd = Math.max(50, split - horizonCandles);
   const val = fitStumps(X.slice(0, trainEnd), y.slice(0, trainEnd), trees, eta);
   let correct = 0;
   for (let k = split; k < X.length; k++) {
