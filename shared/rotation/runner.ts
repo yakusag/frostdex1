@@ -186,15 +186,20 @@ export async function tick(
   // 3. rank + rotate freed capital into the best entries
   const held = new Set(s.positions.map((p) => p.symbol));
   const used = s.positions.reduce((a, p) => a + p.margin, 0);
-  const free = s.balance - used;
-  const margin = Math.min(free, s.balance / params.maxPositions);
+  const free = Math.max(0, s.balance - used);
+  // maxTrades caps total entries in this run; maxPositions only limits
+  // simultaneous positions. Every entry uses the user's selected margin.
+  const entriesOpened = s.stats.longs + s.stats.shorts;
+  const tradeLimitReached = entriesOpened >= params.maxTrades;
+  const margin = free >= params.tradeAmount * 0.999 ? params.tradeAmount : 0;
   const ranked = margin > 0
     ? rankCandidates(markets.filter((m) => !held.has(m.symbol)), margin, params)
     : [];
   s.ranked = ranked.slice(0, 10);
 
-  if (!opts.tradingEnabled || s.haltedReason || s.positions.length >= params.maxPositions) return;
-  let slots = params.maxPositions - s.positions.length;
+  if (!opts.tradingEnabled || s.haltedReason || tradeLimitReached || margin <= 0 ||
+      s.positions.length >= params.maxPositions) return;
+  let slots = Math.min(params.maxPositions - s.positions.length, params.maxTrades - entriesOpened);
   let freeNow = free;
   let opened = 0;
   for (const c of ranked) {
