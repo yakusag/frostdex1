@@ -222,6 +222,23 @@ test("conformal abstention prevents candidate score in shared decision engine", 
   assert.equal(c.conformalEligible, false);
 });
 
+test("conformal singleton must agree with the final strategy direction", () => {
+  const c = scoreCandidate({
+    symbol: "REVERSION", price: 100, pUp: 0.8, sigma: 0.001,
+    distZ: 2.2, conformalEligible: true, conformalSetSize: 1,
+    conformalIncludeUp: true, conformalIncludeDown: false,
+    analysis: {
+      regime: "RANGING", efficiencyRatio: 0.1, volatilityRatio: 1,
+      atrPct: 0.001, mtfBias: 0, mtfAgreement: 0,
+      forecastSigma: 0.001, cusumSignal: 0, regimeConfidence: 0.7,
+      regimeProbabilities: { TRENDING: 0.1, RANGING: 0.7, HIGH_VOL: 0.1, TRANSITION: 0.1 },
+    },
+  }, 100, DEFAULT_PARAMS);
+  assert.equal(c.side, "SHORT");
+  assert.equal(c.conformalEligible, false);
+  assert.equal(c.score, 0);
+});
+
 test("sigma1m is positive on noisy data", () => {
   assert.ok(sigma1m(walk(100, 0, 0.002)) > 0);
 });
