@@ -266,6 +266,76 @@ export class Kalman1D {
 export const smoothedP = (k: Kalman1D, pUp: number) =>
   sigmoid(k.update(logit(clamp(pUp, 0.001, 0.999))));
 
+// ------------------------------------------------------ market regime + MTF
+
+export type MarketRegime = "TRENDING" | "RANGING" | "HIGH_VOL" | "TRANSITION";
+
+export interface MarketAnalysis {
+  regime: MarketRegime;
+  efficiencyRatio: number;
+  volatilityRatio: number;
+  atrPct: number;
+  mtfBias: number;
+  mtfAgreement: number;
+}
+
+/**
+ * Candle-only market diagnostics. Higher-timeframe returns are reconstructed
+ * from the 1m series; no synthetic order-book/funding data is assumed.
+ */
+export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
+  const i = candles.length - 1;
+  if (i < 120) return null;
+  const close = candles[i].c;
+  if (!(close > 0)) return null;
+
+  let path = 0;
+  for (let k = i - 19; k <= i; k++) path += Math.abs(candles[k].c - candles[k - 1].c);
+  const efficiencyRatio = path > 0
+    ? clamp(Math.abs(close - candles[i - 20].c) / path, 0, 1)
+    : 0;
+
+  const shortVol = sigma1m(candles, i, 30);
+  const longVol = sigma1m(candles, i, 120);
+  const volatilityRatio = longVol > 0 ? shortVol / longVol : 1;
+
+  let tr = 0;
+  for (let k = i - 13; k <= i; k++) {
+    const prev = candles[k - 1].c;
+    tr += Math.max(candles[k].h - candles[k].l,
+      Math.abs(candles[k].h - prev), Math.abs(candles[k].l - prev));
+  }
+  const atrPct = tr / 14 / close;
+
+  const horizons = [5, 15, 60] as const;
+  const weights = [0.5, 0.3, 0.2] as const;
+  const signals = horizons.map((n) => {
+    const z = Math.log(close / candles[i - n].c) /
+      Math.max(longVol * Math.sqrt(n), 1e-9);
+    return Math.tanh(z / 2);
+  });
+  const mtfBias = clamp(signals.reduce((sum, v, k) => sum + v * weights[k], 0), -1, 1);
+  const sign = Math.sign(mtfBias);
+  const mtfAgreement = sign === 0 ? 0 :
+    signals.filter((v) => Math.sign(v) === sign).length / signals.length;
+
+  const trendZ = Math.abs(Math.log(close / candles[i - 20].c)) /
+    Math.max(shortVol * Math.sqrt(20), 1e-9);
+  const regime: MarketRegime = volatilityRatio >= 1.8 ? "HIGH_VOL"
+    : efficiencyRatio >= 0.32 && trendZ >= 0.8 ? "TRENDING"
+    : efficiencyRatio <= 0.18 ? "RANGING"
+    : "TRANSITION";
+
+  return { regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement };
+}
+
+/** Modest log-odds fusion: MTF confirmation can adjust, never replace, the trained model. */
+export function fuseMultiTimeframe(pUp: number, analysis: MarketAnalysis): number {
+  const p = clamp(pUp, 0.001, 0.999);
+  const weight = analysis.regime === "HIGH_VOL" ? 0.12 : 0.24;
+  return sigmoid(logit(p) + weight * analysis.mtfBias * analysis.mtfAgreement);
+}
+
 // ----------------------------------------------------------- ranking
 
 export interface MarketInput {
@@ -273,6 +343,7 @@ export interface MarketInput {
   price: number;
   pUp: number; // Kalman-smoothed
   sigma: number; // 1m log-return vol
+  analysis?: MarketAnalysis;
 }
 
 export interface Candidate {
@@ -286,6 +357,9 @@ export interface Candidate {
   margin: number;
   expectedNet: number; // $
   score: number; // $ per $ of margin per minute
+  regime: MarketRegime;
+  mtfAgreement: number;
+  volatilityRatio: number;
 }
 
 /**
@@ -300,15 +374,28 @@ export function scoreCandidate(
 ): Candidate {
   const side: "LONG" | "SHORT" = m.pUp >= 0.5 ? "LONG" : "SHORT";
   const pSide = side === "LONG" ? m.pUp : 1 - m.pUp;
-  const slDist = Math.max(params.slPct / 100, m.sigma * Math.sqrt(5));
-  const tpDist = slDist * params.tpR;
+  const a = m.analysis;
+  const regime = a?.regime ?? "TRANSITION";
+  // Volatility-aware barriers: ATR and realised volatility both constrain risk.
+  const slDist = Math.max(params.slPct / 100, m.sigma * Math.sqrt(5), (a?.atrPct ?? 0) * 0.8);
+  const regimeR = regime === "TRENDING" ? 1.2 : regime === "RANGING" ? 0.82
+    : regime === "HIGH_VOL" ? 0.9 : 1;
+  const tpDist = slDist * params.tpR * regimeR;
+  // Brownian first-passage baseline, then a small log-odds adjustment from
+  // out-of-sample directional probability and independent MTF agreement.
   const base = slDist / (slDist + tpDist);
-  const odds = (base / (1 - base)) * (pSide / (1 - pSide));
-  const pTP = odds / (1 + odds);
+  const mtfTilt = a ? 0.35 * a.mtfBias * a.mtfAgreement * (side === "LONG" ? 1 : -1) : 0;
+  const odds = (base / (1 - base)) * (pSide / (1 - pSide)) * Math.exp(mtfTilt);
+  const pTP = clamp(odds / (1 + odds), 0.001, 0.999);
   const notional = margin * params.leverage;
   const fees = notional * 2 * (params.feeRate + params.slippage);
   const expectedNet = pTP * notional * tpDist - (1 - pTP) * notional * slDist - fees;
-  const tauMin = clamp((slDist / Math.max(m.sigma, 1e-9)) ** 2, 2, params.timeStopMin);
+  // For zero-drift Brownian motion in [-SL,+TP], E[T] = SL*TP / variance.
+  const tauMin = clamp((slDist * tpDist) / Math.max(m.sigma ** 2, 1e-12), 1, params.timeStopMin);
+  // Penalise disagreement and unstable volatility instead of forcing a trade.
+  const agreementPenalty = a ? 0.75 + 0.25 * a.mtfAgreement : 0.85;
+  const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
+  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty;
   return {
     symbol: m.symbol,
     side,
@@ -319,7 +406,10 @@ export function scoreCandidate(
     tauMin,
     margin,
     expectedNet,
-    score: expectedNet / (margin * tauMin),
+    score,
+    regime,
+    mtfAgreement: a?.mtfAgreement ?? 0,
+    volatilityRatio: a?.volatilityRatio ?? 1,
   };
 }
 
