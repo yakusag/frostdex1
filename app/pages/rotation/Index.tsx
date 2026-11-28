@@ -311,7 +311,7 @@ export default function RotationPage() {
     if (!bot) return;
     setBusy(true); setMsg(null);
     try {
-      const result = await api<{ queued?: boolean; status?: string }>(`/api/bots/rotation?network=${network}&id=${bot.id}`, {
+      const result = await api<{ queued?: boolean; status?: string }>(`/api/bots/rotation?network=${bot.network}&id=${bot.id}`, {
         method: "POST", body: JSON.stringify({ action, ...(positionId ? { positionId } : {}) }),
       });
       if (action === "close") setMsg(result.queued ? "Close request queued; the worker will execute it on its next cycle." : "Close request submitted.");
