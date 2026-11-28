@@ -277,6 +277,52 @@ export interface MarketAnalysis {
   atrPct: number;
   mtfBias: number;
   mtfAgreement: number;
+  forecastSigma: number;
+  cusumSignal: -1 | 0 | 1;
+  regimeConfidence: number;
+  regimeProbabilities: Record<MarketRegime, number>;
+}
+
+/** One-step Gaussian HMM filter over efficiency and log volatility ratio. */
+function hmmRegimeFilter(efficiency: number, volatilityRatio: number) {
+  const states: MarketRegime[] = ["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"];
+  const means = [[0.65, 0], [0.10, -0.1], [0.25, 0.8], [0.30, 0.15]];
+  const prior = [0.25, 0.25, 0.25, 0.25];
+  const transition = [
+    [0.88, 0.03, 0.03, 0.06], [0.04, 0.86, 0.03, 0.07],
+    [0.04, 0.04, 0.86, 0.06], [0.12, 0.12, 0.08, 0.68],
+  ];
+  const obs = [efficiency, Math.log(clamp(volatilityRatio, 0.1, 10))];
+  const emission = means.map(([e, v]) => Math.exp(-0.5 * (((obs[0] - e) / 0.22) ** 2 + ((obs[1] - v) / 0.55) ** 2)));
+  const predicted = states.map((_, j) => prior.reduce((sum, p, i) => sum + p * transition[i][j], 0));
+  const weighted = predicted.map((p, i) => p * emission[i]);
+  const total = weighted.reduce((a, b) => a + b, 0) || 1;
+  const probabilities = Object.fromEntries(states.map((state, i) => [state, weighted[i] / total])) as Record<MarketRegime, number>;
+  const regime = states.reduce((best, state) => probabilities[state] > probabilities[best] ? state : best, states[0]);
+  return { regime, probabilities, confidence: probabilities[regime] };
+}
+
+/** GARCH(1,1) variance forecast with conservative fixed coefficients. */
+function garchSigmaForecast(candles: Candle[], i: number): number {
+  const returns: number[] = [];
+  for (let k = Math.max(1, i - 119); k <= i; k++) returns.push(Math.log(candles[k].c / candles[k - 1].c));
+  const variance = Math.max(std(returns) ** 2, 1e-12);
+  const alpha = 0.08, beta = 0.90;
+  const omega = variance * (1 - alpha - beta);
+  let h = variance;
+  for (const r of returns) h = omega + alpha * r * r + beta * h;
+  return Math.sqrt(clamp(h, variance * 0.25, variance * 4));
+}
+
+/** Two-sided standardized CUSUM change detector on recent candle returns. */
+function detectCusum(candles: Candle[], i: number, sigma: number): -1 | 0 | 1 {
+  let positive = 0, negative = 0;
+  for (let k = Math.max(1, i - 29); k <= i; k++) {
+    const z = Math.log(candles[k].c / candles[k - 1].c) / Math.max(sigma, 1e-9);
+    positive = Math.max(0, positive + z - 0.25);
+    negative = Math.max(0, negative - z - 0.25);
+  }
+  return positive > 4.5 && positive > negative ? 1 : negative > 4.5 ? -1 : 0;
 }
 
 /**
@@ -321,12 +367,17 @@ export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
 
   const trendZ = Math.abs(Math.log(close / candles[i - 20].c)) /
     Math.max(shortVol * Math.sqrt(20), 1e-9);
-  const regime: MarketRegime = volatilityRatio >= 1.8 ? "HIGH_VOL"
-    : efficiencyRatio >= 0.32 && trendZ >= 0.8 ? "TRENDING"
-    : efficiencyRatio <= 0.18 ? "RANGING"
-    : "TRANSITION";
+  const hmm = hmmRegimeFilter(efficiencyRatio, volatilityRatio);
+  const forecastSigma = garchSigmaForecast(candles, i);
+  const cusumSignal = detectCusum(candles, i, Math.max(shortVol, forecastSigma));
 
-  return { regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement };
+  // Require meaningful posterior confidence; otherwise retain the neutral transition state.
+  const regime = hmm.confidence >= 0.42 ? hmm.regime : "TRANSITION";
+  return {
+    regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement,
+    forecastSigma, cusumSignal, regimeConfidence: hmm.confidence,
+    regimeProbabilities: hmm.probabilities,
+  };
 }
 
 /** Modest log-odds fusion: MTF confirmation can adjust, never replace, the trained model. */
@@ -377,7 +428,8 @@ export function scoreCandidate(
   const a = m.analysis;
   const regime = a?.regime ?? "TRANSITION";
   // Volatility-aware barriers: ATR and realised volatility both constrain risk.
-  const slDist = Math.max(params.slPct / 100, m.sigma * Math.sqrt(5), (a?.atrPct ?? 0) * 0.8);
+  const forecastSigma = a?.forecastSigma ?? m.sigma;
+  const slDist = Math.max(params.slPct / 100, forecastSigma * Math.sqrt(5), (a?.atrPct ?? 0) * 0.8);
   const regimeR = regime === "TRENDING" ? 1.2 : regime === "RANGING" ? 0.82
     : regime === "HIGH_VOL" ? 0.9 : 1;
   const tpDist = slDist * params.tpR * regimeR;
@@ -395,7 +447,9 @@ export function scoreCandidate(
   // Penalise disagreement and unstable volatility instead of forcing a trade.
   const agreementPenalty = a ? 0.75 + 0.25 * a.mtfAgreement : 0.85;
   const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
-  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty;
+  const cusumPenalty = a?.cusumSignal && a.cusumSignal !== (side === "LONG" ? 1 : -1) ? 0.65 : 1;
+  const confidencePenalty = a ? 0.8 + 0.2 * a.regimeConfidence : 1;
+  const score = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty;
   return {
     symbol: m.symbol,
     side,
