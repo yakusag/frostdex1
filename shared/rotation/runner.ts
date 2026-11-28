@@ -270,6 +270,12 @@ export async function tick(
   // Bayesian outcome calibration and contextual Thompson exploration, both
   // bounded so neither can overwhelm the expected-net-return ranking.
   for (const c of ranked) {
+    // Conformal class-set ambiguity is a hard abstention in both PaperBroker
+    // and OrderlyBroker paths; later calibration/exploration cannot re-enable it.
+    if (c.conformalEligible === false) {
+      c.score = 0;
+      continue;
+    }
     bayesianCalibrate(c, s.trades, params);
     const history = s.trades.filter((t) => t.symbol === c.symbol).slice(-40);
     const wins = history.filter((t) => t.pnl > 0).length;
