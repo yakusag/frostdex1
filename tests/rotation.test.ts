@@ -184,6 +184,22 @@ test("regime changes target distance and MTF disagreement discounts score", () =
   assert.ok(trend.score > range.score);
 });
 
+test("strategy competition selects mean reversion in stretched range conditions", () => {
+  const base = { symbol: "RANGE", price: 100, pUp: 0.7, sigma: 0.001 };
+  const candidate = scoreCandidate({
+    ...base,
+    distZ: 2.1,
+    analysis: {
+      regime: "RANGING", efficiencyRatio: 0.12, volatilityRatio: 0.9,
+      atrPct: 0.001, mtfBias: 0.05, mtfAgreement: 0.33,
+      forecastSigma: 0.001, cusumSignal: 0, regimeConfidence: 0.7,
+      regimeProbabilities: { TRENDING: 0.1, RANGING: 0.7, HIGH_VOL: 0.1, TRANSITION: 0.1 },
+    },
+  }, 100, DEFAULT_PARAMS);
+  assert.equal(candidate.strategy, "MEAN_REVERSION");
+  assert.equal(candidate.side, "SHORT");
+});
+
 test("sigma1m is positive on noisy data", () => {
   assert.ok(sigma1m(walk(100, 0, 0.002)) > 0);
 });
