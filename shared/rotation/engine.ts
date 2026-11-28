@@ -1,3 +1,5 @@
+import { correlatedBocpdProbability } from "./correlated-bocpd.js";
+
 // Frostdex Capital Rotation — pure strategy engine (no I/O, no dependencies).
 // Used by the 24/7 worker. All maths is deterministic and unit-testable.
 
@@ -480,52 +482,13 @@ function hsmmRegimeFilter(candles: Candle[], end: number) {
   return { regime, probabilities, confidence: probabilities[regime], expectedRegimeMinutes };
 }
 
-/** Bayesian online change-point detection with a truncated run-length posterior. */
+/** Markovian/heteroskedastic BOCPD on AR(1)-filtered returns. */
 function bayesianChangePointProbability(candles: Candle[], i: number, sigma: number) {
-  const hazard = 1 / 80;
-  const observationVariance = Math.max(sigma * sigma, 1e-16);
-  const priorMeanVariance = observationVariance * 4;
-  let runProbabilities = [1];
-  let means = [0];
-  let variances = [priorMeanVariance];
-  let cpProbability = 0;
-
-  for (let k = Math.max(1, i - 29); k <= i; k++) {
-    const observation = Math.log(candles[k].c / candles[k - 1].c);
-    const priorPredictiveVariance = observationVariance + priorMeanVariance;
-    const priorZ = observation / Math.sqrt(priorPredictiveVariance);
-    const priorLikelihood = Math.exp(-0.5 * priorZ * priorZ) /
-      Math.sqrt(2 * Math.PI * priorPredictiveVariance);
-    const growthMass: number[] = [];
-    const growthMeans: number[] = [];
-    const growthVariances: number[] = [];
-    let changeMass = 0;
-
-    for (let r = 0; r < runProbabilities.length; r++) {
-      const predictiveVariance = observationVariance + variances[r];
-      const z = (observation - means[r]) / Math.sqrt(predictiveVariance);
-      const likelihood = Math.exp(-0.5 * z * z) /
-        Math.sqrt(2 * Math.PI * predictiveVariance);
-      changeMass += runProbabilities[r] * hazard * priorLikelihood;
-      growthMass[r + 1] = runProbabilities[r] * (1 - hazard) * likelihood;
-      const posteriorVariance = 1 / (1 / variances[r] + 1 / observationVariance);
-      growthMeans[r + 1] = posteriorVariance *
-        (means[r] / variances[r] + observation / observationVariance);
-      growthVariances[r + 1] = posteriorVariance;
-    }
-
-    const cpVariance = 1 / (1 / priorMeanVariance + 1 / observationVariance);
-    const cpMean = cpVariance * (observation / observationVariance);
-    const nextProbabilities = [changeMass, ...growthMass.slice(1, 31)];
-    const nextMeans = [cpMean, ...growthMeans.slice(1, 31)];
-    const nextVariances = [cpVariance, ...growthVariances.slice(1, 31)];
-    const total = nextProbabilities.reduce((sum, p) => sum + p, 0) || 1;
-    runProbabilities = nextProbabilities.map(p => p / total);
-    means = nextMeans;
-    variances = nextVariances;
-    cpProbability = runProbabilities[0] ?? 0;
+  const returns: number[] = [];
+  for (let k = Math.max(1, i - 119); k <= i; k++) {
+    returns.push(Math.log(candles[k].c / candles[k - 1].c));
   }
-  return clamp(cpProbability, 0, 1);
+  return correlatedBocpdProbability(returns, sigma);
 }
 
 /** GARCH(1,1) variance forecast with conservative fixed coefficients. */
@@ -698,123 +661,3 @@ export function scoreCandidate(
     side = (m.distZ ?? 0) > 0 ? "SHORT" : "LONG";
   }
   let pSide = side === "LONG" ? m.pUp : 1 - m.pUp;
-  if (strategy === "MEAN_REVERSION") {
-    const reversionEvidence = clamp((Math.abs(m.distZ ?? 0) - 1.5) * 0.025, 0, 0.06);
-    pSide = clamp(pSide * 0.75 + (0.5 + reversionEvidence) * 0.25, 0.001, 0.999);
-  }
-  const regime = a?.regime ?? "TRANSITION";
-  // Volatility-aware barriers: ATR and realised volatility both constrain risk.
-  const forecastSigma = a?.forecastSigma ?? m.sigma;
-  const slDist = Math.max(params.slPct / 100, forecastSigma * Math.sqrt(5), (a?.atrPct ?? 0) * 0.8);
-  const regimeR = regime === "TRENDING" ? 1.2 : regime === "RANGING" ? 0.82
-    : regime === "HIGH_VOL" ? 0.9 : 1;
-  const tpDist = slDist * params.tpR * regimeR;
-  // Brownian first-passage baseline, then a small log-odds adjustment from
-  // out-of-sample directional probability and independent MTF agreement.
-  const base = slDist / (slDist + tpDist);
-  const mtfTilt = a ? 0.35 * a.mtfBias * a.mtfAgreement * (side === "LONG" ? 1 : -1) : 0;
-  const odds = (base / (1 - base)) * (pSide / (1 - pSide)) * Math.exp(mtfTilt);
-  const pTP = clamp(odds / (1 + odds), 0.001, 0.999);
-  const notional = margin * params.leverage;
-  const fees = notional * 2 * (params.feeRate + params.slippage);
-  const expectedNet = pTP * notional * tpDist - (1 - pTP) * notional * slDist - fees;
-  // For zero-drift Brownian motion in [-SL,+TP], E[T] = SL*TP / variance.
-  const tauMin = clamp((slDist * tpDist) / Math.max(forecastSigma ** 2, 1e-12), 1, params.timeStopMin);
-  // Penalise disagreement and unstable volatility instead of forcing a trade.
-  const agreementPenalty = a ? 0.75 + 0.25 * a.mtfAgreement : 0.85;
-  const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
-  const cusumPenalty = a?.cusumSignal && a.cusumSignal !== (side === "LONG" ? 1 : -1) ? 0.65 : 1;
-  const confidencePenalty = a ? 0.8 + 0.2 * clamp(a.regimeConfidence ?? 0, 0, 1) : 1;
-  const changePointPenalty = a ? 1 - 0.55 * clamp(a.changePointProbability ?? 0, 0, 1) : 1;
-  const durationPenalty = a && a.expectedRegimeMinutes !== undefined && a.expectedRegimeMinutes < 3 ? 0.85 : 1;
-  const conformalEligible = m.conformalSetSize !== undefined &&
-    m.conformalIncludeUp !== undefined && m.conformalIncludeDown !== undefined
-    ? m.conformalSetSize === 1 && (side === "LONG" ? m.conformalIncludeUp : m.conformalIncludeDown)
-    : m.conformalEligible;
-  const conformalPenalty = conformalEligible === false ? 0 : 1;
-  const rawScore = expectedNet / (margin * tauMin) * agreementPenalty * volatilityPenalty * cusumPenalty * confidencePenalty * changePointPenalty * durationPenalty * conformalPenalty;
-  const score = conformalEligible === false ? 0 : (Number.isFinite(rawScore) ? rawScore : 0);
-  return {
-    symbol: m.symbol,
-    side,
-    pSide,
-    pTP,
-    slDist,
-    tpDist,
-    tauMin,
-    margin,
-    expectedNet,
-    score,
-    regime,
-    mtfAgreement: a?.mtfAgreement ?? 0,
-    volatilityRatio: a?.volatilityRatio ?? 1,
-    regimeConfidence: a?.regimeConfidence ?? 0,
-    cusumSignal: a?.cusumSignal ?? 0,
-    forecastSigma,
-    strategy,
-    conformalEligible,
-    conformalThreshold: m.conformalThreshold,
-    conformalAlpha: m.conformalAlpha,
-    conformalCalibrationSamples: m.conformalCalibrationSamples,
-    conformalCalibrated: m.conformalCalibrated,
-    changePointProbability: a?.changePointProbability,
-    expectedRegimeMinutes: a?.expectedRegimeMinutes,
-  };
-}
-
-export function rankCandidates(
-  markets: MarketInput[],
-  margin: number,
-  params: RotationParams,
-): Candidate[] {
-  return markets
-    .map((m) => scoreCandidate(m, margin, params))
-    .sort((a, b) => b.score - a.score);
-}
-
-// ----------------------------------------------------------- exits
-
-export interface Position {
-  id: string;
-  symbol: string;
-  side: "LONG" | "SHORT";
-  entry: number;
-  qty: number;
-  margin: number;
-  slDist: number;
-  tpDist: number;
-  openedAt: number;
-  entryFee: number;
-  peak: number; // best favorable price seen
-  score: number;
-  live: boolean;
-  markPrice?: number;
-  unrealizedPnl?: number;
-  recommendation?: "HOLD" | "CLOSE" | "PAUSE" | "STOP";
-  recommendationReason?: string;
-}
-
-export const dirOf = (side: "LONG" | "SHORT") => (side === "LONG" ? 1 : -1);
-
-export function unrealized(pos: Position, price: number) {
-  return (price - pos.entry) * pos.qty * dirOf(pos.side);
-}
-
-export function evaluateExit(
-  pos: Position,
-  price: number,
-  now: number,
-  params: RotationParams,
-): string | null {
-  const dir = dirOf(pos.side);
-  const move = ((price - pos.entry) / pos.entry) * dir; // favorable fraction
-  const peakMove = ((pos.peak - pos.entry) / pos.entry) * dir;
-  if (move >= pos.tpDist) return "take_profit";
-  if (move <= -pos.slDist) return "stop_loss";
-  // trailing stop once +1R was reached: give back at most 0.7R from the peak
-  if (peakMove >= pos.slDist && peakMove - move >= pos.slDist * 0.7) {
-    return "trailing_stop";
-  }
-  if (now - pos.openedAt >= params.timeStopMin * 60_000) return "time_stop";
-  return null;
-}
