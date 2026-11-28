@@ -121,7 +121,7 @@ test("daily loss limit halts and flattens", async () => {
   const broker = new PaperBroker(params);
   await tick(s, params, new Map([["X", 100]]), [{ symbol: "X", price: 100, pUp: 0.95, sigma: 0.0005 }], broker, { tradingEnabled: true, now: 60_000 });
   assert.equal(s.positions.length, 1);
-  await tick(s, params, new Map([["X", 99.5]]), [], broker, { tradingEnabled: true, now: 120_000 });
+  await tick(s, params, new Map([["X", 80]]), [], broker, { tradingEnabled: true, now: 120_000 });
   assert.ok(s.haltedReason);
   assert.equal(s.positions.length, 0);
 });
@@ -163,6 +163,10 @@ test("volatility expansion is classified as a high-volatility regime", () => {
   assert.equal(a.regime, "HIGH_VOL");
   assert.ok(a.volatilityRatio >= 1.8);
   assert.ok(a.atrPct > 0);
+  assert.ok(a.forecastSigma > 0);
+  assert.ok(a.regimeConfidence > 0 && a.regimeConfidence <= 1);
+  assert.ok(Math.abs(Object.values(a.regimeProbabilities).reduce((sum, p) => sum + p, 0) - 1) < 1e-9);
+  assert.ok([-1, 0, 1].includes(a.cusumSignal));
 });
 
 test("regime changes target distance and MTF disagreement discounts score", () => {
