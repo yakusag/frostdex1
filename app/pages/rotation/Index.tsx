@@ -57,6 +57,8 @@ export default function RotationPage() {
   const [capital, setCapital] = useState(100);
   const [leverage, setLeverage] = useState(5);
   const [maxPositions, setMaxPositions] = useState(3);
+  const [maxTrades, setMaxTrades] = useState(10);
+  const [tradeAmount, setTradeAmount] = useState(10);
   const [tpR, setTpR] = useState(2);
   const [slPct, setSlPct] = useState(0.4);
   const [timeStopMin, setTimeStopMin] = useState(20);
@@ -72,7 +74,10 @@ export default function RotationPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const capitalOk = Number.isFinite(capital) && capital >= MIN_CAPITAL;
+  const capitalOk = Number.isFinite(capital) && capital >= MIN_CAPITAL &&
+    (!guest || capital <= 1000) && Number.isFinite(tradeAmount) &&
+    tradeAmount > 0 && tradeAmount <= capital && Number.isInteger(maxTrades) &&
+    maxTrades >= 1 && maxTrades <= 100000;
 
   // every perp shown on the Markets page
   useEffect(() => {
@@ -101,6 +106,14 @@ export default function RotationPage() {
       if (mine) {
         setLive(mine.liveMode);
         setCapital(mine.investment);
+        setLeverage(Number(mine.params.leverage ?? 5));
+        setMaxPositions(Number(mine.params.maxPositions ?? 3));
+        setMaxTrades(Number(mine.params.maxTrades ?? 10));
+        setTradeAmount(Number(mine.params.tradeAmount ?? 10));
+        setTpR(Number(mine.params.tpR ?? 2));
+        setSlPct(Number(mine.params.slPct ?? 0.4));
+        setTimeStopMin(Number(mine.params.timeStopMin ?? 20));
+        setDailyLossPct(Number(mine.params.dailyLossPct ?? 5));
       }
     } catch (e) {
       setMsg((e as Error).message);
@@ -269,19 +282,28 @@ export default function RotationPage() {
   };
 
   const save = async (status: "running" | "stopped" | "paused", fresh = false) => {
-    if (!capitalOk) return setMsg(`Minimum capital is ${MIN_CAPITAL} USDC.`);
+    if (!capitalOk) {
+      if (guest && capital > 1000) return setMsg("Guest simulations are limited to 1,000 virtual USDC total capital.");
+      if (tradeAmount > capital) return setMsg("Trade amount cannot be greater than the total capital allocation.");
+      return setMsg(`Capital must be at least ${MIN_CAPITAL} USDC, and trade count must be between 1 and 100,000.`);
+    }
+    if (guest && (live || network !== "testnet")) return setMsg("Guest sessions can only run testnet simulations.");
     if (live && !keyConfigured) return setMsg("Live mode needs a trading key (see step 2).");
     setBusy(true); setMsg(null);
     try {
+      // Guest constraints are enforced again server-side; pin the client payload
+      // to testnet so a stale network state cannot trigger a false guest rejection.
+      const targetNetwork: Network = guest ? "testnet" : network;
+      const targetLive = guest ? false : live;
       const id = fresh || !bot ? `ROT-${Date.now().toString(36).toUpperCase()}` : bot.id;
       await api("/api/bots/config", {
         method: "PUT",
         body: JSON.stringify({
-          id, network, strategy: "rotation", symbol: "PERP_ALL_USDC", investment: capital, liveMode: live, status,
-          params: { leverage, maxPositions, tpR, slPct, timeStopMin, dailyLossPct, universe: "all" },
+          id, network: targetNetwork, strategy: "rotation", symbol: "PERP_ALL_USDC", investment: capital, liveMode: targetLive, status,
+          params: { leverage, maxPositions, maxTrades, tradeAmount, tpR, slPct, timeStopMin, dailyLossPct, universe: "all" },
         }),
       });
-      await refreshAccount();
+      await refreshAccount(targetNetwork);
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -357,23 +379,30 @@ export default function RotationPage() {
           {([
             ["Capital (USDC, min 10)", capital, setCapital, 1],
             ["Leverage (1–10)", leverage, setLeverage, 1],
-            ["Max positions", maxPositions, setMaxPositions, 1],
+            ["Max open positions (1–8)", maxPositions, setMaxPositions, 1],
+            ["Maximum total trades", maxTrades, setMaxTrades, 1],
+            ["Margin per trade (USDC)", tradeAmount, setTradeAmount, 1],
             ["Take profit (× risk)", tpR, setTpR, 0.5],
             ["Stop loss (%)", slPct, setSlPct, 0.1],
             ["Time stop (min)", timeStopMin, setTimeStopMin, 1],
             ["Daily loss limit (%)", dailyLossPct, setDailyLossPct, 0.5],
           ] as [string, number, (n: number) => void, number][]).map(([label, v, set, step]) => (
             <label key={label} className="text-xs text-white/60">{label}
-              <input className={`${input} mt-1`} type="number" step={step} min={label === "Max positions" ? 1 : undefined} max={label === "Max positions" ? 8 : undefined} value={v} disabled={running || paused} onChange={(e) => set(label === "Max positions" ? Math.max(1, Math.min(8, Number(e.target.value))) : Number(e.target.value))} />
+              <input className={`${input} mt-1`} type="number" step={step} min={label.startsWith("Max open positions") || label === "Maximum total trades" ? 1 : label === "Margin per trade (USDC)" ? 0.01 : undefined} max={label.startsWith("Max open positions") ? 8 : label === "Maximum total trades" ? 100000 : label === "Margin per trade (USDC)" ? capital : undefined} value={v} disabled={running || paused} onChange={(e) => set(label.startsWith("Max open positions") ? Math.max(1, Math.min(8, Number(e.target.value))) : label === "Maximum total trades" ? Math.max(1, Math.min(100000, Math.floor(Number(e.target.value))) : Number(e.target.value))} />
             </label>
           ))}
         </div>
-        {!capitalOk && <p className="text-xs text-rose-400">Minimum capital is {MIN_CAPITAL} USDC.</p>}
+        {!capitalOk && <p className="text-xs text-rose-400">
+          {guest && capital > 1000 ? "Guest simulations are limited to 1,000 virtual USDC total capital." :
+            tradeAmount > capital ? "Margin per trade cannot exceed total capital." :
+            `Capital must be at least ${MIN_CAPITAL} USDC; choose 1–100,000 total trades.`}
+        </p>}
+        <p className="text-xs text-white/50">Maximum total trades counts every new entry over this run. Max open positions controls how many can be open at the same time. Each new position uses the margin per trade, and the bot will not enter if free balance is insufficient.</p>
         <div className="flex flex-wrap gap-2">
           {running && <button className={`${btn} bg-amber-500 text-black`} disabled={busy} onClick={() => control("pause")}>Ⅱ Pause (keep positions)</button>}
           {paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy} onClick={() => control("resume")}>▶ Resume</button>}
           {(running || paused) && <button className={`${btn} bg-rose-500`} disabled={busy} onClick={() => control("stop")}>■ Stop &amp; close all</button>}
-          {!running && !paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot && (bot.liveMode !== live || bot.investment !== capital))}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
+          {!running && !paused && <button className={`${btn} bg-emerald-500 text-black`} disabled={busy || (!authed && !guest) || !capitalOk || (guest && live)} onClick={() => save("running", !!bot)}>▶ Start 24/7 ({live ? "LIVE" : "simulation"})</button>}
           {bot && !running && !paused && <button className={`${btn} bg-white/10`} disabled={busy} onClick={() => save("stopped", true)}>Reset (new run)</button>}
         </div>
         {msg && <p className="text-sm text-amber-300">{msg}</p>}
@@ -387,6 +416,7 @@ export default function RotationPage() {
             <Stat label={`Equity (${rot.mode})`} value={`$${rot.equity.toFixed(2)}`} />
             <Stat label="Total PnL" value={usd(rot.stats.pnl)} tone={rot.stats.pnl >= 0 ? "up" : "down"} />
             <Stat label="Win rate" value={winRate} />
+            <Stat label="Entries / Limit" value={`${rot.stats.longs + rot.stats.shorts}/${bot?.params.maxTrades ?? maxTrades}`} />
             <Stat label="Trades W/L" value={`${rot.stats.wins}/${rot.stats.losses}`} />
             <Stat label="L / S" value={`${rot.stats.longs} / ${rot.stats.shorts}`} />
             <Stat label="Passes (no edge)" value={String(rot.stats.passes)} />
