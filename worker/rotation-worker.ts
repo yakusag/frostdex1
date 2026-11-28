@@ -12,7 +12,7 @@ import {
 } from "../server/bot-store.js";
 import { redisCommand } from "../server/redis.js";
 import {
-  DEFAULT_PARAMS, Kalman1D, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  DEFAULT_PARAMS, Kalman1D, analyzeMarket, conformalDecision, featuresAt, fuseMultiTimeframe,
   normalizeParams, predictPUp, sigma1m, smoothedP, trainEnsemble,
   type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
@@ -174,12 +174,16 @@ class MarketData {
         this.kalmanP.set(symbol, smoothedP(k, fusedP));
         this.kalmanAt.set(symbol, candleTime);
       }
+      const finalP = this.kalmanP.get(symbol) ?? fusedP;
+      const conformal = conformalDecision(model, finalP);
       out.push({
         symbol,
         price,
-        pUp: this.kalmanP.get(symbol) ?? fusedP,
+        pUp: finalP,
         sigma: sigma1m(candles),
         distZ: x[0],
+        conformalEligible: conformal.eligible,
+        conformalSetSize: conformal.setSize,
         analysis,
       });
     }
