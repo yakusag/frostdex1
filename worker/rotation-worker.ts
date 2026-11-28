@@ -137,7 +137,7 @@ const markets: Record<BotNetwork, MarketData> = {
 
 async function saveState(r: Run) {
   const { network, ownerAddress, id } = r.config;
-  await redisCommand("SET", stateKey(network, ownerAddress, id), JSON.stringify(r.state), "EX", String(7 * 86400));
+  await redisCommand("SET", stateKey(network, ownerAddress, id), JSON.stringify(r.state));
 }
 
 async function loadState(c: BotWorkerConfig): Promise<RotationState | null> {
