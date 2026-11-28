@@ -417,7 +417,7 @@ export default function RotationPage() {
 
           <div className="rounded-xl border border-sky-400/15 bg-sky-400/[0.04] p-3">
             <div className="flex items-center justify-between gap-2"><div><div className="text-[10px] font-bold uppercase tracking-widest text-sky-300">Active intelligence stack</div><p className="mt-1 text-xs text-slate-300">132-tree · Bayesian · HMM · GARCH · CUSUM · Kalman · Thompson · Kelly · Monte Carlo/CVaR</p></div><span className="rounded-lg bg-sky-400/10 px-2 py-1 text-[10px] font-semibold text-sky-200">ENGINE</span></div>
-            <p className="mt-2 text-[10px] leading-4 text-slate-500">Shared intelligence stack runs identically in Simulation and Live: 132-tree + Bayesian calibration, HSMM duration, conformal abstention, Bayesian change-point, GARCH/CUSUM/Kalman, strategy competition, Thompson selection, Fractional Kelly and Monte Carlo/CVaR.</p>
+            <p className="mt-2 text-[10px] leading-4 text-slate-500">Shared intelligence stack runs identically in Simulation and Live: 132-tree + Bayesian calibration, HSMM duration, chronological holdout uncertainty filter, Bayesian change-point, GARCH/CUSUM/Kalman, strategy competition, Thompson selection, Fractional Kelly and Monte Carlo/CVaR. The uncertainty filter is empirical for dependent market data, not a guaranteed coverage level.</p>
           </div>
 
           {!capitalOk && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{guest && capital > 1000 ? "Guest simulations are limited to 1,000 virtual USDC." : `Capital must be at least ${MIN_CAPITAL} USDC.`}</p>}
@@ -490,7 +490,7 @@ export default function RotationPage() {
           </section>
 
           <section className={card}>
-            <h2 className="mb-2 font-semibold">Ranked opportunities · Strategy competition + HSMM + Conformal + Change-point + GARCH + CUSUM</h2>
+            <h2 className="mb-2 font-semibold">Ranked opportunities · Strategy competition + HSMM + Uncertainty filter + Change-point + GARCH + CUSUM</h2>
             <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>Strategy</th><th>pTP</th><th>Regime</th><th>HSMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>HSMM duration</th><th>Change point</th><th>Conformal</th><th>τ</th><th>Net score</th></tr></thead><tbody>
               {rot.ranked.map((c) => (
                 <tr key={c.symbol} className="border-t border-white/5">
