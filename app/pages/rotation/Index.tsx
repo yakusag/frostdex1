@@ -9,7 +9,7 @@ const MIN_CAPITAL = 10; // USDC
 
 interface Position { id: string; symbol: string; side: "LONG" | "SHORT"; entry: number; qty: number; margin: number; openedAt: number; slDist: number; tpDist: number; score: number; markPrice?: number; unrealizedPnl?: number; recommendation?: "HOLD" | "CLOSE" | "PAUSE" | "STOP"; recommendationReason?: string }
 interface Trade { id: string; symbol: string; side: string; pnl: number; reason: string; closedAt: number; entry: number; exit: number }
-interface Candidate { symbol: string; side: string; pTP: number; score: number; tauMin: number; expectedNet: number }
+interface Candidate { symbol: string; side: string; pTP: number; score: number; tauMin: number; expectedNet: number; regime?: string; mtfAgreement?: number; volatilityRatio?: number }
 interface RotationState {
   mode: "paper" | "live"; startEquity: number; balance: number; equity: number;
   haltedReason: string | null; positions: Position[]; trades: Trade[]; ranked: Candidate[];
@@ -453,16 +453,20 @@ export default function RotationPage() {
           </section>
 
           <section className={card}>
-            <h2 className="mb-2 font-semibold">Ranked entries (score = $ per $ per minute)</h2>
-            <table className="w-full text-sm"><tbody>
+            <h2 className="mb-2 font-semibold">Ranked entries · regime + multi-timeframe + net rotation score</h2>
+            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>pTP</th><th>Regime</th><th>MTF agreement</th><th>Vol ratio</th><th>τ</th><th>Net score</th></tr></thead><tbody>
               {rot.ranked.map((c) => (
                 <tr key={c.symbol} className="border-t border-white/5">
-                  <td className="py-1">{c.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{c.side}</td>
-                  <td>pTP {(c.pTP * 100).toFixed(1)}%</td><td>τ {c.tauMin.toFixed(1)}m</td>
+                  <td className="py-2">{c.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{c.side}</td>
+                  <td>{(c.pTP * 100).toFixed(1)}%</td>
+                  <td>{c.regime ?? "TRANSITION"}</td>
+                  <td>{((c.mtfAgreement ?? 0) * 100).toFixed(0)}%</td>
+                  <td>{(c.volatilityRatio ?? 1).toFixed(2)}×</td>
+                  <td>{c.tauMin.toFixed(1)}m</td>
                   <td className={c.score > 0 ? "text-emerald-400" : "text-white/40"}>{c.score.toFixed(5)}{c.score <= 0 ? " · skipped" : ""}</td>
                 </tr>
               ))}
-            </tbody></table>
+            </tbody></table></div>
           </section>
 
           <section className={card}>
