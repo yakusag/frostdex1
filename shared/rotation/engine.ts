@@ -634,6 +634,10 @@ export interface MarketInput {
   conformalSetSize?: number;
   conformalIncludeUp?: boolean;
   conformalIncludeDown?: boolean;
+  conformalThreshold?: number;
+  conformalAlpha?: number;
+  conformalCalibrationSamples?: number;
+  conformalCalibrated?: boolean;
 }
 
 export interface Candidate {
@@ -655,6 +659,10 @@ export interface Candidate {
   forecastSigma: number;
   strategy: "TREND_FOLLOWING" | "MEAN_REVERSION" | "MOMENTUM";
   conformalEligible?: boolean;
+  conformalThreshold?: number;
+  conformalAlpha?: number;
+  conformalCalibrationSamples?: number;
+  conformalCalibrated?: boolean;
   changePointProbability?: number;
   expectedRegimeMinutes?: number;
 }
@@ -737,6 +745,10 @@ export function scoreCandidate(
     forecastSigma,
     strategy,
     conformalEligible,
+    conformalThreshold: m.conformalThreshold,
+    conformalAlpha: m.conformalAlpha,
+    conformalCalibrationSamples: m.conformalCalibrationSamples,
+    conformalCalibrated: m.conformalCalibrated,
     changePointProbability: a?.changePointProbability,
     expectedRegimeMinutes: a?.expectedRegimeMinutes,
   };
