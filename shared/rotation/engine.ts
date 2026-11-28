@@ -283,21 +283,29 @@ export interface MarketAnalysis {
   regimeProbabilities: Record<MarketRegime, number>;
 }
 
-/** One-step Gaussian HMM filter over efficiency and log volatility ratio. */
-function hmmRegimeFilter(efficiency: number, volatilityRatio: number) {
+/** Gaussian HMM forward filter over the recent efficiency/volatility sequence. */
+function hmmRegimeFilter(candles: Candle[], end: number) {
   const states: MarketRegime[] = ["TRENDING", "RANGING", "HIGH_VOL", "TRANSITION"];
   const means = [[0.65, 0], [0.10, -0.1], [0.25, 0.8], [0.30, 0.15]];
-  const prior = [0.25, 0.25, 0.25, 0.25];
   const transition = [
     [0.88, 0.03, 0.03, 0.06], [0.04, 0.86, 0.03, 0.07],
     [0.04, 0.04, 0.86, 0.06], [0.12, 0.12, 0.08, 0.68],
   ];
-  const obs = [efficiency, Math.log(clamp(volatilityRatio, 0.1, 10))];
-  const emission = means.map(([e, v]) => Math.exp(-0.5 * (((obs[0] - e) / 0.22) ** 2 + ((obs[1] - v) / 0.55) ** 2)));
-  const predicted = states.map((_, j) => prior.reduce((sum, p, i) => sum + p * transition[i][j], 0));
-  const weighted = predicted.map((p, i) => p * emission[i]);
-  const total = weighted.reduce((a, b) => a + b, 0) || 1;
-  const probabilities = Object.fromEntries(states.map((state, i) => [state, weighted[i] / total])) as Record<MarketRegime, number>;
+  let alpha = [0.25, 0.25, 0.25, 0.25];
+  for (let t = Math.max(120, end - 59); t <= end; t++) {
+    let path = 0;
+    for (let k = t - 19; k <= t; k++) path += Math.abs(candles[k].c - candles[k - 1].c);
+    const efficiency = path > 0 ? clamp(Math.abs(candles[t].c - candles[t - 20].c) / path, 0, 1) : 0;
+    const longVol = sigma1m(candles, t, 120);
+    const shortVol = sigma1m(candles, t, 30);
+    const obs = [efficiency, Math.log(clamp(longVol > 0 ? shortVol / longVol : 1, 0.1, 10))];
+    const emission = means.map(([e, v]) => Math.exp(-0.5 * (((obs[0] - e) / 0.22) ** 2 + ((obs[1] - v) / 0.55) ** 2)));
+    const predicted = states.map((_, j) => alpha.reduce((sum, p, i) => sum + p * transition[i][j], 0));
+    const weighted = predicted.map((p, i) => p * emission[i]);
+    const total = weighted.reduce((sum, value) => sum + value, 0) || 1;
+    alpha = weighted.map((value) => value / total);
+  }
+  const probabilities = Object.fromEntries(states.map((state, i) => [state, alpha[i]])) as Record<MarketRegime, number>;
   const regime = states.reduce((best, state) => probabilities[state] > probabilities[best] ? state : best, states[0]);
   return { regime, probabilities, confidence: probabilities[regime] };
 }
@@ -365,9 +373,7 @@ export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
   const mtfAgreement = sign === 0 ? 0 :
     signals.filter((v) => Math.sign(v) === sign).length / signals.length;
 
-  const trendZ = Math.abs(Math.log(close / candles[i - 20].c)) /
-    Math.max(shortVol * Math.sqrt(20), 1e-9);
-  const hmm = hmmRegimeFilter(efficiencyRatio, volatilityRatio);
+  const hmm = hmmRegimeFilter(candles, i);
   const forecastSigma = garchSigmaForecast(candles, i);
   const cusumSignal = detectCusum(candles, i, Math.max(shortVol, forecastSigma));
 
@@ -443,7 +449,7 @@ export function scoreCandidate(
   const fees = notional * 2 * (params.feeRate + params.slippage);
   const expectedNet = pTP * notional * tpDist - (1 - pTP) * notional * slDist - fees;
   // For zero-drift Brownian motion in [-SL,+TP], E[T] = SL*TP / variance.
-  const tauMin = clamp((slDist * tpDist) / Math.max(m.sigma ** 2, 1e-12), 1, params.timeStopMin);
+  const tauMin = clamp((slDist * tpDist) / Math.max(forecastSigma ** 2, 1e-12), 1, params.timeStopMin);
   // Penalise disagreement and unstable volatility instead of forcing a trade.
   const agreementPenalty = a ? 0.75 + 0.25 * a.mtfAgreement : 0.85;
   const volatilityPenalty = a ? 1 / Math.sqrt(clamp(a.volatilityRatio, 0.5, 3)) : 1;
