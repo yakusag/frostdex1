@@ -6,7 +6,7 @@ import {
   normalizeParams, predictPUp, rankCandidates, scoreCandidate, sigma1m,
   smoothedP, trainEnsemble, type Candle,
 } from "../shared/rotation/engine";
-import { PaperBroker, newState, tick } from "../shared/rotation/runner";
+import { PaperBroker, newState, tick, type Broker } from "../shared/rotation/runner";
 
 function lcg(seed: number) {
   let s = seed;
@@ -64,6 +64,34 @@ test("no edge => negative score => skipped; strong edge => positive", () => {
   assert.ok(strong.score > 0 && strong.side === "LONG");
   const short = scoreCandidate({ symbol: "A", price: 10, pUp: 0.15, sigma: 0.001 }, 100, params);
   assert.equal(short.side, "SHORT");
+});
+
+test("Live state uses the same shared tick and candidate decision path", async () => {
+  const calls: string[] = [];
+  const liveBroker: Broker = {
+    open: async (symbol, side, qty, refPrice) => {
+      calls.push(`open:${symbol}:${side}`);
+      return { price: refPrice, fee: 0 };
+    },
+    close: async (symbol, side, _qty, refPrice) => {
+      calls.push(`close:${symbol}:${side}`);
+      return { price: refPrice, fee: 0 };
+    },
+    normalizeQty: (_symbol, qty) => qty,
+  };
+  const state = newState("live", 1_000, 1_700_000_000_000);
+  await tick(
+    state,
+    normalizeParams({ leverage: 2, maxPositions: 1, slPct: 0.1 }),
+    new Map([["LIVE-TEST", 100]]),
+    [{ symbol: "LIVE-TEST", price: 100, pUp: 0.99, sigma: 0.001 }],
+    liveBroker,
+    { tradingEnabled: true, now: 1_700_000_000_000 },
+  );
+  assert.equal(state.mode, "live");
+  assert.equal(state.positions.length, 1);
+  assert.equal(state.positions[0].live, true);
+  assert.deepEqual(calls, ["open:LIVE-TEST:LONG"]);
 });
 
 test("capital rotation: fast small win outranks slow big win", () => {
