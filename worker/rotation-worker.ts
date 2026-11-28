@@ -12,8 +12,9 @@ import {
 } from "../server/bot-store.js";
 import { redisCommand } from "../server/redis.js";
 import {
-  DEFAULT_PARAMS, Kalman1D, featuresAt, normalizeParams, predictPUp, sigma1m,
-  smoothedP, trainEnsemble, type Candle, type Ensemble, type MarketInput,
+  DEFAULT_PARAMS, Kalman1D, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  normalizeParams, predictPUp, sigma1m, smoothedP, trainEnsemble,
+  type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
 import {
   PaperBroker, closePosition, newState, tick,
@@ -160,7 +161,17 @@ class MarketData {
       if (!x) continue;
       let k = this.kalman.get(symbol);
       if (!k) this.kalman.set(symbol, (k = new Kalman1D()));
-      out.push({ symbol, price, pUp: smoothedP(k, predictPUp(model, x)), sigma: sigma1m(candles) });
+      const analysis = analyzeMarket(candles);
+      if (!analysis) continue;
+      const rawP = predictPUp(model, x);
+      const fusedP = fuseMultiTimeframe(rawP, analysis);
+      out.push({
+        symbol,
+        price,
+        pUp: smoothedP(k, fusedP),
+        sigma: sigma1m(candles),
+        analysis,
+      });
     }
     return out;
   }
