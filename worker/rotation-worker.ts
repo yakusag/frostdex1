@@ -13,9 +13,16 @@ import {
 import { redisCommand } from "../server/redis.js";
 import {
   DEFAULT_PARAMS, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
-  newAdaptiveConformalState, normalizeParams, observeAdaptiveConformal, predictPUp, sigma1m, smoothedP, trainEnsemble,
-  type AdaptiveConformalState, type Candle, type Ensemble, type MarketInput,
+  newAdaptiveConformalState, normalizeParams, predictPUp, sigma1m, smoothedP, trainEnsemble,
+  type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
+import {
+  newHorizonCalibrationBucket,
+  queueHorizonForecast,
+  resolveHorizonForecasts,
+  type CalibrationHorizon,
+  type HorizonCalibrationBucket,
+} from "../shared/rotation/horizon-calibration.js";
 import {
   PaperBroker, closePosition, newState, tick,
   type Broker, type RotationState,
