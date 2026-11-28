@@ -602,13 +602,21 @@ export function analyzeMarket(candles: Candle[]): MarketAnalysis | null {
   const regime = highVolOverride
     ? "HIGH_VOL"
     : hsmm.confidence >= 0.42 ? hsmm.regime : "TRANSITION";
+  const regimeProbabilities = { ...hsmm.probabilities };
   const regimeConfidence = highVolOverride
-    ? Math.max(hsmm.confidence, clamp((volatilityRatio - 1.4) / 1.2, 0.42, 0.9))
+    ? Math.max(hsmm.probabilities.HIGH_VOL, clamp((volatilityRatio - 1.4) / 1.2, 0.42, 0.9))
     : hsmm.confidence;
+  if (highVolOverride && regimeProbabilities.HIGH_VOL < regimeConfidence) {
+    const otherTotal = Math.max(1e-9, 1 - regimeProbabilities.HIGH_VOL);
+    for (const state of ["TRENDING", "RANGING", "TRANSITION"] as const) {
+      regimeProbabilities[state] *= (1 - regimeConfidence) / otherTotal;
+    }
+    regimeProbabilities.HIGH_VOL = regimeConfidence;
+  }
   return {
     regime, efficiencyRatio, volatilityRatio, atrPct, mtfBias, mtfAgreement,
     forecastSigma, cusumSignal, regimeConfidence,
-    regimeProbabilities: hsmm.probabilities,
+    regimeProbabilities,
     expectedRegimeMinutes: hsmm.expectedRegimeMinutes,
     changePointProbability,
   };
