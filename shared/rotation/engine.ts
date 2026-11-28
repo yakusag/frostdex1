@@ -417,6 +417,9 @@ export interface Candidate {
   regime: MarketRegime;
   mtfAgreement: number;
   volatilityRatio: number;
+  regimeConfidence: number;
+  cusumSignal: -1 | 0 | 1;
+  forecastSigma: number;
 }
 
 /**
@@ -470,6 +473,9 @@ export function scoreCandidate(
     regime,
     mtfAgreement: a?.mtfAgreement ?? 0,
     volatilityRatio: a?.volatilityRatio ?? 1,
+    regimeConfidence: a?.regimeConfidence ?? 0,
+    cusumSignal: a?.cusumSignal ?? 0,
+    forecastSigma,
   };
 }
 
