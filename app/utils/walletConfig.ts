@@ -102,10 +102,10 @@ const getWalletConnectChainOptions = () => {
 
   const supportedChains = [
     ...(!getRuntimeConfigBoolean("VITE_DISABLE_MAINNET")
-      ? parseIds(getRuntimeConfig("VITE_ORDERLY_MAINNET_CHAINS"))
+      ? parseIds(getRuntimeConfig("VITE_ORDERLY_MAINNET_CHAINS") ?? "")
       : []),
     ...(!getRuntimeConfigBoolean("VITE_DISABLE_TESTNET")
-      ? parseIds(getRuntimeConfig("VITE_ORDERLY_TESTNET_CHAINS"))
+      ? parseIds(getRuntimeConfig("VITE_ORDERLY_TESTNET_CHAINS") ?? "")
       : []),
   ].filter((id, index, all) => all.indexOf(id) === index);
 
