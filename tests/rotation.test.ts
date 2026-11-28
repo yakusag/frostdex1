@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  DEFAULT_PARAMS, Kalman1D, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  DEFAULT_PARAMS, Kalman1D, analyzeMarket, conformalDecision, featuresAt, fuseMultiTimeframe,
   normalizeParams, predictPUp, rankCandidates, scoreCandidate, sigma1m,
   smoothedP, trainEnsemble, type Candle,
 } from "../shared/rotation/engine";
@@ -198,6 +198,28 @@ test("strategy competition selects mean reversion in stretched range conditions"
   }, 100, DEFAULT_PARAMS);
   assert.equal(candidate.strategy, "MEAN_REVERSION");
   assert.equal(candidate.side, "SHORT");
+});
+
+test("HSMM duration and Bayesian change-point diagnostics are bounded", () => {
+  const analysis = analyzeMarket(walk(240, 0.0001, 0.002, 91))!;
+  assert.ok(analysis.expectedRegimeMinutes !== undefined && analysis.expectedRegimeMinutes >= 0);
+  assert.ok(analysis.changePointProbability !== undefined);
+  assert.ok(analysis.changePointProbability >= 0 && analysis.changePointProbability <= 1);
+});
+
+test("conformal prediction abstains on ambiguous class sets and accepts a singleton", () => {
+  const model = { f0: 0, eta: 0.1, stumps: [], valAccuracy: 0.6, samples: 300, trainedAt: 1, conformalQ: 0.2 };
+  assert.equal(conformalDecision(model, 0.5).eligible, false);
+  assert.equal(conformalDecision(model, 0.85).eligible, true);
+});
+
+test("conformal abstention prevents candidate score in shared decision engine", () => {
+  const c = scoreCandidate({
+    symbol: "NO-EDGE", price: 10, pUp: 0.8, sigma: 0.001,
+    conformalEligible: false,
+  }, 100, DEFAULT_PARAMS);
+  assert.equal(c.score, 0);
+  assert.equal(c.conformalEligible, false);
 });
 
 test("sigma1m is positive on noisy data", () => {
