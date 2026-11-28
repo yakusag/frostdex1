@@ -190,13 +190,13 @@ class MarketData {
         const contentType = res.headers.get("content-type") ?? "unknown";
         const body = await res.text();
         if (!res.ok) {
-          lastError = `HTTP ${res.status} (${contentType}): ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
+          lastError = `HTTP ${res.status} (${contentType}): ${body.slice(0, 180).replace(/\s+/g, " ")}`;
           if (res.status < 500 && res.status !== 429) break;
-        } else if (!/application\\/(?:[\\w.+-]*\\+)?json/i.test(contentType)) {
-          lastError = `non-JSON response (${contentType}): ${body.slice(0, 180).replace(/\\s+/g, " ")}`;
+        } else if (!/application\/(?:[\w.+-]*\+)?json/i.test(contentType)) {
+          lastError = `non-JSON response (${contentType}): ${body.slice(0, 180).replace(/\s+/g, " ")}`;
         } else {
           try { d = JSON.parse(body); break; }
-          catch { lastError = `invalid JSON response: ${body.slice(0, 180).replace(/\\s+/g, " ")}`; }
+          catch { lastError = `invalid JSON response: ${body.slice(0, 180).replace(/\s+/g, " ")}`; }
         }
       } catch (e) {
         lastError = (e as Error).message || String(e);
