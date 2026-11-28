@@ -398,24 +398,52 @@ function hsmmRegimeFilter(candles: Candle[], end: number) {
   return { regime, probabilities, confidence: probabilities[regime], expectedRegimeMinutes };
 }
 
-/** Bayesian online change-point score from posterior predictive surprise. */
+/** Bayesian online change-point detection with a truncated run-length posterior. */
 function bayesianChangePointProbability(candles: Candle[], i: number, sigma: number) {
   const hazard = 1 / 80;
-  const scale = Math.max(sigma, 1e-8);
-  let runMean = 0, runVariance = scale * scale, surprise = 0;
-  const recent = Math.min(30, i);
-  for (let k = i - recent + 1; k <= i; k++) {
-    const r = Math.log(candles[k].c / candles[k - 1].c);
-    const predictiveVariance = runVariance + scale * scale / 20;
-    const z = (r - runMean) / Math.sqrt(Math.max(predictiveVariance, 1e-16));
-    const likelihoodRatio = Math.exp(clamp(0.5 * (z * z - 1), -8, 8));
-    const cp = hazard * likelihoodRatio / (hazard * likelihoodRatio + (1 - hazard));
-    surprise = Math.max(surprise * 0.72, cp);
-    const gain = 1 / Math.min(20, k - (i - recent));
-    runMean += gain * (r - runMean);
-    runVariance = 0.94 * runVariance + 0.06 * (r - runMean) ** 2;
+  const observationVariance = Math.max(sigma * sigma, 1e-16);
+  const priorMeanVariance = observationVariance * 4;
+  let runProbabilities = [1];
+  let means = [0];
+  let variances = [priorMeanVariance];
+  let cpProbability = 0;
+
+  for (let k = Math.max(1, i - 29); k <= i; k++) {
+    const observation = Math.log(candles[k].c / candles[k - 1].c);
+    const priorPredictiveVariance = observationVariance + priorMeanVariance;
+    const priorZ = observation / Math.sqrt(priorPredictiveVariance);
+    const priorLikelihood = Math.exp(-0.5 * priorZ * priorZ) /
+      Math.sqrt(2 * Math.PI * priorPredictiveVariance);
+    const growthMass: number[] = [];
+    const growthMeans: number[] = [];
+    const growthVariances: number[] = [];
+    let changeMass = 0;
+
+    for (let r = 0; r < runProbabilities.length; r++) {
+      const predictiveVariance = observationVariance + variances[r];
+      const z = (observation - means[r]) / Math.sqrt(predictiveVariance);
+      const likelihood = Math.exp(-0.5 * z * z) /
+        Math.sqrt(2 * Math.PI * predictiveVariance);
+      changeMass += runProbabilities[r] * hazard * priorLikelihood;
+      growthMass[r + 1] = runProbabilities[r] * (1 - hazard) * likelihood;
+      const posteriorVariance = 1 / (1 / variances[r] + 1 / observationVariance);
+      growthMeans[r + 1] = posteriorVariance *
+        (means[r] / variances[r] + observation / observationVariance);
+      growthVariances[r + 1] = posteriorVariance;
+    }
+
+    const cpVariance = 1 / (1 / priorMeanVariance + 1 / observationVariance);
+    const cpMean = cpVariance * (observation / observationVariance);
+    const nextProbabilities = [changeMass, ...growthMass.slice(1, 31)];
+    const nextMeans = [cpMean, ...growthMeans.slice(1, 31)];
+    const nextVariances = [cpVariance, ...growthVariances.slice(1, 31)];
+    const total = nextProbabilities.reduce((sum, p) => sum + p, 0) || 1;
+    runProbabilities = nextProbabilities.map(p => p / total);
+    means = nextMeans;
+    variances = nextVariances;
+    cpProbability = runProbabilities[0] ?? 0;
   }
-  return clamp(surprise, 0, 1);
+  return clamp(cpProbability, 0, 1);
 }
 
 /** GARCH(1,1) variance forecast with conservative fixed coefficients. */
