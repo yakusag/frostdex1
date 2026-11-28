@@ -36,7 +36,9 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 const stateKey = (n: BotNetwork, owner: string, id: string) =>
   `frostdex:rotation:state:${n}:${owner.toLowerCase()}:${id}`;
 const calibrationKey = (network: BotNetwork, symbol: string) =>
-  `frostdex:rotation:calibration:v1:${network}:${symbol}`;
+  `frostdex:rotation:calibration:v2:${network}:${symbol}`;
+const CALIBRATION_HORIZONS = [5, 10, 15] as const;
+type CalibrationHorizon = typeof CALIBRATION_HORIZONS[number];
 
 interface PendingCalibrationForecast {
   originTime: number;
@@ -46,11 +48,14 @@ interface PendingCalibrationForecast {
   threshold: number;
 }
 
-interface StoredAdaptiveCalibration {
-  version: 1;
+interface HorizonCalibrationBucket {
   adaptive: AdaptiveConformalState;
   pending: PendingCalibrationForecast[];
   lastForecastTime: number;
+}
+interface StoredAdaptiveCalibration {
+  version: 2;
+  horizons: Record<string, HorizonCalibrationBucket>;
 }
 
 interface MarketForecast {
@@ -61,6 +66,7 @@ interface MarketForecast {
   sigma: number;
   distZ: number;
   analysis: NonNullable<MarketInput["analysis"]>;
+  horizonModels?: Partial<Record<CalibrationHorizon, Ensemble>>;
 }
 
 // ------------------------------------------------------------ market data
@@ -71,6 +77,7 @@ class MarketData {
   candles = new Map<string, Candle[]>();
   fetchedAt = new Map<string, number>();
   models = new Map<string, Ensemble>();
+  horizonModels = new Map<string, Partial<Record<CalibrationHorizon, Ensemble>>>();
   kalman = new Map<string, Kalman1D>();
   kalmanAt = new Map<string, number>();
   kalmanP = new Map<string, number>();
@@ -102,35 +109,47 @@ class MarketData {
   private async loadCalibration(symbol: string): Promise<StoredAdaptiveCalibration> {
     const cached = this.calibrations.get(symbol);
     if (cached) return cached;
+    const emptyBucket = (): HorizonCalibrationBucket => ({
+      adaptive: newAdaptiveConformalState(), pending: [], lastForecastTime: 0,
+    });
     let state: StoredAdaptiveCalibration = {
-      version: 1,
-      adaptive: newAdaptiveConformalState(),
-      pending: [],
-      lastForecastTime: 0,
+      version: 2,
+      horizons: Object.fromEntries(CALIBRATION_HORIZONS.map((h) => [String(h), emptyBucket()])),
     };
     if (!this.calibrationLoaded.has(symbol)) {
       try {
         const raw = await redisCommand("GET", calibrationKey(this.network, symbol));
         if (typeof raw === "string") {
           const parsed = JSON.parse(raw) as Partial<StoredAdaptiveCalibration>;
-          const a = parsed.adaptive;
-          if (parsed.version === 1 && a && Array.isArray(a.scores)) {
-            state = {
-              version: 1,
-              adaptive: {
-                alpha: Number.isFinite(a.alpha) ? Math.max(0.01, Math.min(0.5, Number(a.alpha))) : 0.1,
-                scores: a.scores.filter((v): v is number => Number.isFinite(v)).slice(-300),
-                observations: Number.isFinite(a.observations) ? Math.max(0, Number(a.observations)) : 0,
-                misses: Number.isFinite(a.misses) ? Math.max(0, Number(a.misses)) : 0,
-              },
-              pending: Array.isArray(parsed.pending) ? parsed.pending.filter((p): p is PendingCalibrationForecast =>
-                Number.isFinite(p?.originTime) && Number.isFinite(p?.targetTime) &&
-                Number.isFinite(p?.originClose) && p.originClose > 0 &&
-                Number.isFinite(p?.pUp) && p.pUp >= 0 && p.pUp <= 1 &&
-                Number.isFinite(p?.threshold) && p.threshold >= 0 && p.threshold <= 1
-              ).slice(-30) : [],
-              lastForecastTime: Number.isFinite(parsed.lastForecastTime) ? Number(parsed.lastForecastTime) : 0,
-            };
+          if (parsed.version === 2 && parsed.horizons && typeof parsed.horizons === "object") {
+            for (const horizon of CALIBRATION_HORIZONS) {
+              const bucket = (parsed.horizons as Record<string, Partial<HorizonCalibrationBucket>>)[String(horizon)];
+              if (!bucket) continue;
+              const a = bucket.adaptive;
+              if (!a || !Array.isArray(a.scores)) continue;
+              state.horizons[String(horizon)] = {
+                adaptive: {
+                  alpha: Number.isFinite(a.alpha) ? Math.max(0.01, Math.min(0.5, Number(a.alpha))) : 0.1,
+                  scores: a.scores.filter((v): v is number => Number.isFinite(v)).slice(-300),
+                  observations: Number.isFinite(a.observations) ? Math.max(0, Number(a.observations)) : 0,
+                  misses: Number.isFinite(a.misses) ? Math.max(0, Number(a.misses)) : 0,
+                },
+                pending: Array.isArray(bucket.pending) ? bucket.pending.filter((p): p is PendingCalibrationForecast =>
+                  Number.isFinite(p?.originTime) && Number.isFinite(p?.targetTime) &&
+                  Number.isFinite(p?.originClose) && p.originClose > 0 &&
+                  Number.isFinite(p?.pUp) && p.pUp >= 0 && p.pUp <= 1 &&
+                  Number.isFinite(p?.threshold) && p.threshold >= 0 && p.threshold <= 1
+                ).slice(-60) : [],
+                lastForecastTime: Number.isFinite(bucket.lastForecastTime) ? Number(bucket.lastForecastTime) : 0,
+              };
+            }
+          } else if ((parsed as any).version === 1 && (parsed as any).adaptive) {
+            // Preserve the existing 10m calibration history when migrating the Redis key.
+            const legacy = parsed as any;
+            const bucket = state.horizons["10"];
+            bucket.adaptive = legacy.adaptive;
+            bucket.pending = Array.isArray(legacy.pending) ? legacy.pending.slice(-60) : [];
+            bucket.lastForecastTime = Number.isFinite(legacy.lastForecastTime) ? legacy.lastForecastTime : 0;
           }
         }
       } catch (e) {
@@ -142,9 +161,9 @@ class MarketData {
     return state;
   }
 
-  private forecast(symbol: string): MarketForecast | null {
+  private forecast(symbol: string, horizon: CalibrationHorizon = 10): MarketForecast | null {
     const candles = this.candles.get(symbol);
-    const model = this.models.get(symbol);
+    const model = this.horizonModels.get(symbol)?.[horizon] ?? (horizon === 10 ? this.models.get(symbol) : undefined);
     const price = this.prices.get(symbol);
     if (!candles || !model || !price || candles.length < 121) return null;
     const x = featuresAt(candles, candles.length - 1);
@@ -227,10 +246,18 @@ class MarketData {
 
     this.candles.set(symbol, rows);
     this.fetchedAt.set(symbol, now);
-    const m = this.models.get(symbol);
-    if (!m || now - m.trainedAt > RETRAIN_MS) {
-      const trained = trainEnsemble(rows, DEFAULT_PARAMS.trees, DEFAULT_PARAMS.eta);
-      if (trained) this.models.set(symbol, trained);
+    const current = this.horizonModels.get(symbol) ?? {};
+    if (!current[5] || !current[10] || !current[15] ||
+        Math.max(...CALIBRATION_HORIZONS.map((h) => current[h]?.trainedAt ?? 0)) + RETRAIN_MS < now) {
+      const trainedByHorizon: Partial<Record<CalibrationHorizon, Ensemble>> = {};
+      for (const horizon of CALIBRATION_HORIZONS) {
+        const trained = trainEnsemble(rows, DEFAULT_PARAMS.trees, DEFAULT_PARAMS.eta, now, horizon);
+        if (trained) trainedByHorizon[horizon] = trained;
+      }
+      if (trainedByHorizon[10]) {
+        this.horizonModels.set(symbol, trainedByHorizon);
+        this.models.set(symbol, trainedByHorizon[10]!);
+      }
     }
   }
 
@@ -249,54 +276,59 @@ class MarketData {
   }
 
   /**
-   * Prequential test-then-update calibration, persisted per network + symbol.
-   * Forecasts are stored once per completed 1m candle and scored only after
-   * their 10-candle outcome is observable. All bot modes on this network
-   * consume the same calibrated MarketInput stream.
+   * Independent prequential ACI for 5m, 10m and 15m forecasts.
+   * Each horizon has its own model, pending labels, adaptive alpha and score
+   * window; outcomes are consumed only after the exact target candle closes.
    */
   async refreshAdaptiveCalibration() {
     for (const symbol of this.symbols) {
       const candles = this.candles.get(symbol);
-      const model = this.models.get(symbol);
-      if (!candles || !model || candles.length < 121) continue;
+      const models = this.horizonModels.get(symbol);
+      if (!candles || !models || candles.length < 121) continue;
       const state = await this.loadCalibration(symbol);
       const candleByTime = new Map(candles.map((c) => [c.t, c]));
       const latestTime = candles[candles.length - 1].t;
       let changed = false;
-      const remaining: PendingCalibrationForecast[] = [];
 
-      for (const pending of state.pending.sort((a, b) => a.originTime - b.originTime)) {
-        const target = candleByTime.get(pending.targetTime);
-        if (target && Date.now() >= pending.targetTime + CANDLE_MS) {
-          const actualUp = target.c > pending.originClose;
-          const nonconformity = actualUp ? 1 - pending.pUp : pending.pUp;
-          observeAdaptiveConformal(state.adaptive, nonconformity, pending.threshold);
-          changed = true;
-        } else if (latestTime <= pending.targetTime + 3 * CANDLE_MS) {
-          remaining.push(pending);
-        } else {
-          // Required target bar is missing from the feed; do not invent a label.
-          changed = true;
+      for (const horizon of CALIBRATION_HORIZONS) {
+        const bucket = state.horizons[String(horizon)];
+        const model = models[horizon];
+        if (!bucket || !model) continue;
+        const remaining: PendingCalibrationForecast[] = [];
+
+        for (const pending of bucket.pending.sort((a, b) => a.originTime - b.originTime)) {
+          const target = candleByTime.get(pending.targetTime);
+          if (target && Date.now() >= pending.targetTime + CANDLE_MS) {
+            const actualUp = target.c > pending.originClose;
+            const nonconformity = actualUp ? 1 - pending.pUp : pending.pUp;
+            observeAdaptiveConformal(bucket.adaptive, nonconformity, pending.threshold);
+            changed = true;
+          } else if (latestTime <= pending.targetTime + 3 * CANDLE_MS) {
+            remaining.push(pending);
+          } else {
+            // Missing target candle: discard without fabricating a realised label.
+            changed = true;
+          }
         }
-      }
-      state.pending = remaining;
+        bucket.pending = remaining;
 
-      if (latestTime > state.lastForecastTime) {
-        const forecast = this.forecast(symbol);
-        if (forecast) {
-          const threshold = adaptiveConformalDecision(
-            state.adaptive, forecast.pUp, model.conformalQ ?? 1,
-          ).threshold;
-          state.pending.push({
-            originTime: forecast.candleTime,
-            targetTime: forecast.candleTime + HORIZON_CANDLES * CANDLE_MS,
-            originClose: forecast.close,
-            pUp: forecast.pUp,
-            threshold,
-          });
-          state.pending = state.pending.slice(-30);
-          state.lastForecastTime = forecast.candleTime;
-          changed = true;
+        if (latestTime > bucket.lastForecastTime) {
+          const forecast = this.forecast(symbol, horizon);
+          if (forecast) {
+            const threshold = adaptiveConformalDecision(
+              bucket.adaptive, forecast.pUp, model.conformalQ ?? 1,
+            ).threshold;
+            bucket.pending.push({
+              originTime: forecast.candleTime,
+              targetTime: forecast.candleTime + horizon * CANDLE_MS,
+              originClose: forecast.close,
+              pUp: forecast.pUp,
+              threshold,
+            });
+            bucket.pending = bucket.pending.slice(-60);
+            bucket.lastForecastTime = forecast.candleTime;
+            changed = true;
+          }
         }
       }
 
@@ -317,7 +349,8 @@ class MarketData {
       const model = this.models.get(symbol);
       if (!forecast || !model) continue;
       const calibration = this.calibrations.get(symbol);
-      const adaptive = calibration?.adaptive ?? newAdaptiveConformalState();
+      const tenMinute = calibration?.horizons["10"];
+      const adaptive = tenMinute?.adaptive ?? newAdaptiveConformalState();
       const conformal = adaptiveConformalDecision(adaptive, forecast.pUp, model.conformalQ ?? 1);
       out.push({
         symbol,
