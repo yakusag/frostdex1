@@ -13,8 +13,6 @@ export interface Candle {
 export interface RotationParams {
   leverage: number;
   maxPositions: number;
-  maxTrades: number;
-  tradeAmount: number; // collateral margin allocated per new position
   tpR: number; // take-profit as multiple of stop distance
   slPct: number; // minimum stop distance, % of price
   timeStopMin: number;
@@ -29,8 +27,6 @@ export interface RotationParams {
 export const DEFAULT_PARAMS: RotationParams = {
   leverage: 5,
   maxPositions: 3,
-  maxTrades: 10,
-  tradeAmount: 10,
   tpR: 2,
   slPct: 0.4,
   timeStopMin: 20,
@@ -57,8 +53,6 @@ export function normalizeParams(
   return {
     leverage: Math.round(n("leverage", 1, 10)),
     maxPositions: Math.round(n("maxPositions", 1, 8)),
-    maxTrades: Math.round(n("maxTrades", 1, 100000)),
-    tradeAmount: n("tradeAmount", 0.01, 1000000),
     tpR: n("tpR", 0.5, 5),
     slPct: n("slPct", 0.1, 5),
     timeStopMin: Math.round(n("timeStopMin", 3, 240)),
