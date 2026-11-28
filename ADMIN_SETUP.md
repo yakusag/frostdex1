@@ -1,34 +1,38 @@
 # Admin panel setup
 
 The admin panel is available at `/admin` and is intentionally not linked in
-public navigation. Before deploying this feature, configure the following
-server-only environment variables in the Vercel project:
+public navigation. Configure these server-only variables in Vercel:
 
-| Variable                   | Value                                                   |
-| -------------------------- | ------------------------------------------------------- |
-| `ADMIN_WALLET_ADDRESS`     | The EVM address registered as the Orderly broker admin. |
-| `ADMIN_SESSION_SECRET`     | A randomly generated secret with at least 32 bytes.     |
-| `UPSTASH_REDIS_REST_URL`   | The REST URL for a managed Upstash Redis database.      |
-| `UPSTASH_REDIS_REST_TOKEN` | The Upstash REST token for that database.               |
+| Variable | Purpose |
+|---|---|
+| `ADMIN_WALLET_ADDRESS` | EVM address registered as the Orderly broker admin |
+| `ADMIN_SESSION_SECRET` | Random secret with at least 32 bytes |
+| `TURSO_DATABASE_URL` | Turso database URL beginning with `libsql://` |
+| `TURSO_AUTH_TOKEN` | Turso database authentication token |
 
-Create an Upstash Redis database and copy its REST URL and token from the
-database details. Generate the session secret locally, for example with
-`openssl rand -base64 48`. Do not send the secret or wallet credentials in
-chat, and do not prefix any of these variables with `VITE_`.
+The same Turso URL and token must be configured on the Railway worker. Do not
+prefix these variables with `VITE_`.
 
-In Vercel, add the variables under **Project Settings → Environment Variables**.
-Use the Production environment for the live site; configure Preview only if
-preview deployments should also have admin access. Redeploy after saving the
-variables. The panel requires HTTPS because its session cookie is Secure.
+## Existing Redis data
+
+Before retiring Upstash, stop the Railway worker and run
+`yarn migrate:redis-to-turso` in an environment containing both the old
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` and new Turso
+credentials. The migration copies FrostDex string and set keys, including
+encrypted Orderly keys, bot configurations, rotation states, calibration and
+admin settings. If Upstash is over quota and refuses reads, restore read access
+before attempting migration. Keep Upstash until the site and worker are
+verified against Turso.
+
+In Vercel, add variables under **Project Settings → Environment Variables**.
+Use Production for the live site and redeploy after saving variables. The panel
+requires HTTPS because its session cookie is Secure.
 
 Connect the registered EVM wallet on the site to open `/admin`, then approve
 the clearly labelled sign-in message. This is a message signature only: no
 transaction, private key, or seed phrase is requested. Page settings are stored
-in Redis and apply to navigation and direct FrostDex routes. If page settings
-cannot be loaded, public routes remain available using the default enabled
-settings; `/admin` remains available for troubleshooting. The admin panel is
-not linked in public navigation, and its settings require the registered owner
-wallet to sign in.
+in Turso and apply to navigation and direct FrostDex routes. If page settings
+cannot be loaded, public routes remain available using default enabled flags.
 
-These controls cover FrostDex routes. Links that open external Orderly pages
-are managed by those external services, not by this panel.
+Generate the admin session secret locally, for example with
+`openssl rand -base64 48`. Do not send secrets or wallet credentials in chat.
