@@ -12,7 +12,7 @@ import {
 } from "../server/bot-store.js";
 import { redisCommand } from "../server/redis.js";
 import {
-  DEFAULT_PARAMS, HORIZON_CANDLES, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
+  DEFAULT_PARAMS, Kalman1D, adaptiveConformalDecision, analyzeMarket, featuresAt, fuseMultiTimeframe,
   newAdaptiveConformalState, normalizeParams, observeAdaptiveConformal, predictPUp, sigma1m, smoothedP, trainEnsemble,
   type AdaptiveConformalState, type Candle, type Ensemble, type MarketInput,
 } from "../shared/rotation/engine.js";
@@ -66,7 +66,6 @@ interface MarketForecast {
   sigma: number;
   distZ: number;
   analysis: NonNullable<MarketInput["analysis"]>;
-  horizonModels?: Partial<Record<CalibrationHorizon, Ensemble>>;
 }
 
 // ------------------------------------------------------------ market data
