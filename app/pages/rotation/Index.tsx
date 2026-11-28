@@ -9,7 +9,7 @@ const MIN_CAPITAL = 10; // USDC
 
 interface Position { id: string; symbol: string; side: "LONG" | "SHORT"; entry: number; qty: number; margin: number; openedAt: number; slDist: number; tpDist: number; score: number; markPrice?: number; unrealizedPnl?: number; recommendation?: "HOLD" | "CLOSE" | "PAUSE" | "STOP"; recommendationReason?: string }
 interface Trade { id: string; symbol: string; side: string; pnl: number; reason: string; closedAt: number; entry: number; exit: number }
-interface Candidate { symbol: string; side: string; pTP: number; score: number; tauMin: number; expectedNet: number; regime?: string; mtfAgreement?: number; volatilityRatio?: number; regimeConfidence?: number; cusumSignal?: number; forecastSigma?: number }
+interface Candidate { symbol: string; side: string; pTP: number; score: number; tauMin: number; expectedNet: number; regime?: string; mtfAgreement?: number; volatilityRatio?: number; regimeConfidence?: number; cusumSignal?: number; forecastSigma?: number; strategy?: string }
 interface RotationState {
   mode: "paper" | "live"; startEquity: number; balance: number; equity: number;
   haltedReason: string | null; positions: Position[]; trades: Trade[]; ranked: Candidate[];
@@ -491,10 +491,11 @@ export default function RotationPage() {
 
           <section className={card}>
             <h2 className="mb-2 font-semibold">Ranked entries · HMM + GARCH + CUSUM + Bayesian + Thompson</h2>
-            <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>pTP</th><th>Regime</th><th>HMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>τ</th><th>Net score</th></tr></thead><tbody>
+            <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead><tr className="text-left text-white/50"><th>Market</th><th>Side</th><th>Strategy</th><th>pTP</th><th>Regime</th><th>HMM confidence</th><th>MTF agreement</th><th>Vol ratio</th><th>CUSUM</th><th>GARCH σ</th><th>τ</th><th>Net score</th></tr></thead><tbody>
               {rot.ranked.map((c) => (
                 <tr key={c.symbol} className="border-t border-white/5">
                   <td className="py-2">{c.symbol.replace("PERP_", "").replace("_USDC", "")}</td><td>{c.side}</td>
+                  <td><span className="rounded bg-sky-400/10 px-2 py-1 text-[10px] text-sky-200">{(c.strategy ?? "MOMENTUM").replace(/_/g, " ")}</span></td>
                   <td>{(c.pTP * 100).toFixed(1)}%</td>
                   <td>{c.regime ?? "TRANSITION"}</td>
                   <td>{((c.regimeConfidence ?? 0) * 100).toFixed(0)}%</td>
