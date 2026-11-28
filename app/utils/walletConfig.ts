@@ -139,8 +139,13 @@ export const getOnboardEvmWallets = () => {
     binanceWallet({ options: { lng: "en" } }),
     walletConnectOnboard({
       projectId: walletConnectProjectId,
-      // Orderly account registration and trading-key authorization both use EIP-712 v4.
-      additionalRequiredMethods: ["eth_signTypedData_v4"],
+      // The initial Orderly sign-in uses personal_sign; account creation and
+      // trading authorization then require EIP-712 v4. Both must be approved
+      // when the WalletConnect session is first established.
+      additionalRequiredMethods: [
+        "personal_sign",
+        "eth_signTypedData_v4",
+      ],
       ...getWalletConnectChainOptions(),
       qrModalOptions: {
         themeMode: "dark",
