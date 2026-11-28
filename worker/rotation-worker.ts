@@ -179,6 +179,7 @@ class MarketData {
         price,
         pUp: this.kalmanP.get(symbol) ?? fusedP,
         sigma: sigma1m(candles),
+        distZ: x[0],
         analysis,
       });
     }
