@@ -184,6 +184,8 @@ class MarketData {
         distZ: x[0],
         conformalEligible: conformal.eligible,
         conformalSetSize: conformal.setSize,
+        conformalIncludeUp: conformal.includeUp,
+        conformalIncludeDown: conformal.includeDown,
         analysis,
       });
     }
