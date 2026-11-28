@@ -401,6 +401,7 @@ export interface MarketInput {
   pUp: number; // Kalman-smoothed
   sigma: number; // 1m log-return vol
   analysis?: MarketAnalysis;
+  distZ?: number;
 }
 
 export interface Candidate {
@@ -420,6 +421,7 @@ export interface Candidate {
   regimeConfidence: number;
   cusumSignal: -1 | 0 | 1;
   forecastSigma: number;
+  strategy: "TREND_FOLLOWING" | "MEAN_REVERSION" | "MOMENTUM";
 }
 
 /**
@@ -432,9 +434,23 @@ export function scoreCandidate(
   margin: number,
   params: RotationParams,
 ): Candidate {
-  const side: "LONG" | "SHORT" = m.pUp >= 0.5 ? "LONG" : "SHORT";
-  const pSide = side === "LONG" ? m.pUp : 1 - m.pUp;
   const a = m.analysis;
+  const trendAligned = Boolean(a && a.efficiencyRatio >= 0.34 && a.mtfAgreement >= 2 / 3);
+  const meanReversionSetup = Boolean(a && a.regime === "RANGING" && Math.abs(m.distZ ?? 0) >= 1.5);
+  const strategy: Candidate["strategy"] = meanReversionSetup
+    ? "MEAN_REVERSION"
+    : trendAligned ? "TREND_FOLLOWING" : "MOMENTUM";
+  // Strategy competition selects the context; the trained probability remains
+  // the primary directional input and is only blended modestly for reversion.
+  let side: "LONG" | "SHORT" = m.pUp >= 0.5 ? "LONG" : "SHORT";
+  if (strategy === "MEAN_REVERSION" && Math.abs(m.distZ ?? 0) >= 1.5) {
+    side = (m.distZ ?? 0) > 0 ? "SHORT" : "LONG";
+  }
+  let pSide = side === "LONG" ? m.pUp : 1 - m.pUp;
+  if (strategy === "MEAN_REVERSION") {
+    const reversionEvidence = clamp((Math.abs(m.distZ ?? 0) - 1.5) * 0.025, 0, 0.06);
+    pSide = clamp(pSide * 0.75 + (0.5 + reversionEvidence) * 0.25, 0.001, 0.999);
+  }
   const regime = a?.regime ?? "TRANSITION";
   // Volatility-aware barriers: ATR and realised volatility both constrain risk.
   const forecastSigma = a?.forecastSigma ?? m.sigma;
@@ -476,6 +492,7 @@ export function scoreCandidate(
     regimeConfidence: a?.regimeConfidence ?? 0,
     cusumSignal: a?.cusumSignal ?? 0,
     forecastSigma,
+    strategy,
   };
 }
 
