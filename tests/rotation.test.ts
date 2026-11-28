@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  DEFAULT_PARAMS, Kalman1D, analyzeMarket, conformalDecision, featuresAt, fuseMultiTimeframe,
+  DEFAULT_PARAMS, Kalman1D, adaptiveConformalDecision, analyzeMarket, conformalDecision, featuresAt, fuseMultiTimeframe,
+  newAdaptiveConformalState, observeAdaptiveConformal,
   normalizeParams, predictPUp, rankCandidates, scoreCandidate, sigma1m,
   smoothedP, trainEnsemble, type Candle,
 } from "../shared/rotation/engine";
@@ -237,6 +238,29 @@ test("conformal singleton must agree with the final strategy direction", () => {
   assert.equal(c.side, "SHORT");
   assert.equal(c.conformalEligible, false);
   assert.equal(c.score, 0);
+});
+
+test("adaptive conformal calibration updates its error level from delayed outcomes", () => {
+  const state = newAdaptiveConformalState();
+  state.scores = Array(50).fill(0.35);
+  const initial = adaptiveConformalDecision(state, 0.8, 0.9);
+  assert.equal(initial.calibrated, true);
+  assert.equal(initial.threshold, 0.35);
+  const missed = observeAdaptiveConformal(state, 0.9, initial.threshold);
+  assert.equal(missed, true);
+  assert.ok(state.alpha < 0.1);
+  assert.equal(state.observations, 1);
+  const covered = observeAdaptiveConformal(state, 0.1, 0.9);
+  assert.equal(covered, false);
+  assert.ok(state.alpha > 0.01);
+});
+
+test("adaptive conformal uses the split-calibration fallback during warm-up", () => {
+  const state = newAdaptiveConformalState();
+  const decision = adaptiveConformalDecision(state, 0.8, 0.25);
+  assert.equal(decision.calibrated, false);
+  assert.equal(decision.threshold, 0.25);
+  assert.equal(decision.calibrationSamples, 0);
 });
 
 test("sigma1m is positive on noisy data", () => {
