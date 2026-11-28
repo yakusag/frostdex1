@@ -36,7 +36,7 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 const stateKey = (n: BotNetwork, owner: string, id: string) =>
   `frostdex:rotation:state:${n}:${owner.toLowerCase()}:${id}`;
 const calibrationKey = (network: BotNetwork, symbol: string) =>
-  `frostdex:rotation:calibration:v2:${network}:${symbol}`;
+  `frostdex:rotation:calibration:v1:${network}:${symbol}`;
 const CALIBRATION_HORIZONS = [5, 10, 15] as const;
 type CalibrationHorizon = typeof CALIBRATION_HORIZONS[number];
 
@@ -173,17 +173,18 @@ class MarketData {
     const rawP = predictPUp(model, x);
     const fusedP = fuseMultiTimeframe(rawP, analysis);
     const candleTime = candles[candles.length - 1].t;
-    let k = this.kalman.get(symbol);
-    if (!k) this.kalman.set(symbol, (k = new Kalman1D()));
-    // Kalman updates once per completed candle, never on repeated 10s polls.
-    if (this.kalmanAt.get(symbol) !== candleTime || !this.kalmanP.has(symbol)) {
-      this.kalmanP.set(symbol, smoothedP(k, fusedP));
-      this.kalmanAt.set(symbol, candleTime);
+    const kalmanKey = `${symbol}:${horizon}`;
+    let k = this.kalman.get(kalmanKey);
+    if (!k) this.kalman.set(kalmanKey, (k = new Kalman1D()));
+    // Each horizon owns its own smoother; update once per completed candle.
+    if (this.kalmanAt.get(kalmanKey) !== candleTime || !this.kalmanP.has(kalmanKey)) {
+      this.kalmanP.set(kalmanKey, smoothedP(k, fusedP));
+      this.kalmanAt.set(kalmanKey, candleTime);
     }
     return {
       candleTime,
       close: candles[candles.length - 1].c,
-      pUp: this.kalmanP.get(symbol) ?? fusedP,
+      pUp: this.kalmanP.get(kalmanKey) ?? fusedP,
       price,
       sigma: sigma1m(candles),
       distZ: x[0],
