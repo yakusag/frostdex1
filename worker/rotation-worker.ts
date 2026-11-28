@@ -366,6 +366,25 @@ class MarketData {
         conformalAlpha: conformal.alpha,
         conformalCalibrationSamples: conformal.calibrationSamples,
         conformalCalibrated: conformal.calibrated,
+        horizonForecasts: Object.fromEntries(CALIBRATION_HORIZONS.flatMap((horizon) => {
+          const horizonForecast = this.forecast(symbol, horizon);
+          const bucket = calibration?.horizons[String(horizon)];
+          const horizonModel = this.horizonModels.get(symbol)?.[horizon];
+          if (!horizonForecast || !horizonModel) return [];
+          const decision = adaptiveConformalDecision(
+            bucket?.adaptive ?? newAdaptiveConformalState(),
+            horizonForecast.pUp,
+            horizonModel.conformalQ ?? 1,
+          );
+          return [[String(horizon), {
+            pUp: horizonForecast.pUp,
+            threshold: decision.threshold,
+            alpha: decision.alpha,
+            observations: bucket?.adaptive.observations ?? 0,
+            misses: bucket?.adaptive.misses ?? 0,
+            calibrated: decision.calibrated,
+          }]];
+        })) as MarketInput["horizonForecasts"],
         analysis: forecast.analysis,
       });
     }
