@@ -352,6 +352,26 @@ class MarketData {
       const tenMinute = calibration?.horizons["10"];
       const adaptive = tenMinute?.adaptive ?? newAdaptiveConformalState();
       const conformal = adaptiveConformalDecision(adaptive, forecast.pUp, model.conformalQ ?? 1);
+      const horizonForecasts: NonNullable<MarketInput["horizonForecasts"]> = {};
+      for (const horizon of CALIBRATION_HORIZONS) {
+        const horizonForecast = this.forecast(symbol, horizon);
+        const bucket = calibration?.horizons[String(horizon)];
+        const horizonModel = this.horizonModels.get(symbol)?.[horizon];
+        if (!horizonForecast || !horizonModel) continue;
+        const decision = adaptiveConformalDecision(
+          bucket?.adaptive ?? newAdaptiveConformalState(),
+          horizonForecast.pUp,
+          horizonModel.conformalQ ?? 1,
+        );
+        horizonForecasts[String(horizon) as "5" | "10" | "15"] = {
+          pUp: horizonForecast.pUp,
+          threshold: decision.threshold,
+          alpha: decision.alpha,
+          observations: bucket?.adaptive.observations ?? 0,
+          misses: bucket?.adaptive.misses ?? 0,
+          calibrated: decision.calibrated,
+        };
+      }
       out.push({
         symbol,
         price: forecast.price,
@@ -366,25 +386,7 @@ class MarketData {
         conformalAlpha: conformal.alpha,
         conformalCalibrationSamples: conformal.calibrationSamples,
         conformalCalibrated: conformal.calibrated,
-        horizonForecasts: Object.fromEntries(CALIBRATION_HORIZONS.flatMap((horizon) => {
-          const horizonForecast = this.forecast(symbol, horizon);
-          const bucket = calibration?.horizons[String(horizon)];
-          const horizonModel = this.horizonModels.get(symbol)?.[horizon];
-          if (!horizonForecast || !horizonModel) return [];
-          const decision = adaptiveConformalDecision(
-            bucket?.adaptive ?? newAdaptiveConformalState(),
-            horizonForecast.pUp,
-            horizonModel.conformalQ ?? 1,
-          );
-          return [[String(horizon), {
-            pUp: horizonForecast.pUp,
-            threshold: decision.threshold,
-            alpha: decision.alpha,
-            observations: bucket?.adaptive.observations ?? 0,
-            misses: bucket?.adaptive.misses ?? 0,
-            calibrated: decision.calibrated,
-          }]];
-        })) as MarketInput["horizonForecasts"],
+        horizonForecasts,
         analysis: forecast.analysis,
       });
     }
