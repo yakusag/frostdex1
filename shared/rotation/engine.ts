@@ -610,6 +610,14 @@ export interface MarketInput {
   conformalAlpha?: number;
   conformalCalibrationSamples?: number;
   conformalCalibrated?: boolean;
+  horizonForecasts?: Partial<Record<"5" | "10" | "15", {
+    pUp: number;
+    threshold: number;
+    alpha: number;
+    observations: number;
+    misses: number;
+    calibrated: boolean;
+  }>>;
 }
 
 export interface Candidate {
