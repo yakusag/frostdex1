@@ -208,14 +208,15 @@ export function trainEnsemble(
   trees: number,
   eta: number,
   now = Date.now(),
+  horizonCandles = HORIZON_CANDLES,
 ): Ensemble | null {
   const X: number[][] = [];
   const y: number[] = [];
-  for (let i = 30; i + HORIZON_CANDLES < candles.length; i++) {
+  for (let i = 30; i + horizonCandles < candles.length; i++) {
     const x = featuresAt(candles, i);
     if (!x) continue;
     X.push(x);
-    y.push(candles[i + HORIZON_CANDLES].c > candles[i].c ? 1 : 0);
+    y.push(candles[i + horizonCandles].c > candles[i].c ? 1 : 0);
   }
   if (X.length < 200) return null;
 
