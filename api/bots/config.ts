@@ -115,16 +115,6 @@ export default async function handler(req: BotApiRequest, res: ServerResponse) {
   if (!isBotConfig(body) || !isNetworkEnabled(body.network)) {
     return sendJson(res, 400, { error: "Invalid or disabled bot settings." });
   }
-  if (body.strategy === "rotation") {
-    const maxTrades = body.params.maxTrades;
-    const tradeAmount = body.params.tradeAmount;
-    if (maxTrades !== undefined && (!Number.isInteger(Number(maxTrades)) || Number(maxTrades) < 1 || Number(maxTrades) > 100000)) {
-      return sendJson(res, 400, { error: "Maximum total trades must be an integer between 1 and 100,000." });
-    }
-    if (tradeAmount !== undefined && (typeof tradeAmount !== "number" || !Number.isFinite(tradeAmount) || tradeAmount <= 0 || tradeAmount > body.investment)) {
-      return sendJson(res, 400, { error: "Margin per trade must be positive and cannot exceed total capital." });
-    }
-  }
   if (guest && body.strategy !== "rotation") {
     return sendJson(res, 403, { error: "Guest sessions are limited to testnet rotation simulations up to 1,000 virtual USDC." });
   }
