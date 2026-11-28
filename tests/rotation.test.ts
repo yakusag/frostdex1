@@ -316,3 +316,16 @@ test("qty normalisation respects tick, min size and min notional", () => {
   assert.equal(normalizeQty(rules, 0.05, 100), 0); // $5 < $10 min notional
   assert.equal(normalizeQty(undefined, 1, 1), 0);
 });
+
+test("5m, 10m and 15m models train against their own forward labels", () => {
+  const candles = walk(900, 0.00003, 0.001, 19);
+  const five = trainEnsemble(candles, 12, 0.1, 1234, 5)!;
+  const ten = trainEnsemble(candles, 12, 0.1, 1234, 10)!;
+  const fifteen = trainEnsemble(candles, 12, 0.1, 1234, 15)!;
+  assert.ok(five && ten && fifteen);
+  assert.notEqual(five.samples, ten.samples);
+  assert.notEqual(ten.samples, fifteen.samples);
+  assert.equal(five.trainedAt, 1234);
+  assert.equal(ten.trainedAt, 1234);
+  assert.equal(fifteen.trainedAt, 1234);
+});
